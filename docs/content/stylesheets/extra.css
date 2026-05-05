@@ -137,9 +137,19 @@ pre,
   color: #E8987E;
 }
 
+/* Tabs bar — dark background, subtle orange bottom border as separator */
+.md-tabs {
+  background-color: #110C0B;
+  border-bottom: 1px solid rgba(218,117,87,0.35);
+}
+
+.md-tabs__link {
+  color: rgba(250,245,244,0.6);
+}
+
 .md-tabs__link--active,
 .md-tabs__link:hover {
-  color: #DA7557;
+  color: rgba(250,245,244,0.95);
 }
 
 /* ---------------------------------------------------------------------------
@@ -184,6 +194,26 @@ pre,
 
 .md-search__input::placeholder {
   color: rgba(250,245,244,0.4);
+}
+
+/* Copy-to-clipboard button — visible against dark code background */
+.md-clipboard {
+  color: rgba(250,245,244,0.3);
+}
+
+.md-clipboard:hover {
+  color: rgba(250,245,244,0.8);
+}
+
+/* Prevent black text leaking through on table cells and other elements */
+.md-typeset table:not([class]) td {
+  color: rgba(250,245,244,0.87);
+}
+
+.md-search-result__article,
+.md-search-result__title,
+.md-search-result__teaser {
+  color: rgba(250,245,244,0.87);
 }
 
 /* ---------------------------------------------------------------------------
