@@ -4,70 +4,77 @@
 
 # TcKit
 
-AI-assisted development toolchain for TwinCAT 3 PLC engineering.
+A toolkit for AI-assisted development of TwinCAT 3 PLC projects.
 
-TcKit connects Claude Code to TwinCAT 3 projects via MCP (Model Context Protocol). Claude can read project structure, write ST code, trigger builds, deploy to targets, run TcUnit tests, and iterate autonomously on failures.
+TcKit provides an MCP (Model Context Protocol) interface so models can read project structure, write ST code, trigger builds, deploy to targets, run tests, and iterate autonomously on failures.
+
+**[tckit.org](https://tckit.org)** — full documentation
+
+---
+
+## Open loop vs closed loop
+
+Without TcKit, the model generates code but can't verify it — you copy, paste, build, and report errors back manually.
+
+```
+ Open loop
+ ┌─────────┐   code   ┌──────────┐   copy/paste   ┌───────────┐
+ │  Model  │ ───────► │   You    │ ──────────────► │ TwinCAT   │
+ └─────────┘          └──────────┘  report errors  └───────────┘
+```
+
+With TcKit, the model drives the full cycle autonomously:
+
+```
+ Closed loop
+ ┌─────────┐  write / build / test  ┌───────────┐
+ │  Model  │ ──────────────────────►│ TwinCAT   │
+ └─────────┘ ◄────────────────────── └───────────┘
+               errors / test results
+```
 
 ---
 
 ## Architecture
 
 ```
-Claude Code
-    │
-    ▼ (MCP protocol)
-MCP Server (Python, Docker)
-    │
-    ▼ (port interfaces)
-┌──────────────────────────────────────────────┐
-│  Reader   Writer   Builder   TestRunner       │
-│  DocGen   DocsSearcher                        │
-└──────────────────────────────────────────────┘
-    │              │              │
-    ▼              ▼              ▼
-xml_reader    automation_   xae_com_
-              writer        builder
-(Docker)      (bridge →     (bridge →
-               Windows)      Windows)
-                   │
-                   ▼
-             TwinCAT XAE
-                   │
-                   ▼
-             PLC / VM (ADS)
+Model (Claude Code)
+        │  MCP protocol
+        ▼
+ TcKit MCP Server          (Docker)
+        │
+        ├── ProjectReader  ──► xml_reader
+        ├── ProjectWriter  ──► automation_writer  ──┐
+        ├── BuildRunner    ──► xae_com_builder    ──┤ Windows bridge
+        ├── TestRunner     ──► tcunit_runner      ──┤ (PowerShell → XAE COM)
+        ├── DocGenerator   ──► sphinx_generator      │
+        └── DocsSearcher   ──► beckhoff_infosys   ──┘
+                                        │
+                                  TwinCAT XAE
+                                        │
+                                   PLC / VM
 ```
 
-Every external concern is abstracted behind a port (Python ABC). Adapters implement ports. The MCP server only calls ports — never adapters directly.
-
-**The one hard rule:** adapters may only import from ports and stdlib. Never from each other.
+Adapters are isolated behind port interfaces (Python ABCs). The server only calls ports — never adapters directly. Adapters may only import from ports and stdlib.
 
 ---
 
 ## Quick Start
 
-### Requirements
-
-- Docker + Docker Compose
-- (For writes/builds) Windows PC with TwinCAT 3.1 Build 4026 installed
-
-### Run the MCP server
+**Requirements:** Docker + Docker Compose. For write/build operations: a Windows PC with TwinCAT 3.1 Build 4026.
 
 ```bash
 cp docker/.env.example docker/.env
-# edit docker/.env with your paths and bridge URL
+# edit docker/.env with your project path and bridge URL
 
 docker compose -f docker/docker-compose.yml up
 ```
 
-### Windows bridge (for write/build operations)
-
-On the Windows machine with XAE installed:
+Windows bridge (write/build/test operations only):
 
 ```powershell
 .\bridge\Start-Bridge.ps1
 ```
-
-### Connect Claude Code
 
 Add to your Claude Code MCP config:
 
@@ -83,45 +90,17 @@ Add to your Claude Code MCP config:
 
 ---
 
-## Development
+## Status
 
-```bash
-# Run tests
-docker compose -f docker/docker-compose.yml run tckit pytest tests/
-
-# Lint
-docker compose -f docker/docker-compose.yml run tckit ruff check tckit/
-
-# Docs (local preview)
-pip install mkdocs-material
-mkdocs serve
-```
-
----
-
-## Project Status
-
-| Phase | Status |
-|-------|--------|
-| 1 — Read layer (xml reader, docs searcher, doc generator) | ✅ Complete |
+| Phase | |
+|-------|-|
+| 1 — Read layer (xml reader, docs searcher, doc generator) | ✅ |
 | 2 — Write layer (automation writer, XAE builder) | Planned |
 | 3 — Test loop (TcUnit runner, autonomous loop) | Planned |
 | 4 — CI, PyPI, open source launch | Planned |
 
 ---
 
-## Docs
-
-Full documentation at [tckit.org](https://tckit.org).
-
----
-
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
-## License
-
-MIT
+See [CONTRIBUTING.md](CONTRIBUTING.md) — MIT licence.
