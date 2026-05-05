@@ -298,7 +298,7 @@ of an existing one. Discuss with the user before adding ports.
 
 | Port | Key Methods |
 |------|------------|
-| ProjectReader | `get_structure()`, `get_pou_interface()`, `get_pou_item()`, `get_gvl()` |
+| ProjectReader | `get_structure()`, `get_pou_interface()`, `get_pou_item()`, `get_gvl()`, `get_dut()` |
 | ProjectWriter | `open_project()`, `add_pou()`, `add_method()`, `update_pou_item()` |
 | BuildRunner | `build()`, `deploy()`, `start_runtime()`, `get_status()` |
 | TestRunner | `run_tests()`, `wait_complete()`, `get_results()`, `get_status()` |
