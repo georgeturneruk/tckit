@@ -23,6 +23,9 @@ Never fetch a full POU when you only need one method.
 | `get_pou_interface(pou_name)` | `POUInterface` |
 | `get_pou_item(pou_name, item_name)` | `POUItem` |
 | `get_gvl(gvl_name)` | `GVL` |
+| `get_dut(dut_name)` | `DUT` |
+
+`get_pou_item` accepts dotted property accessor syntax: `"Status.Get"` / `"Status.Set"`.
 
 ## ProjectWriter
 

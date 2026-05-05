@@ -75,5 +75,32 @@ Reset := TRUE;
 ]]></ST>
       </Implementation>
     </Method>
+    <Property Name="ErrorId" Id="{12345678-0000-0000-0000-000000000004}">
+      <Declaration><![CDATA[
+// :Description: Last error code, 0 when no error.
+PROPERTY ErrorId : UDINT
+]]></Declaration>
+      <Get Id="{12345678-0000-0000-0000-000000000005}">
+        <Declaration><![CDATA[
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[
+ErrorId := nErrorId;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Id="{12345678-0000-0000-0000-000000000006}">
+        <Declaration><![CDATA[
+VAR
+    ErrorId : UDINT;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[
+nErrorId := ErrorId;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
   </POU>
 </TcPlcObject>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <DUT Name="ST_ExampleConfig" Id="{12345678-0000-0000-0000-000000000030}">
+    <Declaration><![CDATA[
+// :Description: Configuration parameters for the example function block.
+TYPE ST_ExampleConfig :
+STRUCT
+    nMaxRetries  : INT := 3;
+    fTimeout     : LREAL := 5.0;    (* seconds *)
+    sDescription : STRING := 'TcKit Example';
+    bEnabled     : BOOL := TRUE;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
