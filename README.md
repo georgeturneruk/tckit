@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/content/assets/logo-full.svg" alt="TcKit" width="100">
+</p>
+
 # TcKit
 
 AI-assisted development toolchain for TwinCAT 3 PLC engineering.
