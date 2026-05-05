@@ -253,6 +253,22 @@ Never commit any `.env` file.
 
 ---
 
+## Git Workflow
+
+Always follow this pattern — no exceptions:
+
+1. Branch from `main`: `git checkout -b feat/my-thing`
+2. Do the work, commit incrementally
+3. Push and open a PR against `main`
+4. Merge via **Squash and merge** on GitHub
+5. Delete the branch after merge
+
+**Never keep working on a branch after it has been merged.** GitHub's squash merge gives the commit a new ID, so git will see your old commits as unrelated to what's on main — any further PR from that branch will show conflicts even when there are none.
+
+**One branch, one PR, one squash commit on main.**
+
+---
+
 ## Adding a New Adapter
 
 1. Create the file in the correct `adapters/` subdirectory
