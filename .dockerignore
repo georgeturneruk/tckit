@@ -6,7 +6,6 @@
 .env.*
 !.env.example
 docs/
-tests/
 scripts/
 bridge/
 cache/
