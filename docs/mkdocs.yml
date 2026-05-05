@@ -1,6 +1,6 @@
 site_name: TcKit
 site_description: AI-assisted development toolchain for TwinCAT 3 PLC engineering
-site_url: https://docs.tckit.dev
+site_url: https://tckit.org
 repo_url: https://github.com/turb5/tckit
 repo_name: turb5/tckit
 edit_uri: edit/main/docs/content/
