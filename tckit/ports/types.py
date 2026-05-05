@@ -1,11 +1,8 @@
 """Shared dataclasses returned by all port methods."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Common
@@ -24,7 +21,7 @@ class Result:
 # ---------------------------------------------------------------------------
 
 
-class POUType(str, Enum):
+class POUType(StrEnum):
     FUNCTION_BLOCK = "function_block"
     FUNCTION = "function"
     PROGRAM = "program"
@@ -83,7 +80,7 @@ class GVL:
 # ---------------------------------------------------------------------------
 
 
-class BuildStatus(str, Enum):
+class BuildStatus(StrEnum):
     IDLE = "idle"
     BUILDING = "building"
     SUCCESS = "success"
@@ -111,7 +108,7 @@ class BuildResult:
 # ---------------------------------------------------------------------------
 
 
-class TestStatus(str, Enum):
+class TestStatus(StrEnum):
     IDLE = "idle"
     RUNNING = "running"
     COMPLETE = "complete"
@@ -163,7 +160,7 @@ class TestResults:
 # ---------------------------------------------------------------------------
 
 
-class DocStatus(str, Enum):
+class DocStatus(StrEnum):
     IDLE = "idle"
     GENERATING = "generating"
     COMPLETE = "complete"
