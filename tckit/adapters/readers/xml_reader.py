@@ -1,10 +1,15 @@
 """xml_reader — ProjectReader adapter using XML + regex.
 
-Reads .TcPOU and .TcGVL files directly from the filesystem.
+Reads .TcPOU, .TcGVL, and .TcDUT files directly from the filesystem.
 Runs in Docker. No XAE, Windows, or blark dependency.
 
 All structural information is extracted from XML attributes and element names.
 ST code is returned as raw strings — no ST grammar parsing is performed.
+
+Property access via get_pou_item():
+  "PropName"      → property header declaration (no body)
+  "PropName.Get"  → getter declaration + body
+  "PropName.Set"  → setter declaration + body
 """
 
 import os
@@ -12,11 +17,14 @@ from pathlib import Path
 
 from tckit.adapters.readers._tcpou_parser import (
     extract_method_return_type,
+    extract_property_return_type,
+    parse_tcdut,
     parse_tcgvl,
     parse_tcpou,
 )
 from tckit.ports.reader import ProjectReader
 from tckit.ports.types import (
+    DUT,
     GVL,
     MethodSignature,
     POUInterface,
@@ -24,6 +32,7 @@ from tckit.ports.types import (
     POURef,
     POUType,
     ProjectStructure,
+    PropertySignature,
 )
 
 
@@ -31,7 +40,7 @@ class XmlReader(ProjectReader):
     """Reads TwinCAT project structure and code via XML parsing (stdlib only)."""
 
     def __init__(self) -> None:
-        # Maps POU/GVL name → absolute file path.
+        # Maps POU/GVL/DUT name → absolute file path.
         # Populated by get_structure(); reused by all subsequent calls.
         self._file_index: dict[str, Path] = {}
 
@@ -40,7 +49,7 @@ class XmlReader(ProjectReader):
     # ------------------------------------------------------------------
 
     def get_structure(self, project_path: str) -> ProjectStructure:
-        """Scan project_path for .TcPOU and .TcGVL files, build file index.
+        """Scan project_path for .TcPOU, .TcGVL, and .TcDUT files, build file index.
 
         Raises:
             FileNotFoundError: If project_path does not exist.
@@ -52,6 +61,7 @@ class XmlReader(ProjectReader):
         self._file_index = {}
         pous: list[POURef] = []
         gvls: list[str] = []
+        duts: list[str] = []
         tasks: list[str] = []
 
         for tc_pou in sorted(root.rglob("*.TcPOU")):
@@ -78,15 +88,25 @@ class XmlReader(ProjectReader):
             self._file_index[name] = tc_gvl
             gvls.append(name)
 
+        for tc_dut in sorted(root.rglob("*.TcDUT")):
+            try:
+                info = parse_tcdut(tc_dut)
+            except (ValueError, FileNotFoundError):
+                continue
+            name = info["name"]
+            self._file_index[name] = tc_dut
+            duts.append(name)
+
         return ProjectStructure(
             project_path=project_path,
             pous=pous,
             gvls=gvls,
+            duts=duts,
             tasks=tasks,
         )
 
     def get_pou_interface(self, pou_name: str) -> POUInterface:
-        """Return declarations and method signatures for a POU.
+        """Return declarations and method/property signatures for a POU or interface.
 
         Raises:
             FileNotFoundError: If pou_name is not in the file index.
@@ -104,17 +124,34 @@ class XmlReader(ProjectReader):
             for m in info["methods"]
         ]
 
+        properties = [
+            PropertySignature(
+                name=p["name"],
+                return_type=extract_property_return_type(p["declaration"]),
+                declaration=p["declaration"],
+                has_get=p["get"] is not None,
+                has_set=p["set"] is not None,
+            )
+            for p in info["properties"]
+        ]
+
         return POUInterface(
             pou_name=pou_name,
             pou_type=POUType(info["pou_type"]),
             declaration=info["declaration"],
             methods=methods,
-            properties=info["properties"],
+            properties=properties,
             actions=[a["name"] for a in info["actions"]],
         )
 
     def get_pou_item(self, pou_name: str, item_name: str) -> POUItem:
-        """Return declaration + body for a single method or action.
+        """Return declaration + body for a single method, action, or property accessor.
+
+        item_name formats:
+          "Execute"       → method or action named Execute
+          "Status"        → property declaration (no body — use .Get/.Set for bodies)
+          "Status.Get"    → property getter declaration + body
+          "Status.Set"    → property setter declaration + body
 
         Raises:
             FileNotFoundError: If pou_name or item_name is not found.
@@ -123,16 +160,56 @@ class XmlReader(ProjectReader):
         path = self._resolve(pou_name, ".TcPOU")
         info = parse_tcpou(path)
 
-        # Search methods first, then actions
-        for collection in (info["methods"], info["actions"]):
-            for item in collection:
-                if item["name"] == item_name:
+        # Check for property accessor syntax first ("PropName.Get" / "PropName.Set")
+        if "." in item_name:
+            prop_name, accessor = item_name.rsplit(".", 1)
+            accessor = accessor.lower()
+            for prop in info["properties"]:
+                if prop["name"] == prop_name:
+                    acc_data = prop.get(accessor)  # prop["get"] or prop["set"]
+                    if acc_data is None:
+                        raise FileNotFoundError(
+                            f"Property {prop_name!r} in {pou_name!r} "
+                            f"has no {accessor.capitalize()} accessor"
+                        )
                     return POUItem(
                         pou_name=pou_name,
                         item_name=item_name,
-                        declaration=item["declaration"],
-                        body=item["body"],
+                        declaration=acc_data["declaration"],
+                        body=acc_data["body"],
                     )
+            raise FileNotFoundError(
+                f"Property {prop_name!r} not found in POU {pou_name!r} ({path})"
+            )
+
+        # Search methods, then actions, then bare property (declaration only)
+        for m in info["methods"]:
+            if m["name"] == item_name:
+                return POUItem(
+                    pou_name=pou_name,
+                    item_name=item_name,
+                    declaration=m["declaration"],
+                    body=m["body"],
+                )
+
+        for a in info["actions"]:
+            if a["name"] == item_name:
+                return POUItem(
+                    pou_name=pou_name,
+                    item_name=item_name,
+                    declaration=a["declaration"],
+                    body=a["body"],
+                )
+
+        for p in info["properties"]:
+            if p["name"] == item_name:
+                # Return the property header declaration; body is in .Get / .Set
+                return POUItem(
+                    pou_name=pou_name,
+                    item_name=item_name,
+                    declaration=p["declaration"],
+                    body="",
+                )
 
         raise FileNotFoundError(
             f"Item {item_name!r} not found in POU {pou_name!r} ({path})"
@@ -149,15 +226,25 @@ class XmlReader(ProjectReader):
         info = parse_tcgvl(path)
         return GVL(name=gvl_name, path=str(path), declaration=info["declaration"])
 
+    def get_dut(self, dut_name: str) -> DUT:
+        """Return declaration for a Data Unit Type (STRUCT, ENUM, UNION).
+
+        Raises:
+            FileNotFoundError: If dut_name is not in the file index.
+            ValueError: If the file cannot be parsed.
+        """
+        path = self._resolve(dut_name, ".TcDUT")
+        info = parse_tcdut(path)
+        return DUT(name=dut_name, path=str(path), declaration=info["declaration"])
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _resolve(self, name: str, extension: str) -> Path:
-        """Return the file path for a named POU or GVL.
+        """Return the file path for a named POU, GVL, or DUT.
 
-        If not in the file index, attempt to scan the directory specified
-        by the PLC_PROJECT_PATH environment variable as a fallback.
+        Falls back to scanning PLC_PROJECT_PATH if the name is not in the index.
 
         Raises:
             FileNotFoundError: If the file cannot be located.
@@ -165,7 +252,6 @@ class XmlReader(ProjectReader):
         if name in self._file_index:
             return self._file_index[name]
 
-        # Fallback: scan env-var path if index is empty
         env_path = os.getenv("PLC_PROJECT_PATH")
         if env_path:
             root = Path(env_path)

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from tckit.ports.types import GVL, POUInterface, POUItem, ProjectStructure
+from tckit.ports.types import DUT, GVL, POUInterface, POUItem, ProjectStructure
 
 
 class ProjectReader(ABC):
@@ -48,5 +48,14 @@ class ProjectReader(ABC):
 
         :param gvl_name: Name of the GVL (e.g. ``GVL_Parameters``).
         :returns: GVL with full declaration text.
+        """
+        ...
+
+    @abstractmethod
+    def get_dut(self, dut_name: str) -> DUT:
+        """Return the declaration block of a Data Unit Type (STRUCT, ENUM, UNION).
+
+        :param dut_name: Name of the DUT (e.g. ``ST_MotorConfig``, ``E_State``).
+        :returns: DUT with full declaration text.
         """
         ...

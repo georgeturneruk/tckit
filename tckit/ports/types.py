@@ -40,6 +40,7 @@ class ProjectStructure:
     project_path: str
     pous: list[POURef] = field(default_factory=list)
     gvls: list[str] = field(default_factory=list)
+    duts: list[str] = field(default_factory=list)
     tasks: list[str] = field(default_factory=list)
 
 
@@ -51,12 +52,21 @@ class MethodSignature:
 
 
 @dataclass
+class PropertySignature:
+    name: str
+    return_type: str  # e.g. "DWORD", "BOOL"
+    declaration: str  # the PROPERTY header declaration
+    has_get: bool = True
+    has_set: bool = False
+
+
+@dataclass
 class POUInterface:
     pou_name: str
     pou_type: POUType
     declaration: str
     methods: list[MethodSignature] = field(default_factory=list)
-    properties: list[str] = field(default_factory=list)
+    properties: list[PropertySignature] = field(default_factory=list)
     actions: list[str] = field(default_factory=list)
 
 
@@ -70,6 +80,15 @@ class POUItem:
 
 @dataclass
 class GVL:
+    name: str
+    path: str
+    declaration: str
+
+
+@dataclass
+class DUT:
+    """A Data Unit Type — STRUCT, ENUM, UNION, or TYPE alias."""
+
     name: str
     path: str
     declaration: str

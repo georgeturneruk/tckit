@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <Itf Name="I_Example" Id="{12345678-0000-0000-0000-000000000020}">
+    <Declaration><![CDATA[
+// :Description: Example interface for TcKit parser validation.
+INTERFACE I_Example
+]]></Declaration>
+    <Method Name="Execute" Id="{12345678-0000-0000-0000-000000000021}">
+      <Declaration><![CDATA[
+// :Description: Execute one cycle.
+// :returns: TRUE when the operation completes
+METHOD Execute : BOOL
+VAR_INPUT
+    bTrigger : BOOL;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="Reset" Id="{12345678-0000-0000-0000-000000000022}">
+      <Declaration><![CDATA[
+// :Description: Reset to idle state.
+// :returns: TRUE on success
+METHOD Reset : BOOL
+]]></Declaration>
+    </Method>
+    <Property Name="Status" Id="{12345678-0000-0000-0000-000000000023}">
+      <Declaration><![CDATA[
+// :Description: Current status word.
+PROPERTY Status : DWORD
+]]></Declaration>
+      <Get Id="{12345678-0000-0000-0000-000000000024}">
+        <Declaration><![CDATA[
+]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>
