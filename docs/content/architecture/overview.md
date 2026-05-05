@@ -15,7 +15,7 @@ MCP Server (Python, Docker)
 └──────────────────────────────────────────────────────┘
     │                  │                  │
     ▼                  ▼                  ▼
-blark_reader    automation_writer   xae_com_builder
+xml_reader      automation_writer   xae_com_builder
 (Docker)        (bridge → COM)      (bridge → COM)
                       │
                       ▼
