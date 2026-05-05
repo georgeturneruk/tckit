@@ -10,9 +10,9 @@ TcKit connects Claude Code to TwinCAT 3 projects via MCP (Model Context Protocol
 
 | Capability | Status |
 |-----------|--------|
-| Read project structure, POU interfaces, method bodies | Phase 1 |
-| Search Beckhoff infosys documentation | Phase 1 |
-| Generate Sphinx docs from RST-commented ST code | Phase 1 |
+| Read POUs, interfaces, properties, GVLs, DUTs | ✅ Phase 1 |
+| Search Beckhoff infosys documentation | ✅ Phase 1 |
+| Generate Sphinx docs from RST-commented ST code | ✅ Phase 1 |
 | Write ST code, add POUs and methods | Phase 2 |
 | Build projects, get structured errors | Phase 2 |
 | Run TcUnit tests and iterate autonomously | Phase 3 |

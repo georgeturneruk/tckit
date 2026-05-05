@@ -97,11 +97,9 @@ mkdocs serve
 
 ## Project Status
 
-Phase 1 (Read Layer) — in progress.
-
 | Phase | Status |
 |-------|--------|
-| 1 — Read layer (xml reader, docs searcher, doc generator) | In progress |
+| 1 — Read layer (xml reader, docs searcher, doc generator) | ✅ Complete |
 | 2 — Write layer (automation writer, XAE builder) | Planned |
 | 3 — Test loop (TcUnit runner, autonomous loop) | Planned |
 | 4 — CI, PyPI, open source launch | Planned |
@@ -110,7 +108,7 @@ Phase 1 (Read Layer) — in progress.
 
 ## Docs
 
-Full documentation at [tckit.dev](https://tckit.dev) (coming soon).
+Full documentation at [tckit.org](https://tckit.org).
 
 ---
 
