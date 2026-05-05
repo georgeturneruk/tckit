@@ -105,6 +105,18 @@ pre,
   box-shadow: none;
 }
 
+/* Keep header text visible on hover — Material defaults to primary-bg (white) */
+.md-header__button:hover,
+.md-header__topic,
+.md-header__title {
+  color: rgba(250,245,244,0.87);
+}
+
+.md-header__button:hover {
+  color: rgba(250,245,244,0.6);
+  opacity: 1;
+}
+
 /* Logo sizing in header */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
@@ -173,3 +185,81 @@ pre,
 .md-search__input::placeholder {
   color: rgba(250,245,244,0.4);
 }
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting — VS Code Dark+ palette
+   Background: #1e1e1e, default text: #d4d4d4
+--------------------------------------------------------------------------- */
+
+.md-typeset pre > code,
+.highlight code,
+.highlight {
+  background-color: #1e1e1e !important;
+  color: #d4d4d4;
+}
+
+/* Keywords: blue */
+.highlight .k,
+.highlight .kd,
+.highlight .kn,
+.highlight .kr,
+.highlight .kt,
+.highlight .kc { color: #569cd6; }
+
+/* Built-ins and type names: teal */
+.highlight .nb,
+.highlight .nc,
+.highlight .nn,
+.highlight .bp { color: #4ec9b0; }
+
+/* Strings: muted orange */
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .sa,
+.highlight .sb,
+.highlight .sc,
+.highlight .dl,
+.highlight .si,
+.highlight .se,
+.highlight .sh,
+.highlight .ss,
+.highlight .sx { color: #ce9178; }
+
+/* Comments: green */
+.highlight .c,
+.highlight .c1,
+.highlight .cm,
+.highlight .cs,
+.highlight .cp,
+.highlight .cpf { color: #6a9955; font-style: italic; }
+
+/* Numbers: light green */
+.highlight .m,
+.highlight .mi,
+.highlight .mf,
+.highlight .mh,
+.highlight .mo,
+.highlight .mb,
+.highlight .il { color: #b5cea8; }
+
+/* Functions and method names: yellow */
+.highlight .nf,
+.highlight .fm { color: #dcdcaa; }
+
+/* Decorators / annotations: yellow-ish */
+.highlight .nd { color: #dcdcaa; }
+
+/* Variables / names: default */
+.highlight .n,
+.highlight .nx { color: #d4d4d4; }
+
+/* Operators and punctuation */
+.highlight .o,
+.highlight .p { color: #d4d4d4; }
+
+/* Boolean / None literals */
+.highlight .kp { color: #569cd6; }
+
+/* Error token — don't make errors invisible */
+.highlight .err { color: #f44747; background-color: transparent; }
