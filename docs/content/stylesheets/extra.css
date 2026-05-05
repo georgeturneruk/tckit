@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Fragment+Mono:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+
+/* ---------------------------------------------------------------------------
+   Colour tokens — warm dark palette
+   Primary: TcKit terracotta (#DA7557), matched to logo
+   Background: near-black with warm tint, matching OpenClaw's palette
+--------------------------------------------------------------------------- */
+
+[data-md-color-scheme="tckit"] {
+  /* Primary — terracotta from the logo */
+  --md-primary-fg-color:        #DA7557;
+  --md-primary-fg-color--light: #E8987E;
+  --md-primary-fg-color--dark:  #BF5E3E;
+  --md-primary-bg-color:        #ffffff;
+  --md-primary-bg-color--light: rgba(255,255,255,0.7);
+
+  /* Accent */
+  --md-accent-fg-color:         #DA7557;
+  --md-accent-fg-color--transparent: rgba(218,117,87,0.1);
+  --md-accent-bg-color:         #ffffff;
+
+  /* Background — warm near-black */
+  --md-default-bg-color:        #0E0C0D;
+  --md-default-fg-color:        rgba(250,245,244,0.87);
+  --md-default-fg-color--light: rgba(250,245,244,0.54);
+  --md-default-fg-color--lighter: rgba(250,245,244,0.32);
+  --md-default-fg-color--lightest: rgba(250,245,244,0.07);
+
+  /* Code blocks */
+  --md-code-bg-color:           #1a1614;
+  --md-code-fg-color:           #e8e3e2;
+  --md-code-hl-color:           rgba(218,117,87,0.15);
+
+  /* Header */
+  --md-header-bg-color:         #110C0B;
+
+  /* Sidebar */
+  --md-sidebar-bg-color:        #110C0B;
+
+  /* Footer */
+  --md-footer-bg-color:         #110C0B;
+  --md-footer-bg-color--dark:   #0a0807;
+  --md-footer-fg-color:         rgba(250,245,244,0.75);
+  --md-footer-fg-color--light:  rgba(250,245,244,0.50);
+  --md-footer-fg-color--lighter: rgba(250,245,244,0.32);
+
+  /* Typeset */
+  --md-typeset-color:           rgba(250,245,244,0.87);
+  --md-typeset-a-color:         #DA7557;
+  --md-typeset-mark-color:      rgba(218,117,87,0.3);
+  --md-typeset-kbd-color:       #1a1614;
+  --md-typeset-kbd-accent-color: #2d2826;
+  --md-typeset-kbd-border-color: #3d3230;
+
+  /* Admonitions */
+  --md-admonition-bg-color:     #1a1614;
+
+  /* Warm grays for borders and dividers */
+  --md-default-border-color:    rgba(213,208,207,0.12);
+}
+
+/* ---------------------------------------------------------------------------
+   Typography
+--------------------------------------------------------------------------- */
+
+body,
+.md-typeset {
+  font-family: 'Fragment Mono', 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6,
+.md-header__title,
+.md-nav__title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1 { font-size: 1.8rem; }
+.md-typeset h2 { font-size: 1.3rem; }
+.md-typeset h3 { font-size: 1.1rem; }
+
+code,
+pre,
+.md-typeset code,
+.md-typeset pre {
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 0.78rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Header
+--------------------------------------------------------------------------- */
+
+.md-header {
+  background-color: #110C0B;
+  border-bottom: 1px solid rgba(213,208,207,0.1);
+  box-shadow: none;
+}
+
+/* Logo sizing in header */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.8rem;
+  width: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Navigation
+--------------------------------------------------------------------------- */
+
+.md-nav__item--active > .md-nav__link {
+  color: #DA7557;
+  font-weight: 500;
+}
+
+.md-nav__link:hover {
+  color: #E8987E;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: #DA7557;
+}
+
+/* ---------------------------------------------------------------------------
+   Content
+--------------------------------------------------------------------------- */
+
+/* Inline code */
+.md-typeset code:not(pre code) {
+  background-color: #1a1614;
+  border: 1px solid rgba(213,208,207,0.12);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  color: #E8987E;
+}
+
+/* Code blocks */
+.md-typeset pre {
+  background-color: #1a1614;
+  border: 1px solid rgba(213,208,207,0.1);
+  border-radius: 6px;
+}
+
+/* Tables */
+.md-typeset table:not([class]) th {
+  background-color: #1a1614;
+  color: rgba(250,245,244,0.87);
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: rgba(218,117,87,0.05);
+}
+
+/* Horizontal rules */
+.md-typeset hr {
+  border-color: rgba(213,208,207,0.12);
+}
+
+/* Search */
+.md-search__input {
+  background-color: rgba(255,255,255,0.07);
+}
+
+.md-search__input::placeholder {
+  color: rgba(250,245,244,0.4);
+}
