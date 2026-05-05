@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <DUT Name="E_ExampleState" Id="{12345678-0000-0000-0000-000000000031}">
+    <Declaration><![CDATA[
+// :Description: State machine states for the example function block.
+TYPE E_ExampleState :
+(
+    Idle    := 0,
+    Running := 1,
+    Error   := 2
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

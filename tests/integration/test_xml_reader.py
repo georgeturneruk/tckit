@@ -34,14 +34,40 @@ def test_get_structure_fb_example_type(sample_project_path: Path) -> None:
     assert fb.pou_type == POUType.FUNCTION_BLOCK
 
 
+def test_get_structure_finds_interface(sample_project_path: Path) -> None:
+    reader = XmlReader()
+    structure = reader.get_structure(str(sample_project_path))
+    names = [p.name for p in structure.pous]
+    assert "I_Example" in names
+
+
+def test_get_structure_interface_type(sample_project_path: Path) -> None:
+    reader = XmlReader()
+    structure = reader.get_structure(str(sample_project_path))
+    itf = next(p for p in structure.pous if p.name == "I_Example")
+    assert itf.pou_type == POUType.INTERFACE
+
+
 def test_get_structure_finds_gvl_params(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
     assert "GVL_Params" in structure.gvls
 
 
+def test_get_structure_finds_struct_dut(sample_project_path: Path) -> None:
+    reader = XmlReader()
+    structure = reader.get_structure(str(sample_project_path))
+    assert "ST_ExampleConfig" in structure.duts
+
+
+def test_get_structure_finds_enum_dut(sample_project_path: Path) -> None:
+    reader = XmlReader()
+    structure = reader.get_structure(str(sample_project_path))
+    assert "E_ExampleState" in structure.duts
+
+
 # ---------------------------------------------------------------------------
-# get_pou_interface
+# get_pou_interface — function block
 # ---------------------------------------------------------------------------
 
 
@@ -68,8 +94,57 @@ def test_get_pou_interface_pou_type(reader: XmlReader) -> None:
     assert interface.pou_type == POUType.FUNCTION_BLOCK
 
 
+def test_get_pou_interface_has_property(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("FB_Example")
+    prop_names = [p.name for p in interface.properties]
+    assert "ErrorId" in prop_names
+
+
+def test_get_pou_interface_property_return_type(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("FB_Example")
+    prop = next(p for p in interface.properties if p.name == "ErrorId")
+    assert prop.return_type == "UDINT"
+
+
+def test_get_pou_interface_property_has_get_and_set(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("FB_Example")
+    prop = next(p for p in interface.properties if p.name == "ErrorId")
+    assert prop.has_get is True
+    assert prop.has_set is True
+
+
 # ---------------------------------------------------------------------------
-# get_pou_item
+# get_pou_interface — interface (Itf element)
+# ---------------------------------------------------------------------------
+
+
+def test_get_pou_interface_itf_type(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("I_Example")
+    assert interface.pou_type == POUType.INTERFACE
+
+
+def test_get_pou_interface_itf_has_methods(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("I_Example")
+    method_names = [m.name for m in interface.methods]
+    assert "Execute" in method_names
+    assert "Reset" in method_names
+
+
+def test_get_pou_interface_itf_has_property(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("I_Example")
+    prop_names = [p.name for p in interface.properties]
+    assert "Status" in prop_names
+
+
+def test_get_pou_interface_itf_property_has_get_no_set(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("I_Example")
+    prop = next(p for p in interface.properties if p.name == "Status")
+    assert prop.has_get is True
+    assert prop.has_set is False
+
+
+# ---------------------------------------------------------------------------
+# get_pou_item — methods and properties
 # ---------------------------------------------------------------------------
 
 
@@ -88,6 +163,28 @@ def test_get_pou_item_execute_has_declaration(reader: XmlReader) -> None:
     assert "METHOD Execute" in item.declaration
 
 
+def test_get_pou_item_property_get_body(reader: XmlReader) -> None:
+    item = reader.get_pou_item("FB_Example", "ErrorId.Get")
+    assert "nErrorId" in item.body
+
+
+def test_get_pou_item_property_set_body(reader: XmlReader) -> None:
+    item = reader.get_pou_item("FB_Example", "ErrorId.Set")
+    assert "nErrorId" in item.body
+
+
+def test_get_pou_item_property_bare_returns_declaration(reader: XmlReader) -> None:
+    item = reader.get_pou_item("FB_Example", "ErrorId")
+    assert "PROPERTY ErrorId" in item.declaration
+    assert item.body == ""
+
+
+def test_get_pou_item_missing_accessor_raises(reader: XmlReader) -> None:
+    # I_Example.Status only has Get, not Set
+    with pytest.raises(FileNotFoundError):
+        reader.get_pou_item("I_Example", "Status.Set")
+
+
 # ---------------------------------------------------------------------------
 # get_gvl
 # ---------------------------------------------------------------------------
@@ -104,6 +201,33 @@ def test_get_gvl_has_name(reader: XmlReader) -> None:
 
 
 # ---------------------------------------------------------------------------
+# get_dut
+# ---------------------------------------------------------------------------
+
+
+def test_get_dut_struct_declaration(reader: XmlReader) -> None:
+    dut = reader.get_dut("ST_ExampleConfig")
+    assert "STRUCT" in dut.declaration
+    assert "nMaxRetries" in dut.declaration
+
+
+def test_get_dut_enum_declaration(reader: XmlReader) -> None:
+    dut = reader.get_dut("E_ExampleState")
+    assert "E_ExampleState" in dut.declaration
+    assert "Running" in dut.declaration
+
+
+def test_get_dut_has_name(reader: XmlReader) -> None:
+    dut = reader.get_dut("ST_ExampleConfig")
+    assert dut.name == "ST_ExampleConfig"
+
+
+def test_get_dut_has_path(reader: XmlReader) -> None:
+    dut = reader.get_dut("ST_ExampleConfig")
+    assert dut.path.endswith(".TcDUT")
+
+
+# ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
 
@@ -116,6 +240,11 @@ def test_unknown_pou_raises(reader: XmlReader) -> None:
 def test_unknown_item_raises(reader: XmlReader) -> None:
     with pytest.raises(FileNotFoundError):
         reader.get_pou_item("FB_Example", "NonExistentMethod")
+
+
+def test_unknown_dut_raises(reader: XmlReader) -> None:
+    with pytest.raises(FileNotFoundError):
+        reader.get_dut("NonExistentDUT")
 
 
 def test_get_structure_bad_path_raises() -> None:
