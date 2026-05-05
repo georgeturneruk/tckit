@@ -23,7 +23,7 @@ TcKit connects Claude Code to TwinCAT 3 projects via MCP (Model Context Protocol
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/tckit
+git clone https://github.com/turb5/tckit
 cd tckit
 
 # Configure

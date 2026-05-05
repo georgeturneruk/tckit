@@ -9,7 +9,7 @@
 ## Docker (recommended)
 
 ```bash
-git clone https://github.com/your-username/tckit
+git clone https://github.com/turb5/tckit
 cd tckit
 cp docker/.env.example docker/.env
 ```

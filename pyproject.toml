@@ -44,10 +44,10 @@ docs = [
 tckit = "tckit.server:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/tckit"
-Documentation = "https://tckit.dev"
-Repository = "https://github.com/your-username/tckit"
-Issues = "https://github.com/your-username/tckit/issues"
+Homepage = "https://github.com/turb5/tckit"
+Documentation = "https://turb5.github.io/tckit"
+Repository = "https://github.com/turb5/tckit"
+Issues = "https://github.com/turb5/tckit/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tckit"]
