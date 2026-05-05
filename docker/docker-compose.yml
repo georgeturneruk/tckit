@@ -1,0 +1,15 @@
+services:
+  tckit:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ..:/app
+    env_file:
+      - .env
+    environment:
+      - BRIDGE_URL=${BRIDGE_URL:-http://host.docker.internal:8765}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

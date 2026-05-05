@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tckit"
+version = "0.1.0"
+description = "AI-assisted development toolchain for TwinCAT 3 PLC engineering"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+keywords = ["twincat", "plc", "mcp", "ai", "beckhoff", "structured-text"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "blark>=0.8.0",
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "types-beautifulsoup4",
+]
+docs = [
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
+
+[project.scripts]
+tckit = "tckit.server:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/tckit"
+Documentation = "https://tckit.dev"
+Repository = "https://github.com/your-username/tckit"
+Issues = "https://github.com/your-username/tckit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tckit"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "TID252"]
+ignore = []
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Enforce adapter isolation: adapters may only import from tckit.ports and stdlib.
+# Cross-adapter imports are caught by the TID252 rule via banned-module-level-imports.
+# The actual enforcement is done by the custom lint check in scripts/check-adapter-isolation.py.
+
+[tool.ruff.lint.isort]
+known-first-party = ["tckit"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true

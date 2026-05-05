@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <POU Name="FB_Example" Id="{12345678-0000-0000-0000-000000000001}" SpecialFunc="None">
+    <Declaration><![CDATA[
+// :Description: Example function block for TcKit parser validation.
+// :param bEnable: Rising edge starts the operation
+// :param nSetpoint: Target value in engineering units
+FUNCTION_BLOCK FB_Example
+VAR_INPUT
+    bEnable    : BOOL;
+    nSetpoint  : INT;
+END_VAR
+VAR_OUTPUT
+    bDone      : BOOL;
+    bError     : BOOL;
+    nErrorId   : UDINT;
+END_VAR
+VAR
+    eState     : E_ExampleState := E_ExampleState.Idle;
+    nInternal  : INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+CASE eState OF
+    E_ExampleState.Idle:
+        IF bEnable THEN
+            eState := E_ExampleState.Running;
+        END_IF
+
+    E_ExampleState.Running:
+        nInternal := nSetpoint;
+        bDone := TRUE;
+        eState := E_ExampleState.Idle;
+
+    E_ExampleState.Error:
+        bError := TRUE;
+END_CASE
+]]></ST>
+    </Implementation>
+    <Method Name="Execute" Id="{12345678-0000-0000-0000-000000000002}">
+      <Declaration><![CDATA[
+// :Description: Execute one cycle of the operation.
+// :returns: TRUE when the operation completes successfully
+METHOD Execute : BOOL
+VAR_INPUT
+    bTrigger : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+IF bTrigger THEN
+    bDone := FALSE;
+    bError := FALSE;
+    nErrorId := 0;
+    eState := E_ExampleState.Running;
+END_IF
+
+Execute := bDone;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Reset" Id="{12345678-0000-0000-0000-000000000003}">
+      <Declaration><![CDATA[
+// :Description: Reset error state and outputs.
+METHOD Reset : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+bDone := FALSE;
+bError := FALSE;
+nErrorId := 0;
+eState := E_ExampleState.Idle;
+Reset := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

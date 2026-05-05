@@ -1,0 +1,73 @@
+site_name: TcKit
+site_description: AI-assisted development toolchain for TwinCAT 3 PLC engineering
+site_url: https://your-username.github.io/tckit
+repo_url: https://github.com/your-username/tckit
+repo_name: your-username/tckit
+edit_uri: edit/main/docs/content/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+docs_dir: content
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Docker Setup: getting-started/docker-setup.md
+    - Bridge Setup: getting-started/bridge-setup.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Ports: architecture/ports.md
+  - Adapters:
+    - blark reader: adapters/blark-reader.md
+    - automation writer: adapters/automation-writer.md
+    - xae_com builder: adapters/xae-com-builder.md
+    - tcunit runner: adapters/tcunit-runner.md
+    - sphinx generator: adapters/sphinx-generator.md
+    - beckhoff infosys: adapters/beckhoff-infosys.md
+  - Contributing: contributing.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true

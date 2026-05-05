@@ -1,0 +1,18 @@
+{
+  "reader": "blark",
+  "writer": "automation_interface",
+  "builder": "xae_com",
+  "test_runner": "tcunit",
+  "doc_generator": "sphinx",
+  "docs_searcher": "beckhoff_infosys",
+
+  "xae_mode": "attach",
+  "com_version": "17.0",
+
+  "doc_trigger": "on_build",
+  "comment_style": "rst",
+  "docs_output_path": "./docs/plc",
+
+  "infosys_cache_path": "./cache/infosys",
+  "infosys_lang": "1033"
+}

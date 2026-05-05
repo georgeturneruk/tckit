@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <GVL Name="GVL_Params" Id="{12345678-0000-0000-0000-000000000010}">
+    <Declaration><![CDATA[
+// :Description: Global parameters for the sample project.
+VAR_GLOBAL CONSTANT
+    nMaxRetries    : INT := 3;
+    fTimeout       : LREAL := 5.0;    (* seconds *)
+    sProjectName   : STRING := 'TcKit Sample';
+END_VAR
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

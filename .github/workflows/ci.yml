@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint + Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker compose -f docker/docker-compose.ci.yml build
+
+      - name: Ruff lint
+        run: docker compose -f docker/docker-compose.ci.yml run --rm tckit ruff check tckit/
+
+      - name: Unit tests
+        run: docker compose -f docker/docker-compose.ci.yml run --rm tckit pytest tests/unit/ -v
