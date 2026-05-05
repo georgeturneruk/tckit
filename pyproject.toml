@@ -21,7 +21,6 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.0.0",
-    "blark>=0.8.0",
     "httpx>=0.27.0",
     "beautifulsoup4>=4.12.0",
     "python-dotenv>=1.0.0",
@@ -38,6 +37,8 @@ dev = [
 docs = [
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.25.0",
+    "sphinx>=5.0,<7.0",
+    "plcdoc>=0.0.1",
 ]
 
 [project.scripts]
@@ -71,6 +72,9 @@ known-first-party = ["tckit"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "network: marks tests that require network access (deselect with '-m \"not network\"')",
+]
 
 [tool.mypy]
 python_version = "3.11"

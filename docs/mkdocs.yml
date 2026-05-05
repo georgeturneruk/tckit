@@ -44,7 +44,7 @@ nav:
     - Overview: architecture/overview.md
     - Ports: architecture/ports.md
   - Adapters:
-    - blark reader: adapters/blark-reader.md
+    - xml reader: adapters/xml-reader.md
     - automation writer: adapters/automation-writer.md
     - xae_com builder: adapters/xae-com-builder.md
     - tcunit runner: adapters/tcunit-runner.md

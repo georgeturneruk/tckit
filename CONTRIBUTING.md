@@ -10,7 +10,7 @@
 6. **Write** unit tests in `tests/unit/`
 7. **Document** in `docs/content/adapters/{name}-{port_type}.md`
 
-Naming convention: `{tool}_{port_type}` — e.g. `blark_reader`, `xae_com_builder`.
+Naming convention: `{tool}_{port_type}` — e.g. `xml_reader`, `xae_com_builder`.
 
 ## Adding a new port
 

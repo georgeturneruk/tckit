@@ -153,7 +153,7 @@ sections when the automation interface is unavailable.
 ## Rename Operations
 
 The automation interface does NOT expose a rename/refactor API.
-Cross-project variable renames must use the blark-based find-and-replace approach.
+Cross-project variable renames require a manual find-and-replace across `.TcPOU` files.
 
 **Always flag rename operations for human review before executing.**
 Add a comment in your response like:

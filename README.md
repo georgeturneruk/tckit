@@ -21,7 +21,7 @@ MCP Server (Python, Docker)
 └──────────────────────────────────────────────┘
     │              │              │
     ▼              ▼              ▼
-blark_reader  automation_   xae_com_
+xml_reader    automation_   xae_com_
               writer        builder
 (Docker)      (bridge →     (bridge →
                Windows)      Windows)
@@ -101,7 +101,7 @@ Phase 1 (Read Layer) — in progress.
 
 | Phase | Status |
 |-------|--------|
-| 1 — Read layer (blark reader, docs searcher, doc generator) | In progress |
+| 1 — Read layer (xml reader, docs searcher, doc generator) | In progress |
 | 2 — Write layer (automation writer, XAE builder) | Planned |
 | 3 — Test loop (TcUnit runner, autonomous loop) | Planned |
 | 4 — CI, PyPI, open source launch | Planned |

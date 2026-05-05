@@ -1,5 +1,5 @@
 {
-  "reader": "blark",
+  "reader": "xml",
   "writer": "automation_interface",
   "builder": "xae_com",
   "test_runner": "tcunit",

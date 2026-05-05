@@ -31,11 +31,11 @@ def _load_registries() -> None:
     from tckit.adapters.builders.xae_com_builder import XaeComBuilder
     from tckit.adapters.doc_generators.sphinx_generator import SphinxGenerator
     from tckit.adapters.docs_searchers.beckhoff_infosys import BeckhoffInfosys
-    from tckit.adapters.readers.blark_reader import BlarkReader
+    from tckit.adapters.readers.xml_reader import XmlReader
     from tckit.adapters.test_runners.tcunit_runner import TcUnitRunner
     from tckit.adapters.writers.automation_writer import AutomationWriter
 
-    _READER_REGISTRY["blark"] = BlarkReader
+    _READER_REGISTRY["xml"] = XmlReader
     _WRITER_REGISTRY["automation_interface"] = AutomationWriter
     _BUILDER_REGISTRY["xae_com"] = XaeComBuilder
     _TEST_RUNNER_REGISTRY["tcunit"] = TcUnitRunner
@@ -76,7 +76,7 @@ class TcKitConfig:
 
     def reader(self) -> ProjectReader:
         _ensure_registries()
-        name = self.get("reader", "blark")
+        name = self.get("reader", "xml")
         cls = _READER_REGISTRY.get(name)
         if cls is None:
             raise ValueError(f"Unknown reader adapter: {name!r}")

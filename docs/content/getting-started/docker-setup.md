@@ -35,7 +35,7 @@ docker compose -f docker/docker-compose.yml up
 
 If the Windows bridge is not running, TcKit works in read-only mode:
 
-- `blark_reader` — reads `.TcPOU` and `.TcGVL` files
+- `xml_reader` — reads `.TcPOU` and `.TcGVL` files
 - `sphinx_generator` — generates docs
 - `beckhoff_infosys` — searches Beckhoff documentation
 

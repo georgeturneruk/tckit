@@ -13,7 +13,7 @@ from tckit.ports.writer import ProjectWriter
 
 def _cfg(overrides: dict | None = None) -> TcKitConfig:
     base = {
-        "reader": "blark",
+        "reader": "xml",
         "writer": "automation_interface",
         "builder": "xae_com",
         "test_runner": "tcunit",
