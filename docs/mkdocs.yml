@@ -32,16 +32,27 @@ nav:
     - Installation: getting-started/installation.md
     - Docker Setup: getting-started/docker-setup.md
     - Bridge Setup: getting-started/bridge-setup.md
+  - Capabilities:
+    - ProjectReader:
+      - Overview: capabilities/project-reader/overview.md
+      - xml_reader: capabilities/project-reader/xml-reader.md
+    - ProjectWriter:
+      - Overview: capabilities/project-writer/overview.md
+      - automation_writer: capabilities/project-writer/automation-writer.md
+    - BuildRunner:
+      - Overview: capabilities/build-runner/overview.md
+      - xae_com_builder: capabilities/build-runner/xae-com-builder.md
+    - TestRunner:
+      - Overview: capabilities/test-runner/overview.md
+      - tcunit_runner: capabilities/test-runner/tcunit-runner.md
+    - DocGenerator:
+      - Overview: capabilities/doc-generator/overview.md
+      - sphinx_generator: capabilities/doc-generator/sphinx-generator.md
+    - DocsSearcher:
+      - Overview: capabilities/docs-searcher/overview.md
+      - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys.md
   - Architecture:
     - Overview: architecture/overview.md
-    - Ports: architecture/ports.md
-  - Adapters:
-    - xml reader: adapters/xml-reader.md
-    - automation writer: adapters/automation-writer.md
-    - xae_com builder: adapters/xae-com-builder.md
-    - tcunit runner: adapters/tcunit-runner.md
-    - sphinx generator: adapters/sphinx-generator.md
-    - beckhoff infosys: adapters/beckhoff-infosys.md
   - Contributing: contributing.md
 
 plugins:

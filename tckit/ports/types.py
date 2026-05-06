@@ -16,6 +16,16 @@ class Result:
     details: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class CommentDoc:
+    """Parsed documentation comment extracted from a declaration block."""
+
+    description: str = ""
+    params: dict[str, str] = field(default_factory=dict)
+    returns: str = ""
+    remarks: str = ""
+
+
 # ---------------------------------------------------------------------------
 # ProjectReader types
 # ---------------------------------------------------------------------------

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<h1>{{ project.name }}</h1>
+<p class="description">
+  {{ project.objects | length }} object{{ 's' if project.objects | length != 1 else '' }}
+  &mdash;
+  {% set counts = {} %}
+  {% for obj in project.objects %}
+    {% if obj.obj_type not in counts %}{% set _ = counts.update({obj.obj_type: 0}) %}{% endif %}
+    {% set _ = counts.update({obj.obj_type: counts[obj.obj_type] + 1}) %}
+  {% endfor %}
+  {% for type_key, label in [('function_block','function block'), ('program','program'), ('function','function'), ('interface','interface'), ('gvl','GVL'), ('struct','struct'), ('enum','enum')] %}
+    {% if counts.get(type_key, 0) > 0 %}
+      {{ counts[type_key] }} {{ label }}{{ 's' if counts[type_key] != 1 else '' }}&ensp;
+    {% endif %}
+  {% endfor %}
+</p>
+
+<hr>
+
+{% macro type_badge(obj_type) %}
+  {% if obj_type == 'function_block' %}<span class="badge badge-fb">FB</span>
+  {% elif obj_type == 'program' %}<span class="badge badge-prg">PRG</span>
+  {% elif obj_type == 'function' %}<span class="badge badge-fn">FN</span>
+  {% elif obj_type == 'interface' %}<span class="badge badge-itf">ITF</span>
+  {% elif obj_type == 'gvl' %}<span class="badge badge-gvl">GVL</span>
+  {% elif obj_type == 'struct' %}<span class="badge badge-struct">ST</span>
+  {% elif obj_type == 'enum' %}<span class="badge badge-enum">ENUM</span>
+  {% endif %}
+{% endmacro %}
+
+{% for section_type, section_label in [
+  ('function_block', 'Function Blocks'),
+  ('program',        'Programs'),
+  ('function',       'Functions'),
+  ('interface',      'Interfaces'),
+  ('gvl',            'Global Variable Lists'),
+  ('struct',         'Structures'),
+  ('enum',           'Enumerations'),
+] %}
+  {% set objs = project.objects | selectattr('obj_type', 'equalto', section_type) | list %}
+  {% if objs %}
+    <h2>{{ section_label }}</h2>
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        {% for obj in objs %}
+        <tr>
+          <td>
+            {{ type_badge(obj.obj_type) }}
+            <a href="{{ obj.name }}.html">{{ obj.name }}</a>
+          </td>
+          <td class="description">{{ obj.comment.description | truncate(120) if obj.comment.description else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endfor %}
+{% endblock %}
