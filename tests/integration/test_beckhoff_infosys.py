@@ -62,12 +62,62 @@ def test_get_page_returns_cached(tmp_path: Path) -> None:
     assert page.content == "This is cached content."
 
 
-def test_fb_candidate_urls_includes_slug(tmp_path: Path) -> None:
-    """Candidate URLs for an FB include the lowercased FB name."""
+def test_normalise_url_strips_english_php_wrapper(tmp_path: Path) -> None:
+    """_normalise_url converts english.php wrapper URLs to direct content URLs."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
-    candidates = infosys._fb_candidate_urls("FB_EcCoESdoRead")
-    slug = "fb_eccoesdoread"
-    assert any(slug in url for url in candidates)
+    wrapper = (
+        "https://infosys.beckhoff.com/english.php"
+        "?content=../content/1033/tf6310_tc3_tcpip/index.html&id="
+    )
+    direct = infosys._normalise_url(wrapper)
+    assert "english.php" not in direct
+    assert "content/1033/tf6310_tc3_tcpip/index.html" in direct
+    assert direct.startswith("https://infosys.beckhoff.com")
+
+
+def test_normalise_url_passes_through_direct_url(tmp_path: Path) -> None:
+    """_normalise_url leaves direct content URLs unchanged."""
+    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    url = "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84136843.html"
+    assert infosys._normalise_url(url) == url
+
+
+def test_ddg_cache_round_trip(tmp_path: Path) -> None:
+    """DDG URL list can be saved and loaded from cache."""
+    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    query = "site:infosys.beckhoff.com FB_SocketSend"
+    urls = [
+        "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/123.html",
+        "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/456.html",
+    ]
+    infosys._save_ddg_cache(query, urls)
+    loaded = infosys._load_ddg_cache(query)
+    assert loaded == urls
+
+
+def test_ddg_cache_miss_returns_none(tmp_path: Path) -> None:
+    """_load_ddg_cache returns None when no cached result exists."""
+    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    assert infosys._load_ddg_cache("site:infosys.beckhoff.com FB_Unknown") is None
+
+
+def test_find_fb_uses_ddg_cache(tmp_path: Path) -> None:
+    """find_fb() uses cached DDG results + cached page without any network call."""
+    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    url = "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84136843.html"
+
+    # Prime both caches
+    infosys._save_ddg_cache("site:infosys.beckhoff.com FB_ClientConnect", [url])
+    infosys._save_cache(
+        url,
+        "FB_ClientServerConnection - Beckhoff",
+        "The function block FB_ClientServerConnection manages connections.",
+    )
+
+    result = infosys.find_fb("FB_ClientConnect")
+    assert result.name == "FB_ClientConnect"
+    assert "FB_ClientServerConnection" in result.description
+    assert result.url == url
 
 
 # ---------------------------------------------------------------------------
