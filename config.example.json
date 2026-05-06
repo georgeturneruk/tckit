@@ -3,7 +3,7 @@
   "writer": "automation_interface",
   "builder": "xae_com",
   "test_runner": "tcunit",
-  "doc_generator": "sphinx",
+  "doc_generator": "html",
   "docs_searcher": "beckhoff_infosys",
 
   "xae_mode": "attach",

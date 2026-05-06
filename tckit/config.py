@@ -29,7 +29,7 @@ _DOCS_SEARCHER_REGISTRY: dict[str, type[DocsSearcher]] = {}
 def _load_registries() -> None:
     """Populate registries lazily to avoid importing adapters at module level."""
     from tckit.adapters.builders.xae_com_builder import XaeComBuilder
-    from tckit.adapters.doc_generators.sphinx_generator import SphinxGenerator
+    from tckit.adapters.doc_generators.html_generator import HtmlGenerator
     from tckit.adapters.docs_searchers.beckhoff_infosys import BeckhoffInfosys
     from tckit.adapters.readers.xml_reader import XmlReader
     from tckit.adapters.test_runners.tcunit_runner import TcUnitRunner
@@ -39,7 +39,7 @@ def _load_registries() -> None:
     _WRITER_REGISTRY["automation_interface"] = AutomationWriter
     _BUILDER_REGISTRY["xae_com"] = XaeComBuilder
     _TEST_RUNNER_REGISTRY["tcunit"] = TcUnitRunner
-    _DOC_GENERATOR_REGISTRY["sphinx"] = SphinxGenerator
+    _DOC_GENERATOR_REGISTRY["html"] = HtmlGenerator
     _DOCS_SEARCHER_REGISTRY["beckhoff_infosys"] = BeckhoffInfosys
 
 
@@ -108,7 +108,7 @@ class TcKitConfig:
 
     def doc_generator(self) -> DocGenerator:
         _ensure_registries()
-        name = self.get("doc_generator", "sphinx")
+        name = self.get("doc_generator", "html")
         cls = _DOC_GENERATOR_REGISTRY.get(name)
         if cls is None:
             raise ValueError(f"Unknown doc_generator adapter: {name!r}")

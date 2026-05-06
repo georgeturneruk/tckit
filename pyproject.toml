@@ -37,8 +37,7 @@ dev = [
 docs = [
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.25.0",
-    "sphinx>=5.0,<7.0",
-    "plcdoc>=0.0.1",
+    "jinja2>=3.0",
 ]
 
 [project.scripts]
