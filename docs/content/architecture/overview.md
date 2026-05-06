@@ -3,7 +3,7 @@
 TcKit uses a **ports & adapters** (hexagonal) architecture.
 
 ```
-Claude Code
+AI agent (any MCP client)
     │
     ▼ (MCP protocol)
 MCP Server (Python, Docker)
@@ -51,4 +51,4 @@ See [Contributing](../contributing.md) for the full process.
 4. Register it in `tckit/config.py`
 5. Add the config name to `config.example.json`
 6. Write unit tests in `tests/unit/`
-7. Document it in `docs/content/adapters/`
+7. Document it under `docs/content/capabilities/<port>/`

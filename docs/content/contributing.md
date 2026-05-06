@@ -33,7 +33,7 @@
 
 6. **Write unit tests** in `tests/unit/`.
 
-7. **Document it** in `docs/content/adapters/my-reader.md`.
+7. **Document it** under `docs/content/capabilities/<port>/my-reader.md`.
 
 ## Code style
 
