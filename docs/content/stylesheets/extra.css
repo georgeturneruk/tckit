@@ -54,6 +54,7 @@
 
   /* Admonitions */
   --md-admonition-bg-color:     #1a1614;
+  --md-admonition-fg-color:     rgba(250,245,244,0.87);
 
   /* Warm grays for borders and dividers */
   --md-default-border-color:    rgba(213,208,207,0.12);
@@ -124,6 +125,13 @@ pre,
   width: auto;
 }
 
+/* Material hides the logo on mobile by default — show it. */
+.md-header__button.md-logo {
+  display: inline-block;
+  padding: 0.4rem;
+  margin: 0.2rem;
+}
+
 /* ---------------------------------------------------------------------------
    Navigation
 --------------------------------------------------------------------------- */
@@ -182,6 +190,27 @@ pre,
   background-color: rgba(218,117,87,0.05);
 }
 
+/* Admonitions — force light text in body and title for the dark theme */
+.md-typeset .admonition,
+.md-typeset details {
+  background-color: #1a1614;
+  border-color: rgba(213,208,207,0.12);
+  color: rgba(250,245,244,0.87);
+}
+
+.md-typeset .admonition > *:not(.admonition-title):not(summary),
+.md-typeset details > *:not(.admonition-title):not(summary),
+.md-typeset .admonition p,
+.md-typeset details p {
+  color: rgba(250,245,244,0.87);
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  color: rgba(250,245,244,0.95);
+  background-color: rgba(255,255,255,0.04);
+}
+
 /* Horizontal rules */
 .md-typeset hr {
   border-color: rgba(213,208,207,0.12);
@@ -196,13 +225,15 @@ pre,
   color: rgba(250,245,244,0.4);
 }
 
-/* Copy-to-clipboard button — visible against dark code background */
+/* Copy-to-clipboard button — white so it stands out against the dark code background */
 .md-clipboard {
-  color: rgba(250,245,244,0.3);
+  color: #ffffff;
+  opacity: 0.85;
 }
 
 .md-clipboard:hover {
-  color: rgba(250,245,244,0.8);
+  color: #ffffff;
+  opacity: 1;
 }
 
 /* Prevent black text leaking through on table cells and other elements */
@@ -217,32 +248,33 @@ pre,
 }
 
 /* ---------------------------------------------------------------------------
-   Syntax highlighting — VS Code Dark+ palette
-   Background: #1e1e1e, default text: #d4d4d4
+   Syntax highlighting — brighter palette tuned for the warm dark theme
+   Background: #1e1e1e, default text bumped to #f0eeec for stronger contrast
 --------------------------------------------------------------------------- */
 
 .md-typeset pre > code,
 .highlight code,
 .highlight {
   background-color: #1e1e1e !important;
-  color: #d4d4d4;
+  color: #f0eeec;
 }
 
-/* Keywords: blue */
+/* Keywords: bright blue */
 .highlight .k,
 .highlight .kd,
 .highlight .kn,
 .highlight .kr,
 .highlight .kt,
-.highlight .kc { color: #569cd6; }
+.highlight .kc,
+.highlight .kp { color: #7cb7ff; }
 
-/* Built-ins and type names: teal */
+/* Built-ins and type names: bright teal */
 .highlight .nb,
 .highlight .nc,
 .highlight .nn,
-.highlight .bp { color: #4ec9b0; }
+.highlight .bp { color: #5dd6bf; }
 
-/* Strings: muted orange */
+/* Strings: warm orange */
 .highlight .s,
 .highlight .s1,
 .highlight .s2,
@@ -254,42 +286,55 @@ pre,
 .highlight .se,
 .highlight .sh,
 .highlight .ss,
-.highlight .sx { color: #ce9178; }
+.highlight .sx { color: #e8a878; }
 
-/* Comments: green */
+/* Comments: green, softened */
 .highlight .c,
 .highlight .c1,
 .highlight .cm,
 .highlight .cs,
 .highlight .cp,
-.highlight .cpf { color: #6a9955; font-style: italic; }
+.highlight .cpf { color: #8bc77a; font-style: italic; }
 
-/* Numbers: light green */
+/* Numbers: pale green */
 .highlight .m,
 .highlight .mi,
 .highlight .mf,
 .highlight .mh,
 .highlight .mo,
 .highlight .mb,
-.highlight .il { color: #b5cea8; }
+.highlight .il { color: #c8e6b4; }
 
 /* Functions and method names: yellow */
 .highlight .nf,
-.highlight .fm { color: #dcdcaa; }
+.highlight .fm,
+.highlight .nd { color: #e8e08a; }
 
-/* Decorators / annotations: yellow-ish */
-.highlight .nd { color: #dcdcaa; }
+/* JSON / XML / HTML tag names and attributes — used by JSON keys */
+.highlight .nt,
+.highlight .na { color: #7cb7ff; }
 
-/* Variables / names: default */
+/* Variables / names — explicit so they don't fall back to grey */
 .highlight .n,
-.highlight .nx { color: #d4d4d4; }
+.highlight .nx,
+.highlight .nv,
+.highlight .vi,
+.highlight .vg,
+.highlight .vc { color: #f0eeec; }
 
-/* Operators and punctuation */
+/* Operators, punctuation, generic output — slightly muted but readable */
 .highlight .o,
-.highlight .p { color: #d4d4d4; }
+.highlight .ow,
+.highlight .p,
+.highlight .pi { color: #d8d4d2; }
 
-/* Boolean / None literals */
-.highlight .kp { color: #569cd6; }
+/* Bash command-line tokens (flags, switches) */
+.highlight .nl { color: #e8a878; }
 
-/* Error token — don't make errors invisible */
-.highlight .err { color: #f44747; background-color: transparent; }
+/* Diff / generic markers, when present */
+.highlight .gd { color: #f08080; background-color: rgba(240,128,128,0.08); }
+.highlight .gi { color: #8bc77a; background-color: rgba(139,199,122,0.08); }
+.highlight .gh { color: #7cb7ff; font-weight: 600; }
+
+/* Error token — visible but not alarming */
+.highlight .err { color: #ff6b6b; background-color: transparent; }
