@@ -25,6 +25,7 @@ env/
 .env
 .env.*
 !.env.example
+!.env.docs.example
 
 # Docker
 docker/.env
