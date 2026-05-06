@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -226,9 +227,28 @@ class BeckhoffInfosys(DocsSearcher):
     def _ddg_search(self, query: str, max_results: int = 5) -> list[str]:
         """Search DuckDuckGo HTML endpoint and return direct infosys content URLs.
 
-        Parses .result__url elements which contain the actual destination URL
-        as visible text (not a redirect), already in content/1033/... form.
+        Results are cached so the same query never hits DDG twice.
+        Retries once with a 3-second delay on rate-limit (HTTP 202/429) responses.
         """
+        # Check DDG result cache first
+        cached = self._load_ddg_cache(query)
+        if cached is not None:
+            return cached[:max_results]
+
+        urls = self._ddg_fetch(query)
+
+        # On rate-limit (202/empty), wait and retry once
+        if not urls:
+            time.sleep(3)
+            urls = self._ddg_fetch(query)
+
+        if urls:
+            self._save_ddg_cache(query, urls)
+
+        return urls[:max_results]
+
+    def _ddg_fetch(self, query: str) -> list[str]:
+        """Single DDG fetch — parses .result__url elements for infosys content URLs."""
         try:
             response = httpx.get(
                 DDG_HTML_URL,
@@ -237,7 +257,8 @@ class BeckhoffInfosys(DocsSearcher):
                 timeout=10,
                 follow_redirects=True,
             )
-            response.raise_for_status()
+            if response.status_code not in (200, 202):
+                response.raise_for_status()
         except (httpx.HTTPStatusError, httpx.RequestError):
             return []
 
@@ -249,15 +270,33 @@ class BeckhoffInfosys(DocsSearcher):
             if url_el is None:
                 continue
             raw = url_el.get_text(strip=True)
-            # DDG shows the URL without scheme — add https:// if missing
             if not raw.startswith("http"):
                 raw = "https://" + raw
             if "infosys.beckhoff.com" in raw and "/content/" in raw:
                 urls.append(raw)
-                if len(urls) >= max_results:
-                    break
 
         return urls
+
+    def _load_ddg_cache(self, query: str) -> list[str] | None:
+        key = "ddg_" + hashlib.sha256(query.encode()).hexdigest()[:16]
+        path = self._cache_dir / f"{key}.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                return data.get("urls", [])
+            except (json.JSONDecodeError, OSError):
+                pass
+        return None
+
+    def _save_ddg_cache(self, query: str, urls: list[str]) -> None:
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        key = "ddg_" + hashlib.sha256(query.encode()).hexdigest()[:16]
+        path = self._cache_dir / f"{key}.json"
+        entry = {"query": query, "urls": urls, "fetched_at": datetime.now(tz=UTC).isoformat()}
+        path.write_text(
+            json.dumps(entry, indent=2),
+            encoding="utf-8",
+        )
 
     # ------------------------------------------------------------------
     # URL helpers
