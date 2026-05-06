@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from tckit.config import load_config
 
-mcp = FastMCP("tckit")
+mcp = FastMCP("tckit", host="0.0.0.0", port=8000)
 _cfg = load_config()
 
 
@@ -273,12 +273,49 @@ def get_doc_page(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# DocGenerator tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def generate_docs(project_path: str, output_path: str) -> str:
+    """Generate Sphinx HTML documentation from RST-commented TwinCAT source.
+
+    Uses plcdoc to extract RST docstrings from .TcPOU, .TcGVL, and .TcDUT
+    files and compiles them into HTML with Sphinx.
+
+    Output is written to output_path/_build/html/index.html.
+
+    :param project_path: Absolute path to the TwinCAT PLC project directory.
+    :param output_path: Directory where HTML output should be written.
+    """
+    try:
+        result = _cfg.doc_generator().generate(project_path, output_path)
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+@mcp.tool()
+def get_doc_status() -> str:
+    """Return the current documentation generation status.
+
+    Returns one of: idle, generating, complete, error.
+    """
+    try:
+        status = _cfg.doc_generator().get_status()
+        return _ok({"status": status.value})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    mcp.run()
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
