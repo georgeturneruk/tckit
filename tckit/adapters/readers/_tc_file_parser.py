@@ -1,4 +1,4 @@
-"""_tcpou_parser — private XML/CDATA utilities for .TcPOU, .TcGVL, and .TcDUT files.
+"""_tc_file_parser — private XML/CDATA utilities for .TcPOU, .TcGVL, and .TcDUT files.
 
 Stdlib only: xml.etree.ElementTree, re, pathlib.
 No third-party dependencies.

@@ -17,7 +17,7 @@ def _cfg(overrides: dict | None = None) -> TcKitConfig:
         "writer": "automation_interface",
         "builder": "xae_com",
         "test_runner": "tcunit",
-        "doc_generator": "sphinx",
+        "doc_generator": "html",
         "docs_searcher": "beckhoff_infosys",
     }
     if overrides:
