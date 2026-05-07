@@ -30,19 +30,35 @@ def _safety_check(action: str, target_ams_id: str, confirmed: bool) -> str | Non
 
     None means the caller may proceed normally.
     A non-None return should be returned directly from the MCP tool.
+
+    Precedence (highest to lowest):
+      1. BLOCKED_NETIDS  — always rejected, cannot be bypassed
+      2. ALLOWED_NETIDS  — always permitted without confirmation (e.g. test VMs)
+      3. SAFETY_CONFIRMATIONS=false — disables gate for all targets
+      4. confirmed=True  — explicit per-call approval
+      5. Default         — return awaiting_confirmation
     """
-    # Blacklist — enforced regardless of SAFETY_CONFIRMATIONS or confirmed flag
-    blocked_raw = os.getenv("BLOCKED_NETIDS", "")
-    blocked = [n.strip() for n in blocked_raw.split(",") if n.strip()]
-    if target_ams_id in blocked:
+    def _parse_netids(env_var: str) -> list[str]:
+        return [n.strip() for n in os.getenv(env_var, "").split(",") if n.strip()]
+
+    # 1. Blacklist — always enforced, cannot be bypassed
+    if target_ams_id in _parse_netids("BLOCKED_NETIDS"):
         return _err(
             f"NetId {target_ams_id!r} is in BLOCKED_NETIDS and cannot be targeted. "
             f"Remove it from BLOCKED_NETIDS in docker/.env to allow access."
         )
 
-    # Confirmation gate — skipped when SAFETY_CONFIRMATIONS=false
-    confirmations_enabled = os.getenv("SAFETY_CONFIRMATIONS", "true").lower() != "false"
-    if confirmations_enabled and not confirmed:
+    # 2. Whitelist — these targets bypass the confirmation gate (e.g. test VMs)
+    allowed = _parse_netids("ALLOWED_NETIDS")
+    if allowed and target_ams_id in allowed:
+        return None  # always permitted, no confirmation needed
+
+    # 3. Global disable — trusted closed network, fully autonomous operation
+    if os.getenv("SAFETY_CONFIRMATIONS", "true").lower() == "false":
+        return None
+
+    # 4 & 5. Confirmation gate
+    if not confirmed:
         return _ok({
             "action": action,
             "target_ams_id": target_ams_id,
@@ -56,8 +72,10 @@ def _safety_check(action: str, target_ams_id: str, confirmed: bool) -> str | Non
                 "or stop if you are unsure about the target."
             ),
             "override_info": (
-                "To disable confirmations globally set SAFETY_CONFIRMATIONS=false in docker/.env. "
-                "To permanently block a NetId set BLOCKED_NETIDS=<netid> in docker/.env."
+                "To skip confirmation for known-safe targets (e.g. a test VM), "
+                "add the NetId to ALLOWED_NETIDS in docker/.env. "
+                "To disable all confirmations set SAFETY_CONFIRMATIONS=false. "
+                "To permanently block a NetId set BLOCKED_NETIDS=<netid>."
             ),
         })
 
