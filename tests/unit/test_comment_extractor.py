@@ -70,6 +70,11 @@ class TestDetectStyle:
     def test_attribute_pragma_only_is_plain(self):
         assert _detect_style("{attribute 'hide'}") == "plain"
 
+    def test_inline_block_comment_does_not_trigger_block_rst(self):
+        # (* ... *) appearing inside a variable line must not be treated as block doc
+        preamble = "// :Description: Some GVL\nVAR_GLOBAL\n    x : REAL := 1.0; (* seconds *)\nEND_VAR"
+        assert _detect_style(preamble) == "line_rst"
+
 
 # ---------------------------------------------------------------------------
 # RST line comment style
