@@ -11,6 +11,11 @@
       POST /build    -> harness\Invoke-TcBuild.ps1
       POST /deploy   -> harness\Invoke-TcDeploy.ps1
       POST /runtime  -> harness\Invoke-TcRuntime.ps1
+      POST /open     -> harness\Open-TcProject.ps1
+      POST /create   -> harness\New-TcProject.ps1
+      POST /pou      -> harness\Add-TcPou.ps1
+      POST /method   -> harness\Add-TcMethod.ps1
+      POST /item     -> harness\Update-TcPouItem.ps1
       GET  /results  -> harness\Get-TcUnitResults.ps1
       GET  /health   -> {"status": "ok"}
 
@@ -116,6 +121,31 @@ try {
                 'POST /runtime' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Invoke-TcRuntime.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /open' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Open-TcProject.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /create' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'New-TcProject.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /pou' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcPou.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /method' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcMethod.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /item' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcPouItem.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'GET /results' {
