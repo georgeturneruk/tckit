@@ -32,8 +32,8 @@ TcKit is the layer in between. Instead of dumping files at the model, it exposes
 | [ProjectReader](capabilities/project-reader/overview.md) | Read POUs, interfaces, methods, GVLs, DUTs at three precision levels | Complete |
 | [DocsSearcher](capabilities/docs-searcher/overview.md) | Fetch vendor documentation pages on demand | Complete |
 | [DocGenerator](capabilities/doc-generator/overview.md) | Render docs from comments in ST source | Complete |
-| [ProjectWriter](capabilities/project-writer/overview.md) | Structural writes via the IDE's authoring interface | In progress |
-| [BuildRunner](capabilities/build-runner/overview.md) | Build, deploy, runtime control with structured diagnostics | In progress |
+| [ProjectWriter](capabilities/project-writer/overview.md) | Structural writes via the IDE's authoring interface | Complete |
+| [BuildRunner](capabilities/build-runner/overview.md) | Build, deploy, runtime control with structured diagnostics | Complete |
 | [TestRunner](capabilities/test-runner/overview.md) | Run unit tests, return parsed suite/test trees | Planned |
 
 ---
