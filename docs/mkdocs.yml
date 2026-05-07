@@ -47,7 +47,7 @@ nav:
       - tcunit_runner: capabilities/test-runner/tcunit-runner.md
     - DocGenerator:
       - Overview: capabilities/doc-generator/overview.md
-      - sphinx_generator: capabilities/doc-generator/sphinx-generator.md
+      - html_generator: capabilities/doc-generator/html-generator.md
     - DocsSearcher:
       - Overview: capabilities/docs-searcher/overview.md
       - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys.md
