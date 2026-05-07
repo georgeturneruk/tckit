@@ -88,15 +88,21 @@ def _extract_preamble(declaration: str) -> str:
 
 
 def _detect_style(preamble: str) -> str:
-    """Detect the comment style in the preamble text."""
-    if "(*~" in preamble:
-        return "xml_docu"
-    if "(*" in preamble:
-        return "block_rst"
-    # Check if any non-empty line starts with //
+    """Detect the comment style in the preamble text.
+
+    Block comment markers `(*` must appear at the START of a non-empty line
+    to count as a doc comment — inline block comments inside variable
+    declarations (e.g. `x : REAL := 1.0; (* unit *)`) must not trigger this.
+    """
     for line in preamble.splitlines():
         stripped = line.strip()
-        if stripped and stripped.startswith("//"):
+        if not stripped:
+            continue
+        if stripped.startswith("(*~"):
+            return "xml_docu"
+        if stripped.startswith("(*"):
+            return "block_rst"
+        if stripped.startswith("//"):
             return "line_rst"
     return "plain"
 
