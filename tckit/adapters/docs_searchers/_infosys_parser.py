@@ -70,7 +70,10 @@ def extract_parameter_table(soup: BeautifulSoup) -> list[dict[str, str]]:
     """Extract parameter rows from Beckhoff parameter tables.
 
     Returns a list of dicts with keys: name, type, direction, description.
-    Handles variations in column ordering and naming.
+    Handles two Beckhoff table layouts:
+      1. Single table with a "Direction" column (older style)
+      2. Separate tables per VAR_INPUT / VAR_OUTPUT block, identified by
+         the nearest preceding heading (newer TF6xxx style)
     """
     rows: list[dict[str, str]] = []
 
@@ -97,17 +100,23 @@ def extract_parameter_table(soup: BeautifulSoup) -> list[dict[str, str]]:
             "description": _find_col(headers, ("description", "comment", "meaning")),
         }
 
+        # Infer direction from preceding heading when there's no direction column
+        heading_direction = ""
+        if col["direction"] is None:
+            heading_direction = _infer_direction_from_heading(table)
+
         for tr in table.find_all("tr")[1:]:  # skip header row
             if not isinstance(tr, Tag):
                 continue
             cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
             if not cells:
                 continue
+            direction = _cell(cells, col["direction"]) or heading_direction
             rows.append(
                 {
                     "name": _cell(cells, col["name"]),
                     "type": _cell(cells, col["type"]),
-                    "direction": _cell(cells, col["direction"]),
+                    "direction": direction,
                     "description": _cell(cells, col["description"]),
                 }
             )
@@ -137,6 +146,40 @@ def _clean_text(text: str) -> str:
         result.append(line)
         prev_blank = is_blank
     return "\n".join(result).strip()
+
+
+_INPUT_HEADINGS = ("var_input", "input", "inputs", "varat_eingang", "eingang")
+_OUTPUT_HEADINGS = ("var_output", "output", "outputs", "var_in_out", "in_out", "ausgang")
+
+
+def _infer_direction_from_heading(table: Tag) -> str:
+    """Walk backwards through siblings/parents to find a heading that implies direction.
+
+    Beckhoff TF6xxx pages use separate tables per direction block, titled
+    e.g. 'VAR_INPUT', 'Inputs', 'VAR_OUTPUT', 'Outputs'.
+    """
+    # Check previous siblings first (heading directly above the table)
+    for sibling in table.find_previous_siblings():
+        if not isinstance(sibling, Tag):
+            continue
+        if sibling.name in ("h1", "h2", "h3", "h4", "h5", "p", "caption"):
+            text = sibling.get_text(strip=True).lower()
+            if any(kw in text for kw in _INPUT_HEADINGS):
+                return "input"
+            if any(kw in text for kw in _OUTPUT_HEADINGS):
+                return "output"
+            break  # stop at first heading-like element
+
+    # Check table caption
+    caption = table.find("caption")
+    if caption and isinstance(caption, Tag):
+        text = caption.get_text(strip=True).lower()
+        if any(kw in text for kw in _INPUT_HEADINGS):
+            return "input"
+        if any(kw in text for kw in _OUTPUT_HEADINGS):
+            return "output"
+
+    return ""
 
 
 def _find_col(headers: list[str], candidates: tuple[str, ...]) -> int | None:
