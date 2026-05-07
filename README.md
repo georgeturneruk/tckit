@@ -88,6 +88,9 @@ Adapters are isolated behind port interfaces (Python ABCs). The server only call
 
 ## Quick Start
 
+> [!CAUTION]
+> TcKit is an **engineering tool for development environments**. The `deploy` and `start_runtime` tools write to and restart a running PLC. By default, these operations require explicit `confirmed=True` — always verify the target NetId before proceeding. To disable confirmations on a trusted closed network, set `SAFETY_CONFIRMATIONS=false` in `docker/.env`. To permanently block specific targets (e.g. a production PLC), set `BLOCKED_NETIDS=<netid>,...` — this cannot be bypassed even with `confirmed=True`.
+
 **Requirements:** Docker + Docker Compose. For write/build/test operations: a Windows PC with TwinCAT 3.1 Build 4026.
 
 ```bash
