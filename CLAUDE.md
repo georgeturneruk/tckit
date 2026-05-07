@@ -95,9 +95,9 @@ docs = docs_searcher.find_fb("FB_EcCoESdoRead")
 
 ## Writing ST Code
 
-### Comment Style — RST (reStructuredText)
-Always write RST-format comments. This is aligned with Beckhoff TE1030
-and feeds into the Sphinx doc generation pipeline.
+### Comment Style
+The doc generator auto-detects three styles — use whichever is already present in the
+codebase. For new code, prefer RST line comments:
 
 ```pascal
 // :Description: Brief description of what this FB does
@@ -110,6 +110,8 @@ VAR_INPUT
     sNetId   : T_AmsNetId;
 END_VAR
 ```
+
+Beckhoff XML `<docu>` style (TcOpen / TE1030) is also fully supported and auto-detected.
 
 ### Naming Conventions
 Follow standard TwinCAT conventions:
@@ -277,7 +279,7 @@ Always follow this pattern — no exceptions:
 4. Register it in `tckit/config.py` adapter registry
 5. Add the config name to `config.example.json`
 6. Write unit tests in `tests/unit/`
-7. Document it in `docs/content/adapters/`
+7. Document it in `docs/content/capabilities/<port>/`
 
 ---
 
@@ -306,7 +308,7 @@ of an existing one. Discuss with the user before adding ports.
 - Do not deploy without a successful build
 - Do not continue looping after 5 failed test iterations
 - Do not put secrets in config.json or commit .env files
-- Do not write code comments without RST format
+- Do not write code comments in a format other than RST line (`// :Description:`) or Beckhoff XML (`(*~ <docu> ~*)`)
 
 ---
 
