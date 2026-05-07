@@ -124,8 +124,8 @@ Add to your MCP client config:
 | ProjectReader | Complete |
 | DocsSearcher | Complete |
 | DocGenerator | Complete |
-| ProjectWriter | In progress |
-| BuildRunner | In progress |
+| ProjectWriter | Complete |
+| BuildRunner | Complete |
 | TestRunner | Planned |
 
 ---
