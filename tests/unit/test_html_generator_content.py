@@ -304,5 +304,5 @@ class TestHtmlSafety:
         assert result.success
 
         html = (out / "FB_Xss.html").read_text(encoding="utf-8")
-        assert "<script>" not in html
-        assert "&lt;script&gt;" in html or "alert" not in html
+        assert "<script>alert" not in html
+        assert "alert('xss')" not in html

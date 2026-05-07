@@ -13,16 +13,19 @@
   {% endif %}
 {% endmacro %}
 
-{% macro var_table(vars, title) %}
+{% macro var_table(vars, title, badge_class="") %}
   {% if vars %}
-  <h3>{{ title }}</h3>
+  <h3>
+    {{ title }}
+    {% if badge_class %}<span class="badge {{ badge_class }}" style="font-size:0.55rem;vertical-align:middle;">{{ title }}</span>{% endif %}
+  </h3>
   <table>
     <thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead>
     <tbody>
       {% for v in vars %}
       <tr>
         <td><code>{{ v.name }}</code></td>
-        <td><code>{{ v.var_type }}</code></td>
+        <td>{{ v.var_type | link_type }}</td>
         <td class="description">{{ v.comment }}</td>
       </tr>
       {% endfor %}
@@ -58,8 +61,9 @@
 <hr>
 
 {# Variable tables #}
-{{ var_table(obj.inputs,    'Inputs') }}
-{{ var_table(obj.outputs,   'Outputs') }}
+{{ var_table(obj.inputs,  'Inputs') }}
+{{ var_table(obj.inout,   'In/Out') }}
+{{ var_table(obj.outputs, 'Outputs') }}
 {{ var_table(obj.variables, 'Variables') }}
 
 {# Methods #}
@@ -73,7 +77,7 @@
     {% if method.is_abstract %}<span class="badge badge-prot">ABSTRACT</span>{% endif %}
     {% if method.is_final %}<span class="badge badge-prot">FINAL</span>{% endif %}
     {% if method.return_type %}
-      <span class="item-return-type">: {{ method.return_type }}</span>
+      <span class="item-return-type">: {{ method.return_type | link_type }}</span>
     {% endif %}
   </div>
   <div class="item-card-body">
@@ -82,6 +86,7 @@
     {% endif %}
 
     {{ var_table(method.inputs,  'Parameters') }}
+    {{ var_table(method.inout,   'In/Out') }}
     {{ var_table(method.outputs, 'Outputs') }}
 
     {% if method.comment.returns %}
@@ -104,10 +109,11 @@
 <div class="item-card">
   <div class="item-card-header">
     {{ prop.name }}
+    {% if prop.visibility %}<span class="badge badge-{% if prop.visibility == 'PUBLIC' %}pub{% elif prop.visibility == 'PRIVATE' %}priv{% else %}prot{% endif %}">{{ prop.visibility }}</span>{% endif %}
     {% if prop.has_get %}<span class="badge badge-get">GET</span>{% endif %}
     {% if prop.has_set %}<span class="badge badge-set">SET</span>{% endif %}
     {% if prop.return_type %}
-      <span class="item-return-type">: {{ prop.return_type }}</span>
+      <span class="item-return-type">: {{ prop.return_type | link_type }}</span>
     {% endif %}
   </div>
   {% if prop.comment.description %}
@@ -125,6 +131,16 @@
 <ul>
   {% for action in obj.actions %}
   <li>{{ action }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{# Used by #}
+{% if obj.used_by %}
+<h2>Used by</h2>
+<ul>
+  {% for name in obj.used_by | sort %}
+  <li><a href="{{ name }}.html">{{ name }}</a></li>
   {% endfor %}
 </ul>
 {% endif %}

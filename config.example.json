@@ -4,6 +4,7 @@
   "builder": "xae_com",
   "test_runner": "tcunit",
   "doc_generator": "html",
+  "_doc_generator_options": "html | markdown",
   "docs_searcher": "beckhoff_infosys",
 
   "xae_mode": "attach",
