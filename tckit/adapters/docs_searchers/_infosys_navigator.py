@@ -15,7 +15,7 @@ After the first build, all lookups within a section are local cache reads.
 from __future__ import annotations
 
 import time
-from urllib.parse import urljoin, urlparse, parse_qs
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup, Tag
