@@ -11,7 +11,6 @@ Pipeline:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from jinja2 import Environment, PackageLoader
@@ -19,7 +18,6 @@ from markupsafe import Markup
 
 from tckit.adapters.doc_generators._doc_model import (
     ObjectDoc,
-    ProjectDoc,
     _base_type,
     build_project_doc,
 )
