@@ -40,6 +40,7 @@ class MethodDoc:
     is_final: bool = False
     inputs: list[VariableDoc] = field(default_factory=list)
     outputs: list[VariableDoc] = field(default_factory=list)
+    inout: list[VariableDoc] = field(default_factory=list)
     body: str = ""
 
 
@@ -66,10 +67,12 @@ class ObjectDoc:
     implements: list[str] = field(default_factory=list)  # IMPLEMENTS clause
     inputs: list[VariableDoc] = field(default_factory=list)
     outputs: list[VariableDoc] = field(default_factory=list)
+    inout: list[VariableDoc] = field(default_factory=list)
     variables: list[VariableDoc] = field(default_factory=list)
     methods: list[MethodDoc] = field(default_factory=list)
     properties: list[PropertyDoc] = field(default_factory=list)
     actions: list[str] = field(default_factory=list)
+    used_by: list[str] = field(default_factory=list)  # names of objects that reference this type
 
 
 @dataclass
@@ -96,12 +99,13 @@ _VAR_LINE_RE = re.compile(
 def _parse_variables(declaration: str) -> dict[str, list[VariableDoc]]:
     """Extract variable lists from a declaration block.
 
-    Returns a dict with keys 'input', 'output', 'variable' mapping to lists
-    of VariableDoc.
+    Returns a dict with keys 'input', 'output', 'inout', 'variable'.
+    VAR_IN_OUT is classified separately as 'inout' (bidirectional).
     """
     result: dict[str, list[VariableDoc]] = {
         "input": [],
         "output": [],
+        "inout": [],
         "variable": [],
     }
     for block_match in _VAR_BLOCK_RE.finditer(declaration):
@@ -109,7 +113,8 @@ def _parse_variables(declaration: str) -> dict[str, list[VariableDoc]]:
         block_text = block_match.group(0)
         category = (
             "input" if kind == "_INPUT"
-            else "output" if kind in ("_OUTPUT", "_IN_OUT")
+            else "output" if kind == "_OUTPUT"
+            else "inout" if kind == "_IN_OUT"
             else "variable"
         )
         for var_match in _VAR_LINE_RE.finditer(block_text):
@@ -138,6 +143,48 @@ def _enrich_vars(vars_: list[VariableDoc], params: dict[str, str]) -> list[Varia
         if not v.comment and v.name in params:
             v.comment = params[v.name]
     return vars_
+
+
+# Regex to strip ARRAY/POINTER/REFERENCE prefixes and extract the base type name
+_BASE_TYPE_RE = re.compile(
+    r"(?:ARRAY\s*\[[^\]]*\]\s*OF\s*|POINTER\s+TO\s*|REFERENCE\s+TO\s*)*(\w+)",
+    re.IGNORECASE,
+)
+
+
+def _base_type(type_str: str) -> str:
+    """Extract the base type name, stripping ARRAY/POINTER/REFERENCE prefixes."""
+    m = _BASE_TYPE_RE.match(type_str.strip())
+    return m.group(1) if m else type_str.strip()
+
+
+def _compute_used_by(objects: list[ObjectDoc]) -> None:
+    """Populate ObjectDoc.used_by by scanning all type references across the project.
+
+    For each object, scan variable types, method return types, and property
+    return types. If any base type name matches a known object, record the
+    referencing object's name in the target's used_by list.
+    """
+    known: dict[str, ObjectDoc] = {obj.name: obj for obj in objects}
+
+    def _record(type_str: str, referencing_name: str) -> None:
+        base = _base_type(type_str)
+        if base in known and base != referencing_name:
+            target = known[base]
+            if referencing_name not in target.used_by:
+                target.used_by.append(referencing_name)
+
+    for obj in objects:
+        for v in obj.inputs + obj.outputs + obj.inout + obj.variables:
+            _record(v.var_type, obj.name)
+        for m in obj.methods:
+            if m.return_type:
+                _record(m.return_type, obj.name)
+            for v in m.inputs + m.outputs + m.inout:
+                _record(v.var_type, obj.name)
+        for p in obj.properties:
+            if p.return_type:
+                _record(p.return_type, obj.name)
 
 
 def build_project_doc(project_path: str) -> ProjectDoc:
@@ -171,7 +218,7 @@ def build_project_doc(project_path: str) -> ProjectDoc:
         comment = extract_comment(pou["declaration"])
         vars_ = _parse_variables(pou["declaration"])
         _enrich_vars(vars_["input"], comment.params)
-        _enrich_vars(vars_["output"], comment.params)
+        _enrich_vars(vars_["inout"], comment.params)
 
         meta = _extract_declaration_meta(pou["declaration"])
 
@@ -191,6 +238,7 @@ def build_project_doc(project_path: str) -> ProjectDoc:
                 is_final=m_meta["is_final"],
                 inputs=m_vars["input"],
                 outputs=m_vars["output"],
+                inout=m_vars["inout"],
                 body=m.get("body", ""),
             ))
 
@@ -219,6 +267,7 @@ def build_project_doc(project_path: str) -> ProjectDoc:
             implements=meta["implements"],
             inputs=vars_["input"],
             outputs=vars_["output"],
+            inout=vars_["inout"],
             variables=vars_["variable"],
             methods=methods,
             properties=properties,
@@ -259,6 +308,9 @@ def build_project_doc(project_path: str) -> ProjectDoc:
             variables=vars_["variable"],
         ))
 
+    # Compute back-references after all objects are assembled
+    _compute_used_by(objects)
+
     return ProjectDoc(name=project.name, objects=objects)
 
 
@@ -289,18 +341,13 @@ def _extract_property_type(declaration: str) -> str:
 
 
 def _extract_declaration_meta(declaration: str) -> dict:
-    """Extract visibility, extends, implements, abstract, final from declaration.
-
-    Finds the first line starting with a PLC keyword and parses the modifiers
-    that appear on that line.
-    """
+    """Extract visibility, extends, implements, abstract, final from declaration."""
     for line in declaration.splitlines():
         words = line.strip().split()
         if not words:
             continue
         if words[0].upper() not in _KEYWORDS_UPPER:
             continue
-        # This is the declaration line
         upper_words = {w.upper().rstrip(",") for w in words}
 
         visibility = next((w for w in words if w.upper() in _VISIBILITY_WORDS), "")

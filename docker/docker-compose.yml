@@ -7,6 +7,7 @@ services:
       - "8000:8000"
     volumes:
       - ..:/app
+      - C:/TcOpen:/projects/TcOpen:ro
     env_file:
       - .env
     environment:
