@@ -16,7 +16,7 @@ from tckit.ports.types import DocPage
 def test_cache_miss_returns_none(tmp_path: Path) -> None:
     """_load_cache returns None when no cached file exists."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
-    result = infosys._load_cache("https://infosys.beckhoff.com/content/1033/test.html")
+    result = infosys._load_page_cache("https://infosys.beckhoff.com/content/1033/test.html")
     assert result is None
 
 
@@ -24,9 +24,9 @@ def test_save_and_load_cache(tmp_path: Path) -> None:
     """Pages saved to cache can be loaded back correctly."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/sample.html"
-    infosys._save_cache(url, "Sample Title", "Sample content text.")
+    infosys._save_page_cache(url, "Sample Title", "Sample content text.")
 
-    loaded = infosys._load_cache(url)
+    loaded = infosys._load_page_cache(url)
     assert loaded is not None
     assert loaded["url"] == url
     assert loaded["title"] == "Sample Title"
@@ -53,7 +53,7 @@ def test_get_page_returns_cached(tmp_path: Path) -> None:
     """get_page() returns cached DocPage on second call without network."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/cached_page.html"
-    infosys._save_cache(url, "Cached Page", "This is cached content.")
+    infosys._save_page_cache(url, "Cached Page", "This is cached content.")
 
     page = infosys.get_page(url)
     assert isinstance(page, DocPage)
@@ -82,33 +82,36 @@ def test_normalise_url_passes_through_direct_url(tmp_path: Path) -> None:
     assert infosys._normalise_url(url) == url
 
 
-def test_ddg_cache_round_trip(tmp_path: Path) -> None:
-    """DDG URL list can be saved and loaded from cache."""
+def test_section_index_round_trip(tmp_path: Path) -> None:
+    """Section index can be saved and loaded from cache."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
-    query = "site:infosys.beckhoff.com FB_SocketSend"
-    urls = [
-        "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/123.html",
-        "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/456.html",
-    ]
-    infosys._save_ddg_cache(query, urls)
-    loaded = infosys._load_ddg_cache(query)
-    assert loaded == urls
+    section = "tf6310_tc3_tcpip"
+    index = {
+        "fb_socketsend": "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84149131.html",
+        "fb_socketconnect": "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84141451.html",
+    }
+    infosys._save_section_index(section, index)
+    loaded = infosys._load_section_index(section)
+    assert loaded == index
 
 
-def test_ddg_cache_miss_returns_none(tmp_path: Path) -> None:
-    """_load_ddg_cache returns None when no cached result exists."""
+def test_section_index_miss_returns_none(tmp_path: Path) -> None:
+    """_load_section_index returns None when no cached index exists."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
-    assert infosys._load_ddg_cache("site:infosys.beckhoff.com FB_Unknown") is None
+    assert infosys._load_section_index("tf6310_tc3_tcpip") is None
 
 
-def test_find_fb_uses_ddg_cache(tmp_path: Path) -> None:
-    """find_fb() uses cached DDG results + cached page without any network call."""
+def test_find_fb_uses_section_index_cache(tmp_path: Path) -> None:
+    """find_fb() resolves from section index + page cache without network calls."""
     infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84136843.html"
 
-    # Prime both caches
-    infosys._save_ddg_cache("site:infosys.beckhoff.com FB_ClientConnect", [url])
-    infosys._save_cache(
+    # Prime section index and page cache
+    infosys._save_section_index(
+        "tf6310_tc3_tcpip",
+        {"fb_clientconnect": url, "fb_clientserverconnection": url},
+    )
+    infosys._save_page_cache(
         url,
         "FB_ClientServerConnection - Beckhoff",
         "The function block FB_ClientServerConnection manages connections.",
