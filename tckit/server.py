@@ -91,6 +91,19 @@ def get_gvl(gvl_name: str) -> str:
         return _err(str(exc))
 
 
+@mcp.tool()
+def get_dut(dut_name: str) -> str:
+    """Return the declaration block of a Data Unit Type (struct, enum, union, alias).
+
+    :param dut_name: Name of the DUT (e.g. ST_Config, E_State).
+    """
+    try:
+        result = _cfg.reader().get_dut(dut_name)
+        return _ok(result)
+    except Exception as exc:
+        return _err(str(exc))
+
+
 # ---------------------------------------------------------------------------
 # ProjectWriter tools
 # ---------------------------------------------------------------------------
