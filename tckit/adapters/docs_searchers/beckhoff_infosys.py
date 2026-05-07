@@ -1,18 +1,15 @@
 """beckhoff_infosys — DocsSearcher adapter targeting infosys.beckhoff.com.
 
-Uses DuckDuckGo HTML search to resolve Beckhoff infosys page URLs (which use
-opaque numeric IDs), then fetches and parses the content directly.
+Uses infosys's own menu.php tree navigation to build section indexes — no DDG,
+no external search APIs, no rate limiting.
 
-Pages are cached locally as JSON files keyed by sha256(url)[:16] to protect
-against HTML structure changes and reduce repeated network calls.
+How it works:
+  1. Each section (e.g. tf6310_tc3_tcpip) has an index.html with a <meta primaryid>
+  2. Fetching menu.php?...&id=<primaryid> returns the section's expanded tree
+  3. Walking that tree builds a {page_title: url} index for the whole section
+  4. The index is cached locally — subsequent lookups are instant local reads
 
-Cache schema: {"url": str, "title": str, "content": str, "fetched_at": str}
-Cache is write-once, never auto-invalidated.
-
-URL resolution strategy:
-  DuckDuckGo HTML search returns infosys.beckhoff.com/content/1033/... URLs
-  directly in the .result__url element — no API key needed, no JS rendering.
-  These direct content URLs serve parseable HTML unlike the english.php frameset.
+Page content is also cached locally (write-once, keyed by SHA256 of URL).
 """
 
 from __future__ import annotations
@@ -24,8 +21,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from bs4 import BeautifulSoup
 
+from tckit.adapters.docs_searchers._infosys_navigator import (
+    KNOWN_SECTIONS,
+    build_section_index,
+    search_index,
+)
 from tckit.adapters.docs_searchers._infosys_parser import (
     extract_description,
     extract_main_content,
@@ -34,26 +35,31 @@ from tckit.adapters.docs_searchers._infosys_parser import (
     parse_html,
 )
 from tckit.ports.docs_searcher import DocsSearcher
-from tckit.ports.types import DocPage, FBDoc, LibraryDoc, ParameterDoc, SearchResult, SearchResults
+from tckit.ports.types import (
+    DocPage,
+    FBDoc,
+    LibraryDoc,
+    ParameterDoc,
+    SearchResult,
+    SearchResults,
+)
 
 INFOSYS_HOST = "https://infosys.beckhoff.com"
-DDG_HTML_URL = "https://html.duckduckgo.com/html/"
 
-_DDG_HEADERS = {
+_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "en-US,en;q=0.9",
 }
 
 
 class BeckhoffInfosys(DocsSearcher):
-    """Searches and fetches Beckhoff infosys documentation with local page cache.
+    """Searches and fetches Beckhoff infosys documentation.
 
-    Uses DuckDuckGo HTML search to resolve opaque infosys numeric page IDs,
-    then fetches the direct content URL. No API key required.
+    Uses infosys's own navigation structure to build section indexes — no
+    external search required. Section indexes are cached locally.
     """
 
     def __init__(self, cache_path: str = "./cache/infosys", lang: str = "1033") -> None:
@@ -67,17 +73,11 @@ class BeckhoffInfosys(DocsSearcher):
     def get_page(self, url: str) -> DocPage:
         """Fetch a page from infosys (or return from cache).
 
-        Accepts either:
-          - Direct content URLs: https://infosys.beckhoff.com/content/1033/...
-          - english.php wrapper: converted to direct URL automatically
-
-        Raises:
-            httpx.HTTPStatusError: If the server returns a non-2xx response.
-            httpx.RequestError: If the network request fails.
+        Accepts direct content URLs or english.php wrapper URLs — both handled.
         """
         url = self._normalise_url(url)
 
-        cached = self._load_cache(url)
+        cached = self._load_page_cache(url)
         if cached is not None:
             return DocPage(
                 url=cached["url"],
@@ -86,79 +86,74 @@ class BeckhoffInfosys(DocsSearcher):
                 cached=True,
             )
 
-        response = httpx.get(url, follow_redirects=True, timeout=10, headers=_DDG_HEADERS)
-        response.raise_for_status()
+        resp = httpx.get(url, follow_redirects=True, timeout=10, headers=_HEADERS)
+        resp.raise_for_status()
 
-        soup = parse_html(response.text)
+        soup = parse_html(resp.text)
         title = extract_title(soup)
         content = extract_main_content(soup)
 
-        self._save_cache(url, title, content)
+        self._save_page_cache(url, title, content)
         return DocPage(url=url, title=title, content=content, cached=False)
 
     def search(self, query: str, section: str | None = None) -> SearchResults:
-        """Search infosys via DuckDuckGo HTML search.
-
-        Constructs a `site:infosys.beckhoff.com` query and parses the first
-        page of DDG HTML results to extract direct content URLs.
+        """Search infosys by scanning section indexes.
 
         Args:
-            query: Free-text search query.
-            section: Optional infosys section path to scope results
-                     (e.g. "tf6310_tc3_tcpip").
-
-        Returns:
-            SearchResults with up to 5 matching pages.
+            query: Free-text search term.
+            section: Optional section path to restrict search (e.g. "tf6310_tc3_tcpip").
         """
-        ddg_query = "site:infosys.beckhoff.com"
-        if section:
-            ddg_query += f" {section}"
-        ddg_query += f" {query}"
-
-        urls = self._ddg_search(ddg_query, max_results=5)
+        sections = [section] if section else KNOWN_SECTIONS
         results: list[SearchResult] = []
 
-        for url in urls:
-            try:
-                page = self.get_page(url)
-                if page.title and "Beckhoff Information System" not in page.title:
-                    snippet = page.content[:200].replace("\n", " ")
-                    results.append(SearchResult(title=page.title, url=url, snippet=snippet))
-            except (httpx.HTTPStatusError, httpx.RequestError):
+        for sec in sections:
+            index = self._load_section_index(sec)
+            if not index:
                 continue
+            matches = search_index(index, query)
+            for title, url in matches[:3]:
+                try:
+                    page = self.get_page(url)
+                    if page.title and "Information System" not in page.title:
+                        snippet = page.content[:200].replace("\n", " ")
+                        results.append(SearchResult(title=page.title, url=url, snippet=snippet))
+                except (httpx.HTTPStatusError, httpx.RequestError):
+                    continue
+            if len(results) >= 5:
+                break
 
         return SearchResults(query=query, results=results)
 
     def find_fb(self, fb_name: str) -> FBDoc:
         """Locate and parse the infosys page for a Function Block.
 
-        Uses DuckDuckGo to find the correct numeric URL, then fetches and
-        parses the page for description and parameter tables.
+        Searches known sections by building/loading their page indexes, then
+        fetches and parses the matching page.
 
         Raises:
             FileNotFoundError: If no infosys page can be found for fb_name.
         """
-        ddg_query = f"site:infosys.beckhoff.com {fb_name}"
-        urls = self._ddg_search(ddg_query, max_results=8)
+        for section in KNOWN_SECTIONS:
+            url = self._find_in_section(section, fb_name)
+            if url is None:
+                continue
 
-        for url in urls:
             try:
-                response = httpx.get(url, follow_redirects=True, timeout=10, headers=_DDG_HEADERS)
-                if response.status_code != 200:
+                resp = httpx.get(url, follow_redirects=True, timeout=10, headers=_HEADERS)
+                if resp.status_code != 200:
                     continue
             except httpx.RequestError:
                 continue
 
-            soup = parse_html(response.text)
+            soup = parse_html(resp.text)
             title = extract_title(soup)
 
-            # Skip frameset / index pages that aren't actual FB docs
             if not title or "Information System" in title:
                 continue
 
             description = extract_description(soup)
             content = extract_main_content(soup)
-            self._save_cache(url, title, content)
+            self._save_page_cache(url, title, content)
 
             param_rows = extract_parameter_table(soup)
             inputs = [
@@ -192,19 +187,20 @@ class BeckhoffInfosys(DocsSearcher):
 
         raise FileNotFoundError(
             f"Could not find infosys page for {fb_name!r}. "
-            f"Tried {len(urls)} DDG result(s)."
+            f"Searched {len(KNOWN_SECTIONS)} section(s). "
+            f"Try get_page() with a known URL, or add the section to KNOWN_SECTIONS."
         )
 
     def find_library(self, library_name: str) -> LibraryDoc:
-        """Locate and parse the infosys overview page for a library.
+        """Locate the infosys overview page for a library.
 
         Raises:
-            FileNotFoundError: If no infosys page can be found for library_name.
+            FileNotFoundError: If no infosys page can be found.
         """
-        ddg_query = f"site:infosys.beckhoff.com {library_name} overview"
-        urls = self._ddg_search(ddg_query, max_results=5)
-
-        for url in urls:
+        for section in KNOWN_SECTIONS:
+            url = self._find_in_section(section, library_name)
+            if url is None:
+                continue
             try:
                 page = self.get_page(url)
                 if page.title and "Information System" not in page.title:
@@ -216,129 +212,103 @@ class BeckhoffInfosys(DocsSearcher):
             except (httpx.HTTPStatusError, httpx.RequestError):
                 continue
 
-        raise FileNotFoundError(
-            f"Could not find infosys page for library {library_name!r}."
-        )
+        raise FileNotFoundError(f"Could not find infosys page for library {library_name!r}.")
 
     # ------------------------------------------------------------------
-    # DuckDuckGo search
+    # Section index management
     # ------------------------------------------------------------------
 
-    def _ddg_search(self, query: str, max_results: int = 5) -> list[str]:
-        """Search DuckDuckGo HTML endpoint and return direct infosys content URLs.
+    def _find_in_section(self, section: str, name: str) -> str | None:
+        """Return a URL for the named page within a section, or None.
 
-        Results are cached so the same query never hits DDG twice.
-        Retries once with a 3-second delay on rate-limit (HTTP 202/429) responses.
+        Tries the full name first, then strips common TwinCAT FB prefixes
+        (FB_, FC_, FUN_, STLB_) to handle IEC standard library pages like
+        "TON" which are indexed without the FB_ prefix.
         """
-        # Check DDG result cache first
-        cached = self._load_ddg_cache(query)
-        if cached is not None:
-            return cached[:max_results]
+        # Try cache first
+        index = self._load_section_index(section)
 
-        urls = self._ddg_fetch(query)
+        if index:
+            url = self._search_with_aliases(index, name)
+            if url:
+                return url
+            # Cache exists but no match — don't rebuild
+            return None
 
-        # On rate-limit (202/empty), wait and retry once
-        if not urls:
-            time.sleep(3)
-            urls = self._ddg_fetch(query)
+        # Build index for this section (first time only)
+        index = build_section_index(section)
+        if index:
+            self._save_section_index(section, index)
+            return self._search_with_aliases(index, name)
 
-        if urls:
-            self._save_ddg_cache(query, urls)
+        return None
 
-        return urls[:max_results]
+    @staticmethod
+    def _search_with_aliases(index: dict[str, str], name: str) -> str | None:
+        """Search with the given name and common prefix-stripped variants."""
+        candidates = [name]
+        # Strip common TwinCAT prefixes so "FB_TON" also matches "TON"
+        for prefix in ("FB_", "FC_", "FUN_", "STLB_", "ST_", "E_", "F_"):
+            if name.upper().startswith(prefix):
+                candidates.append(name[len(prefix):])
+                break
 
-    def _ddg_fetch(self, query: str) -> list[str]:
-        """Single DDG fetch — parses .result__url elements for infosys content URLs."""
-        try:
-            response = httpx.get(
-                DDG_HTML_URL,
-                params={"q": query},
-                headers=_DDG_HEADERS,
-                timeout=10,
-                follow_redirects=True,
-            )
-            if response.status_code not in (200, 202):
-                response.raise_for_status()
-        except (httpx.HTTPStatusError, httpx.RequestError):
-            return []
+        for candidate in candidates:
+            matches = search_index(index, candidate)
+            if matches:
+                return matches[0][1]
+        return None
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        urls: list[str] = []
+    def _section_cache_path(self, section: str) -> Path:
+        key = hashlib.sha256(section.encode()).hexdigest()[:16]
+        return self._cache_dir / f"section_{key}.json"
 
-        for result in soup.select(".result"):
-            url_el = result.select_one(".result__url")
-            if url_el is None:
-                continue
-            raw = url_el.get_text(strip=True)
-            if not raw.startswith("http"):
-                raw = "https://" + raw
-            if "infosys.beckhoff.com" in raw and "/content/" in raw:
-                urls.append(raw)
-
-        return urls
-
-    def _load_ddg_cache(self, query: str) -> list[str] | None:
-        key = "ddg_" + hashlib.sha256(query.encode()).hexdigest()[:16]
-        path = self._cache_dir / f"{key}.json"
+    def _load_section_index(self, section: str) -> dict[str, str] | None:
+        path = self._section_cache_path(section)
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-                return data.get("urls", [])
+                return data.get("pages", {})
             except (json.JSONDecodeError, OSError):
                 pass
         return None
 
-    def _save_ddg_cache(self, query: str, urls: list[str]) -> None:
+    def _save_section_index(self, section: str, index: dict[str, str]) -> None:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        key = "ddg_" + hashlib.sha256(query.encode()).hexdigest()[:16]
-        path = self._cache_dir / f"{key}.json"
-        entry = {"query": query, "urls": urls, "fetched_at": datetime.now(tz=UTC).isoformat()}
+        path = self._section_cache_path(section)
         path.write_text(
-            json.dumps(entry, indent=2),
+            json.dumps(
+                {
+                    "section": section,
+                    "built_at": datetime.now(tz=UTC).isoformat(),
+                    "pages": index,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
 
     # ------------------------------------------------------------------
-    # URL helpers
-    # ------------------------------------------------------------------
-
-    def _normalise_url(self, url: str) -> str:
-        """Convert english.php wrapper URLs to direct content URLs.
-
-        english.php?content=../content/1033/section/page.html
-          → https://infosys.beckhoff.com/content/1033/section/page.html
-        """
-        if "english.php" in url and "content=" in url:
-            # Extract the content= parameter value
-            import urllib.parse
-            parsed = urllib.parse.urlparse(url)
-            qs = urllib.parse.parse_qs(parsed.query)
-            content_path = qs.get("content", [""])[0]
-            # Strip leading ../
-            content_path = content_path.lstrip("./").lstrip("../")
-            return f"{INFOSYS_HOST}/{content_path}"
-        return url
-
-    # ------------------------------------------------------------------
-    # Cache helpers
+    # Page content cache
     # ------------------------------------------------------------------
 
     def _cache_key(self, url: str) -> str:
         return hashlib.sha256(url.encode()).hexdigest()[:16]
 
-    def _cache_path(self, url: str) -> Path:
+    def _page_cache_path(self, url: str) -> Path:
         return self._cache_dir / f"{self._cache_key(url)}.json"
 
-    def _load_cache(self, url: str) -> dict | None:
-        path = self._cache_path(url)
+    def _load_page_cache(self, url: str) -> dict | None:
+        path = self._page_cache_path(url)
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
-                return None
+                pass
         return None
 
-    def _save_cache(self, url: str, title: str, content: str) -> None:
+    def _save_page_cache(self, url: str, title: str, content: str) -> None:
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         entry = {
             "url": url,
@@ -346,5 +316,19 @@ class BeckhoffInfosys(DocsSearcher):
             "content": content,
             "fetched_at": datetime.now(tz=UTC).isoformat(),
         }
-        path = self._cache_path(url)
-        path.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._page_cache_path(url).write_text(
+            json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    # ------------------------------------------------------------------
+    # URL helpers
+    # ------------------------------------------------------------------
+
+    def _normalise_url(self, url: str) -> str:
+        """Convert english.php wrapper URLs to direct content URLs."""
+        if "english.php" in url and "content=" in url:
+            import urllib.parse
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            content_path = qs.get("content", [""])[0].lstrip("./").lstrip("../")
+            return f"{INFOSYS_HOST}/{content_path}"
+        return url
