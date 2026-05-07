@@ -41,6 +41,7 @@ site/
 
 # Docs generated output
 docs/plc/
+docs-output/
 
 # Obsidian
 .obsidian/

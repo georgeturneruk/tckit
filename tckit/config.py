@@ -30,6 +30,7 @@ def _load_registries() -> None:
     """Populate registries lazily to avoid importing adapters at module level."""
     from tckit.adapters.builders.xae_com_builder import XaeComBuilder
     from tckit.adapters.doc_generators.html_generator import HtmlGenerator
+    from tckit.adapters.doc_generators.markdown_generator import MarkdownGenerator
     from tckit.adapters.docs_searchers.beckhoff_infosys import BeckhoffInfosys
     from tckit.adapters.readers.xml_reader import XmlReader
     from tckit.adapters.test_runners.tcunit_runner import TcUnitRunner
@@ -40,6 +41,7 @@ def _load_registries() -> None:
     _BUILDER_REGISTRY["xae_com"] = XaeComBuilder
     _TEST_RUNNER_REGISTRY["tcunit"] = TcUnitRunner
     _DOC_GENERATOR_REGISTRY["html"] = HtmlGenerator
+    _DOC_GENERATOR_REGISTRY["markdown"] = MarkdownGenerator
     _DOCS_SEARCHER_REGISTRY["beckhoff_infosys"] = BeckhoffInfosys
 
 
