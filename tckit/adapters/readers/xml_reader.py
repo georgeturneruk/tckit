@@ -15,7 +15,7 @@ Property access via get_pou_item():
 import os
 from pathlib import Path
 
-from tckit.adapters.readers._tc_file_parser import (
+from tckit.utils.tc_file_parser import (
     extract_method_return_type,
     extract_property_return_type,
     parse_tcdut,

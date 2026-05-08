@@ -1,4 +1,8 @@
-"""_tc_file_parser — private XML/CDATA utilities for .TcPOU, .TcGVL, and .TcDUT files.
+"""tc_file_parser — XML/CDATA utilities for .TcPOU, .TcGVL, and .TcDUT files.
+
+Shared utility used by reader and doc-generator adapters. Lives under
+``tckit/utils/`` so adapters can depend on it without violating the
+adapter-isolation rule (no adapter-to-adapter imports).
 
 Stdlib only: xml.etree.ElementTree, re, pathlib.
 No third-party dependencies.
