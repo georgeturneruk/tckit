@@ -15,13 +15,6 @@ Property access via get_pou_item():
 import os
 from pathlib import Path
 
-from tckit.adapters.readers._tc_file_parser import (
-    extract_method_return_type,
-    extract_property_return_type,
-    parse_tcdut,
-    parse_tcgvl,
-    parse_tcpou,
-)
 from tckit.ports.reader import ProjectReader
 from tckit.ports.types import (
     DUT,
@@ -33,6 +26,13 @@ from tckit.ports.types import (
     POUType,
     ProjectStructure,
     PropertySignature,
+)
+from tckit.utils.tc_file_parser import (
+    extract_method_return_type,
+    extract_property_return_type,
+    parse_tcdut,
+    parse_tcgvl,
+    parse_tcpou,
 )
 
 

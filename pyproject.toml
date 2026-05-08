@@ -60,10 +60,9 @@ line-length = 100
 select = ["E", "F", "I", "UP", "TID252"]
 ignore = []
 
-[tool.ruff.lint.flake8-tidy-imports]
-# Enforce adapter isolation: adapters may only import from tckit.ports and stdlib.
-# Cross-adapter imports are caught by the TID252 rule via banned-module-level-imports.
-# The actual enforcement is done by the custom lint check in scripts/check-adapter-isolation.py.
+# Adapter isolation (adapters may only import from tckit.ports, tckit.utils,
+# or stdlib) is enforced by scripts/check-adapter-isolation.py, run in CI.
+# Ruff is not the right tool for that check — keep it focused on style/typing.
 
 [tool.ruff.lint.isort]
 known-first-party = ["tckit"]

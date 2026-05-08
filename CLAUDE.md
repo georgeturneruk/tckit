@@ -22,7 +22,8 @@ Python package lives in `tckit/`. Bridge service (Windows) lives in `bridge/`.
 
 **Adapters may only import from ports and stdlib. Never from each other.**
 
-This is enforced by linting. Do not break this rule under any circumstances.
+This is enforced by `scripts/check-adapter-isolation.py`, which runs in CI.
+Do not break this rule under any circumstances.
 
 ```
 MCP Server → Port (abstract) → Adapter (concrete) → External tool
@@ -115,8 +116,11 @@ docker compose -f docker/docker-compose.yml up
 # Run tests
 docker compose -f docker/docker-compose.yml run tckit pytest tests/
 
-# Lint (includes adapter isolation check)
+# Lint
 docker compose -f docker/docker-compose.yml run tckit ruff check tckit/
+
+# Adapter isolation check (stdlib only — runs outside Docker)
+python scripts/check-adapter-isolation.py
 ```
 
 Windows bridge (run natively on Windows PC):

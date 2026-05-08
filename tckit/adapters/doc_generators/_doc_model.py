@@ -1,6 +1,6 @@
 """_doc_model — build a structured documentation model from a TwinCAT project.
 
-Orchestrates _tc_file_parser (structure) and _comment_extractor (comments)
+Orchestrates tc_file_parser (structure) and _comment_extractor (comments)
 into a ProjectDoc tree that templates can render directly.
 """
 
@@ -11,12 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from tckit.adapters.doc_generators._comment_extractor import extract_comment
-from tckit.adapters.readers._tc_file_parser import (
+from tckit.ports.types import CommentDoc
+from tckit.utils.tc_file_parser import (
     parse_tcdut,
     parse_tcgvl,
     parse_tcpou,
 )
-from tckit.ports.types import CommentDoc
 
 # ---------------------------------------------------------------------------
 # Doc model dataclasses

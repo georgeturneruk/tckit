@@ -37,9 +37,9 @@ This means:
 
 ## The adapter isolation rule
 
-**Adapters may only import from `tckit.ports` and stdlib. Never from each other.**
+**Adapters may only import from `tckit.ports`, `tckit.utils`, or stdlib. Never from each other.**
 
-This is enforced by linting (`ruff check`). If you need to share logic between adapters, put it in `tckit/utils/` and import that — never adapter-to-adapter.
+This is enforced by `scripts/check-adapter-isolation.py`, which runs in CI alongside ruff. If you need to share logic between adapters, put it in `tckit/utils/` and import that — never adapter-to-adapter.
 
 ## Adding a new adapter
 

@@ -20,5 +20,8 @@ jobs:
       - name: Ruff lint
         run: docker compose -f docker/docker-compose.ci.yml run --rm tckit ruff check tckit/
 
+      - name: Adapter isolation
+        run: python scripts/check-adapter-isolation.py
+
       - name: Unit tests
         run: docker compose -f docker/docker-compose.ci.yml run --rm tckit pytest tests/unit/ -v
