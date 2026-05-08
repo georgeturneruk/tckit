@@ -31,9 +31,8 @@ pip install -e ".[dev]"
 ## Verify
 
 ```bash
-# Check the server starts cleanly
-python -m tckit.server --help
-
 # Run unit tests
 pytest tests/unit/ -v
 ```
+
+To verify the MCP server runs end-to-end, point an MCP client at `http://localhost:8000/sse` after `docker compose up`.

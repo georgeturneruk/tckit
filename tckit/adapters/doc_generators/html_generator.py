@@ -1,6 +1,6 @@
 """html_generator — DocGenerator adapter producing HTML from TwinCAT source.
 
-Replaces sphinx_generator. No Sphinx, no plcdoc, no subprocess.
+Self-contained Jinja2-based renderer. No Sphinx, no plcdoc, no subprocess.
 
 Pipeline:
   1. _doc_model.build_project_doc()  — parse project + extract comments

@@ -35,8 +35,8 @@ docker compose -f docker/docker-compose.yml up
 
 If the Windows bridge is not running, TcKit works in read-only mode:
 
-- `xml_reader` — reads `.TcPOU` and `.TcGVL` files
-- `sphinx_generator` — generates docs
+- `xml_reader` — reads `.TcPOU`, `.TcGVL`, and `.TcDUT` files
+- `html_generator` / `markdown_generator` — generates docs from ST comments
 - `beckhoff_infosys` — searches Beckhoff documentation
 
 Write, build, deploy, and test operations will return an error until the bridge is reachable.
