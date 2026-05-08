@@ -427,15 +427,18 @@ def get_doc_page(url: str) -> str:
 
 @mcp.tool()
 def generate_docs(project_path: str, output_path: str) -> str:
-    """Generate Sphinx HTML documentation from RST-commented TwinCAT source.
+    """Generate documentation from comments embedded in TwinCAT ST source.
 
-    Uses plcdoc to extract RST docstrings from .TcPOU, .TcGVL, and .TcDUT
-    files and compiles them into HTML with Sphinx.
+    Selects between adapters via the ``doc_generator`` config key:
+      ``html``     — self-contained HTML site (default)
+      ``markdown`` — GitHub Flavoured Markdown files
 
-    Output is written to output_path/_build/html/index.html.
+    Auto-detects RST line, RST block, and Beckhoff XML ``<docu>`` comments.
+    Output is written to ``output_path``; ``index.html`` or ``index.md`` is
+    the entry point.
 
     :param project_path: Absolute path to the TwinCAT PLC project directory.
-    :param output_path: Directory where HTML output should be written.
+    :param output_path: Directory where the generated docs should be written.
     """
     try:
         result = _cfg.doc_generator().generate(project_path, output_path)

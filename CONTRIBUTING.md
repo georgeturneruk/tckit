@@ -8,7 +8,7 @@
 4. **Register** the class in `tckit/config.py` under the appropriate registry
 5. **Add** the config key to `config.example.json`
 6. **Write** unit tests in `tests/unit/`
-7. **Document** in `docs/content/adapters/{name}-{port_type}.md`
+7. **Document** in `docs/content/capabilities/<port>/<adapter>.md` and add it to `docs/mkdocs.yml`
 
 Naming convention: `{tool}_{port_type}` — e.g. `xml_reader`, `xae_com_builder`.
 
