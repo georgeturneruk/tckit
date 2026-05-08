@@ -60,6 +60,36 @@ Execute := bDone;
 ]]></ST>
       </Implementation>
     </Method>
+    <Method Name="CalculateInternal" Id="{12345678-0000-0000-0000-000000000007}">
+      <Declaration><![CDATA[
+// :Description: Internal calculation used by the state machine.
+METHOD CalculateInternal : INT
+VAR_INPUT
+    nFactor : INT;
+END_VAR
+VAR_OUTPUT
+    bOverflow : BOOL;
+END_VAR
+VAR
+    nScratch : DINT;
+    bIntermediate : BOOL;
+END_VAR
+VAR_TEMP
+    nTempResult : INT;
+END_VAR
+VAR CONSTANT
+    nMaxValue : INT := 32767;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+nScratch := nInternal * nFactor;
+bOverflow := nScratch > nMaxValue;
+nTempResult := INT_TO_INT(nScratch);
+CalculateInternal := nTempResult;
+]]></ST>
+      </Implementation>
+    </Method>
     <Method Name="Reset" Id="{12345678-0000-0000-0000-000000000003}">
       <Declaration><![CDATA[
 // :Description: Reset error state and outputs.
