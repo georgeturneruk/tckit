@@ -75,7 +75,20 @@ See the linked SKILL.md for the full step-by-step.
 | [`tc-beckhoff-docs`](.claude/skills/tc-beckhoff-docs/SKILL.md) | Researching a Beckhoff library FB / function / TF library | `find_fb` precondition for unfamiliar FBs, `search_docs` / `get_doc_page` etiquette, source-URL citations |
 | [`tc-write-st`](.claude/skills/tc-write-st/SKILL.md) | Writing or modifying ST code | Comment style (RST line preferred; Beckhoff XML accepted), naming, `bError` propagation pattern, rename guard, safety-name guard, "never edit XML directly" |
 | [`tc-build-test-loop`](.claude/skills/tc-build-test-loop/SKILL.md) | Building, deploying, running TcUnit tests | Build-before-deploy, 2-attempt build-fix cap, 5-iteration test cap, `awaiting_confirmation` handshake for deploy/start_runtime, tolerating `docs_warning` on a successful build |
-| [`tc-add-adapter`](.claude/skills/tc-add-adapter/SKILL.md) | Adding a new adapter to TcKit itself | The 7-step adapter procedure, the adapter-isolation rule |
+
+---
+
+## Adding a New Adapter
+
+Adapters live under `tckit/adapters/<port_kind>/`. The one hard rule: adapters import only from `tckit.ports` and stdlib. Never from another adapter (linting enforces this).
+
+1. Create the file in the correct `adapters/` subdirectory
+2. Import only from `tckit.ports` and stdlib
+3. Implement all abstract methods from the port
+4. Register it in `tckit/config.py` adapter registry
+5. Add the config name to `config.example.json`
+6. Write unit tests in `tests/unit/`
+7. Document it in `docs/content/capabilities/<port>/`
 
 ---
 
