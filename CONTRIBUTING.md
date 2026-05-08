@@ -33,7 +33,7 @@ Only do this if there is a genuinely new external concern — not a variation of
 
 ```bash
 docker compose -f docker/docker-compose.yml run tckit ruff check tckit/
-docker compose -f docker/docker-compose.yml run tckit python scripts/check-adapter-isolation.py
+python scripts/check-adapter-isolation.py
 docker compose -f docker/docker-compose.yml run tckit pytest tests/unit/ -v
 ```
 

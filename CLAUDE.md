@@ -119,8 +119,8 @@ docker compose -f docker/docker-compose.yml run tckit pytest tests/
 # Lint
 docker compose -f docker/docker-compose.yml run tckit ruff check tckit/
 
-# Adapter isolation check
-docker compose -f docker/docker-compose.yml run tckit python scripts/check-adapter-isolation.py
+# Adapter isolation check (stdlib only — runs outside Docker)
+python scripts/check-adapter-isolation.py
 ```
 
 Windows bridge (run natively on Windows PC):
