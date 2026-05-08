@@ -111,6 +111,32 @@ def extract_property_return_type(declaration: str) -> str:
     return match.group(1) if match else ""
 
 
+# Matches an implementation-only VAR block:
+#   VAR  ... END_VAR        (method locals)
+#   VAR_TEMP ... END_VAR    (per-call temporaries)
+#   VAR CONSTANT ... END_VAR (internal constants)
+# Each block opener must be the only token on its line so we don't accidentally
+# match VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT/VAR_INST, which are part of the API
+# surface and must be preserved.
+_LOCAL_VAR_BLOCK_RE = re.compile(
+    r"^[ \t]*(?:VAR(?:[ \t]+CONSTANT)?|VAR_TEMP)[ \t]*\r?\n.*?^[ \t]*END_VAR[ \t]*\r?\n?",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
+)
+
+
+def strip_method_locals(declaration: str) -> str:
+    """Strip implementation-only VAR blocks from a method declaration.
+
+    Removes VAR (locals), VAR_TEMP, and VAR CONSTANT blocks while preserving
+    VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, and VAR_INST (the API surface).
+
+    Used when building MethodSignature payloads for ``get_pou_interface`` so
+    the interface call doesn't carry implementation detail. ``get_pou_item``
+    must NOT call this — callers asking for a method body need its locals.
+    """
+    return _LOCAL_VAR_BLOCK_RE.sub("", declaration).rstrip()
+
+
 # ---------------------------------------------------------------------------
 # File-level parsers
 # ---------------------------------------------------------------------------

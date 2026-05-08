@@ -33,6 +33,7 @@ from tckit.utils.tc_file_parser import (
     parse_tcdut,
     parse_tcgvl,
     parse_tcpou,
+    strip_method_locals,
 )
 
 
@@ -119,7 +120,9 @@ class XmlReader(ProjectReader):
             MethodSignature(
                 name=m["name"],
                 return_type=extract_method_return_type(m["declaration"]),
-                declaration=m["declaration"],
+                # Strip method-local VAR blocks: they are implementation detail,
+                # not API surface. get_pou_item still returns the full declaration.
+                declaration=strip_method_locals(m["declaration"]),
             )
             for m in info["methods"]
         ]

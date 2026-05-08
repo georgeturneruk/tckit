@@ -144,6 +144,31 @@ def test_get_pou_interface_itf_property_has_get_no_set(reader: XmlReader) -> Non
 
 
 # ---------------------------------------------------------------------------
+# get_pou_interface — local-VAR stripping
+# ---------------------------------------------------------------------------
+
+
+def test_get_pou_interface_strips_method_locals(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("FB_Example")
+    method = next(m for m in interface.methods if m.name == "CalculateInternal")
+    # Locals/temp/constant are implementation detail and must not leak.
+    assert "nScratch" not in method.declaration
+    assert "nTempResult" not in method.declaration
+    assert "nMaxValue" not in method.declaration
+
+
+def test_get_pou_interface_preserves_method_api(reader: XmlReader) -> None:
+    interface = reader.get_pou_interface("FB_Example")
+    method = next(m for m in interface.methods if m.name == "CalculateInternal")
+    # API surface must survive the strip.
+    assert "VAR_INPUT" in method.declaration
+    assert "nFactor" in method.declaration
+    assert "VAR_OUTPUT" in method.declaration
+    assert "bOverflow" in method.declaration
+    assert "// :Description:" in method.declaration
+
+
+# ---------------------------------------------------------------------------
 # get_pou_item — methods and properties
 # ---------------------------------------------------------------------------
 
@@ -161,6 +186,15 @@ def test_get_pou_item_reset_body(reader: XmlReader) -> None:
 def test_get_pou_item_execute_has_declaration(reader: XmlReader) -> None:
     item = reader.get_pou_item("FB_Example", "Execute")
     assert "METHOD Execute" in item.declaration
+
+
+def test_get_pou_item_keeps_method_locals(reader: XmlReader) -> None:
+    # Inverse of the interface strip: the item-level call must include locals
+    # so the caller can read the implementation faithfully.
+    item = reader.get_pou_item("FB_Example", "CalculateInternal")
+    assert "nScratch" in item.declaration
+    assert "nTempResult" in item.declaration
+    assert "nMaxValue" in item.declaration
 
 
 def test_get_pou_item_property_get_body(reader: XmlReader) -> None:
