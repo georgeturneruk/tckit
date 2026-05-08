@@ -15,6 +15,7 @@ from tckit.ports.docs_searcher import DocsSearcher
 from tckit.ports.reader import ProjectReader
 from tckit.ports.test_runner import TestRunner
 from tckit.ports.writer import ProjectWriter
+from tckit.utils.bridge_client import BridgeClient
 
 load_dotenv()
 
@@ -68,9 +69,18 @@ class TcKitConfig:
 
     def __init__(self, raw: dict[str, Any]) -> None:
         self._raw = raw
+        # Single BridgeClient shared by all bridge-backed adapters so the
+        # underlying httpx.Client (and its connection pool) lives for the
+        # server's lifetime instead of being re-created per MCP call.
+        self._bridge_client: BridgeClient | None = None
 
     def get(self, key: str, default: Any = None) -> Any:
         return self._raw.get(key, os.getenv(key.upper(), default))
+
+    def bridge_client(self) -> BridgeClient:
+        if self._bridge_client is None:
+            self._bridge_client = BridgeClient()
+        return self._bridge_client
 
     # ------------------------------------------------------------------
     # Adapter factories
@@ -90,7 +100,7 @@ class TcKitConfig:
         cls = _WRITER_REGISTRY.get(name)
         if cls is None:
             raise ValueError(f"Unknown writer adapter: {name!r}")
-        return cls()
+        return cls(client=self.bridge_client())  # type: ignore[call-arg]
 
     def builder(self) -> BuildRunner:
         _ensure_registries()
@@ -98,7 +108,7 @@ class TcKitConfig:
         cls = _BUILDER_REGISTRY.get(name)
         if cls is None:
             raise ValueError(f"Unknown builder adapter: {name!r}")
-        return cls()
+        return cls(client=self.bridge_client())  # type: ignore[call-arg]
 
     def test_runner(self) -> TestRunner:
         _ensure_registries()
