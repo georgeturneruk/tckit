@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -e ".[dev,docs]"
 
 EXPOSE 8000
 
-CMD ["python", "-m", "tckit.server"]
+CMD ["tckit", "--transport", "sse"]

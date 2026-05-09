@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from dataclasses import asdict
@@ -11,7 +12,6 @@ from mcp.server.fastmcp import FastMCP
 
 from tckit.config import load_config
 
-mcp = FastMCP("tckit", host="0.0.0.0", port=8000)
 _cfg = load_config()
 
 
@@ -97,7 +97,6 @@ def _err(message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def get_structure(project_path: str) -> str:
     """Return the top-level map of POUs, GVLs, and tasks in a TwinCAT project.
 
@@ -113,7 +112,6 @@ def get_structure(project_path: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_pou_interface(pou_name: str) -> str:
     """Return declarations and method signatures for a POU, without method bodies.
 
@@ -129,7 +127,6 @@ def get_pou_interface(pou_name: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_pou_item(pou_name: str, item_name: str) -> str:
     """Return the body of a single method, action, or property.
 
@@ -146,7 +143,6 @@ def get_pou_item(pou_name: str, item_name: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_gvl(gvl_name: str) -> str:
     """Return the declaration block of a Global Variable List.
 
@@ -159,7 +155,6 @@ def get_gvl(gvl_name: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_dut(dut_name: str) -> str:
     """Return the declaration block of a Data Unit Type (struct, enum, union, alias).
 
@@ -177,7 +172,6 @@ def get_dut(dut_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def open_project(solution_path: str) -> str:
     """Open a TwinCAT solution in XAE.
 
@@ -192,7 +186,6 @@ def open_project(solution_path: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def create_project(name: str, path: str) -> str:
     """Create a new TwinCAT PLC project from the standard template.
 
@@ -206,7 +199,6 @@ def create_project(name: str, path: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def add_pou(name: str, pou_type: str, code: str) -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
@@ -224,7 +216,6 @@ def add_pou(name: str, pou_type: str, code: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def add_method(pou_name: str, method_name: str, code: str) -> str:
     """Add a new method to an existing POU.
 
@@ -239,7 +230,6 @@ def add_method(pou_name: str, method_name: str, code: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def update_pou_item(pou_name: str, item_name: str, code: str) -> str:
     """Update the body of an existing method, action, or property.
 
@@ -259,7 +249,6 @@ def update_pou_item(pou_name: str, item_name: str, code: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def build(project_path: str) -> str:
     """Build the TwinCAT project and return structured errors.
 
@@ -289,7 +278,6 @@ def build(project_path: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def deploy(target_ams_id: str, confirmed: bool = False) -> str:
     """Deploy the built configuration to a target runtime.
 
@@ -316,7 +304,6 @@ def deploy(target_ams_id: str, confirmed: bool = False) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
     """Start or restart the TwinCAT runtime on a target.
 
@@ -346,7 +333,6 @@ def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def run_tests() -> str:
     """Trigger TcUnit test execution on the target runtime."""
     try:
@@ -356,7 +342,6 @@ def run_tests() -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_test_results() -> str:
     """Return parsed TcUnit test results after tests have completed.
 
@@ -375,7 +360,6 @@ def get_test_results() -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def find_fb(fb_name: str) -> str:
     """Search and fetch Beckhoff infosys documentation for a Function Block.
 
@@ -391,7 +375,6 @@ def find_fb(fb_name: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def search_docs(query: str, section: str = "") -> str:
     """Search Beckhoff infosys documentation.
 
@@ -405,7 +388,6 @@ def search_docs(query: str, section: str = "") -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_doc_page(url: str) -> str:
     """Fetch and parse a specific Beckhoff infosys page.
 
@@ -425,7 +407,6 @@ def get_doc_page(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
 def generate_docs(project_path: str, output_path: str) -> str:
     """Generate documentation from comments embedded in TwinCAT ST source.
 
@@ -447,7 +428,6 @@ def generate_docs(project_path: str, output_path: str) -> str:
         return _err(str(exc))
 
 
-@mcp.tool()
 def get_doc_status() -> str:
     """Return the current documentation generation status.
 
@@ -461,12 +441,77 @@ def get_doc_status() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Tool registration
+# ---------------------------------------------------------------------------
+
+_TOOLS = (
+    get_structure,
+    get_pou_interface,
+    get_pou_item,
+    get_gvl,
+    get_dut,
+    open_project,
+    create_project,
+    add_pou,
+    add_method,
+    update_pou_item,
+    build,
+    deploy,
+    start_runtime,
+    run_tests,
+    get_test_results,
+    find_fb,
+    search_docs,
+    get_doc_page,
+    generate_docs,
+    get_doc_status,
+)
+
+
+def _register_tools(mcp: FastMCP) -> None:
+    """Register every tool function on the given FastMCP instance."""
+    for fn in _TOOLS:
+        mcp.tool()(fn)
+
+
+def _build_mcp(transport: str) -> FastMCP:
+    """Construct a FastMCP instance suitable for the chosen transport.
+
+    stdio transport ignores host/port; SSE/HTTP need them.
+    """
+    if transport == "stdio":
+        return FastMCP("tckit")
+    return FastMCP("tckit", host="0.0.0.0", port=8000)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser. Extracted for testability."""
+    parser = argparse.ArgumentParser(
+        prog="tckit",
+        description="TcKit MCP server: connects Claude Code to TwinCAT 3 PLC projects.",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse"],
+        default=os.getenv("TCKIT_TRANSPORT", "stdio"),
+        help=(
+            "MCP transport to use. Default: stdio (also via TCKIT_TRANSPORT env var). "
+            "Use sse for the Docker / long-running server path."
+        ),
+    )
+    return parser
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    mcp.run(transport="sse")
+    args = _build_parser().parse_args()
+    mcp = _build_mcp(args.transport)
+    _register_tools(mcp)
+    mcp.run(transport=args.transport)
 
 
 if __name__ == "__main__":
