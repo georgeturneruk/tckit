@@ -1,13 +1,26 @@
-"""Config loader — reads config.json and .env, returns adapter instances."""
+"""Config loader — resolves config from layered sources, returns adapter instances.
+
+Resolution order, highest precedence first:
+
+1. Process environment variables — always win when set.
+2. Project-local ``config.json`` (or path from ``TCKIT_CONFIG`` env var).
+3. User-global ``~/.tckit/config.toml`` (Python 3.11 stdlib ``tomllib``).
+4. Built-in defaults supplied by callers of :meth:`TcKitConfig.get`.
+
+The user-global location can be redirected by setting ``TCKIT_HOME``. ``.env``
+files are loaded by walking up from the current working directory and falling
+back to ``$TCKIT_HOME/.env``; existing OS env vars are not overridden.
+"""
 
 from __future__ import annotations
 
 import json
 import os
+import tomllib
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from tckit.ports.builder import BuildRunner
 from tckit.ports.doc_generator import DocGenerator
@@ -17,7 +30,35 @@ from tckit.ports.test_runner import TestRunner
 from tckit.ports.writer import ProjectWriter
 from tckit.utils.bridge_client import BridgeClient
 
-load_dotenv()
+
+def _user_home() -> Path:
+    """Resolve the TcKit user-global directory.
+
+    Honours ``TCKIT_HOME`` if set, otherwise ``~/.tckit``.
+    """
+    override = os.getenv("TCKIT_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".tckit"
+
+
+def _load_dotenv_layered() -> None:
+    """Load a ``.env`` file by walking up from cwd, then falling back to user home.
+
+    Existing OS env vars are not overridden by either source. The walk-up uses
+    ``python-dotenv``'s :func:`find_dotenv` so behaviour matches the rest of
+    the ecosystem.
+    """
+    found = find_dotenv(usecwd=True)
+    if found:
+        load_dotenv(found)
+        return
+    user_env = _user_home() / ".env"
+    if user_env.exists():
+        load_dotenv(user_env)
+
+
+_load_dotenv_layered()
 
 _READER_REGISTRY: dict[str, type[ProjectReader]] = {}
 _WRITER_REGISTRY: dict[str, type[ProjectWriter]] = {}
@@ -56,12 +97,22 @@ def _ensure_registries() -> None:
         _registries_loaded = True
 
 
-def _load_config_file() -> dict[str, Any]:
+def _load_user_toml() -> dict[str, Any]:
+    """Read ``$TCKIT_HOME/config.toml`` if present, else return an empty dict."""
+    path = _user_home() / "config.toml"
+    if not path.exists():
+        return {}
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _load_project_config() -> dict[str, Any]:
+    """Read project ``config.json`` (or path from ``TCKIT_CONFIG`` env)."""
     config_path = Path(os.getenv("TCKIT_CONFIG", "config.json"))
-    if config_path.exists():
-        with config_path.open() as f:
-            return json.load(f)  # type: ignore[no-any-return]
-    return {}
+    if not config_path.exists():
+        return {}
+    with config_path.open() as f:
+        return json.load(f)  # type: ignore[no-any-return]
 
 
 class TcKitConfig:
@@ -75,7 +126,11 @@ class TcKitConfig:
         self._bridge_client: BridgeClient | None = None
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._raw.get(key, os.getenv(key.upper(), default))
+        """Resolve ``key`` from env (uppercased) first, then file values, then default."""
+        env_val = os.getenv(key.upper())
+        if env_val is not None:
+            return env_val
+        return self._raw.get(key, default)
 
     def bridge_client(self) -> BridgeClient:
         if self._bridge_client is None:
@@ -138,5 +193,12 @@ class TcKitConfig:
 
 
 def load_config() -> TcKitConfig:
-    """Load config.json + .env and return a TcKitConfig instance."""
-    return TcKitConfig(_load_config_file())
+    """Load layered config sources and return a :class:`TcKitConfig`.
+
+    Project ``config.json`` overrides user-global ``config.toml``; env vars
+    override both at lookup time via :meth:`TcKitConfig.get`.
+    """
+    user_cfg = _load_user_toml()
+    project_cfg = _load_project_config()
+    merged: dict[str, Any] = {**user_cfg, **project_cfg}
+    return TcKitConfig(merged)
