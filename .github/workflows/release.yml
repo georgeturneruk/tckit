@@ -11,6 +11,20 @@ jobs:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
 
+    # Scope this job to the `pypi` deployment environment so PyPI's Trusted
+    # Publisher constraint is satisfied. The environment is also the hook for
+    # adding required reviewers, branch/tag restrictions, or wait timers later
+    # — leave it empty in GitHub repo settings for fully automated releases.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tckit/
+
+    # Trusted Publisher (OIDC) requires id-token: write.
+    # No PyPI API token is stored as a GitHub secret.
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,13 +33,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install hatchling build twine
+        run: pip install build
 
       - name: Build wheel and sdist
         run: python -m build
 
       - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1

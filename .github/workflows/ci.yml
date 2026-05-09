@@ -28,3 +28,25 @@ jobs:
 
       - name: Skills drift check (.claude/skills/ vs plugin/skills/)
         run: diff -r .claude/skills/ plugin/skills/
+
+  pip-install:
+    name: Pip install smoke-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with dev extras
+        run: pip install -e ".[dev]"
+
+      - name: Verify console script runs
+        run: |
+          tckit --help
+          tckit config --help
+
+      - name: Run unit tests against installed package
+        run: pytest tests/unit/ -q
