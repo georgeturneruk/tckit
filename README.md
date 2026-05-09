@@ -11,7 +11,7 @@ An MCP server that gives AI agents a precise, structured view of a TwinCAT 3 pro
 ---
 
 > [!WARNING]
-> **TcKit is in active development and not yet production-ready.** Expect breaking changes between minor versions, rough edges, and missing features. The Phase 1 read layer is stable; writer/builder/test paths and the plugin install flow are new in v0.2.0 and have not been battle-tested across a wide range of TwinCAT setups. Use against test PLCs and dev VMs, not production. [Open an issue](https://github.com/georgeturneruk/tckit/issues) if you hit something.
+> **TcKit is in active development and not yet production-ready.** Expect breaking changes between minor versions, rough edges, and missing features.
 
 ---
 
