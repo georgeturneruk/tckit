@@ -10,6 +10,11 @@ An MCP server that gives AI agents a precise, structured view of a TwinCAT 3 pro
 
 ---
 
+> [!WARNING]
+> **TcKit is in active development and not yet production-ready.** Expect breaking changes between minor versions, rough edges, and missing features. The Phase 1 read layer is stable; writer/builder/test paths and the plugin install flow are new in v0.2.0 and have not been battle-tested across a wide range of TwinCAT setups. Use against test PLCs and dev VMs, not production. [Open an issue](https://github.com/georgeturneruk/tckit/issues) if you hit something.
+
+---
+
 ## Why TcKit
 
 LLMs do not get smarter when you give them more tokens. Quality degrades as context fills up — Anthropic call this [context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), and PLC projects are an unusually fast way to trigger it: a single `.TcPOU` file is XML wrapped around code, easily thousands of lines for one function block. Pasting one in to ask about one method poisons the rest of the conversation.
@@ -135,11 +140,11 @@ For write/build/deploy/test, run the bridge in a separate PowerShell window with
 
 | Capability | State |
 |---|---|
-| ProjectReader | Complete |
-| DocsSearcher | Complete |
-| DocGenerator | Complete |
-| ProjectWriter | Complete |
-| BuildRunner | Complete |
+| ProjectReader | Implemented |
+| DocsSearcher | Implemented |
+| DocGenerator | Implemented |
+| ProjectWriter | Implemented |
+| BuildRunner | Implemented |
 | TestRunner | Planned |
 
 ---
