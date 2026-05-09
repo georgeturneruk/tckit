@@ -1,7 +1,7 @@
 ---
 adr: 0000
 title: Template
-status: Template       # Proposed | Accepted | Implemented | Superseded
+status: Template       # Exploring | Proposed | Accepted | Implemented | Superseded
 created: YYYY-MM-DD
 issue:                 # GH issue number (optional)
 pr:                    # GH PR number once opened

@@ -83,19 +83,25 @@ See the linked SKILL.md for the full step-by-step.
 
 Non-trivial design decisions live as Architecture Decision Records under
 `adrs/`. One Markdown file per decision, with frontmatter status
-(`Proposed | Accepted | Implemented | Superseded`). Template at
-`adrs/0000-template.md`.
+(`Exploring | Proposed | Accepted | Implemented | Superseded`). Template
+at `adrs/0000-template.md`.
+
+`Exploring` precedes `Proposed` and is for ADRs that capture investigation
+before a specific proposal is on the table. Use it when the work is
+"here are the options we've evaluated and what we know about each", not
+"here is what we propose to do". Promote to `Proposed` once a recommended
+direction crystallises.
 
 **When to write one.** Only if you would lose meaningful context by not
 writing it down before stopping. Single-session work doesn't qualify.
 Routine bug fixes don't qualify. ADRs are for design choices that span
 multiple sessions or that future-you will need to understand the *why* of.
 
-**At session start.** If `adrs/` contains any ADR with `status: Proposed`
-or `status: Accepted` relevant to the user's request, read those before
-doing work and propose an orientation: which ADRs intersect with the
-request, and a suggested sequence for this session. Do not write the
-session orientation to disk; it is verbal context.
+**At session start.** If `adrs/` contains any ADR with `status: Exploring`,
+`status: Proposed` or `status: Accepted` relevant to the user's request,
+read those before doing work and propose an orientation: which ADRs
+intersect with the request, and a suggested sequence for this session. Do
+not write the session orientation to disk; it is verbal context.
 
 **Decisions flow back into the ADR.** When a session lands on something
 that contradicts or extends an ADR (tried X, switched to Y), update its
