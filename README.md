@@ -89,33 +89,44 @@ Adapters are isolated behind port interfaces (Python ABCs). The server only call
 ## Quick Start
 
 > [!CAUTION]
-> TcKit is an **engineering tool for development environments**. The `deploy` and `start_runtime` tools write to and restart a running PLC. By default, these operations require explicit `confirmed=True` — always verify the target NetId before proceeding. To disable confirmations on a trusted closed network, set `SAFETY_CONFIRMATIONS=false` in `docker/.env`. To permanently block specific targets (e.g. a production PLC), set `BLOCKED_NETIDS=<netid>,...` — this cannot be bypassed even with `confirmed=True`.
+> TcKit is an **engineering tool for development environments**. The `deploy` and `start_runtime` tools write to and restart a running PLC. By default these require explicit `confirmed=True` — always verify the target NetId. Set `SAFETY_CONFIRMATIONS=false` only on closed networks. Set `BLOCKED_NETIDS=<netid>,...` to permanently block targets (e.g. a production PLC); blocked NetIds cannot be bypassed even with `confirmed=True`.
 
-**Requirements:** Docker + Docker Compose. For write/build/test operations: a Windows PC with TwinCAT 3.1 Build 4026.
+**Requirements (both paths):** Claude Code, TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host (only for write/build/deploy/test; reads work without it). The Windows bridge service runs natively in PowerShell.
 
-```bash
-cp docker/.env.example docker/.env
-# edit docker/.env with your project path and bridge URL
+### Plugin (recommended)
 
-docker compose -f docker/docker-compose.yml up
+Needs [`uv`](https://docs.astral.sh/uv/) installed (`pip install uv`). In Claude Code:
+
+```
+/plugin marketplace add georgeturneruk/tckit
+/plugin install tckit@tckit
+> Set me up for TcKit.
 ```
 
-Windows bridge (write/build/test operations only):
+The bundled `tc-config` skill walks you through prompts and writes `~/.tckit/config.toml`. The MCP server runs as `uvx tckit`, fetching the package from PyPI on first use.
+
+### Docker (opt-in)
+
+For users who want isolation, multi-client setups, or a remote-server install:
+
+```bash
+git clone https://github.com/georgeturneruk/tckit
+cd tckit
+# In Claude Code:
+> /tc-config init        # pick "docker" mode, fill in prompts
+
+docker compose -f docker/docker-compose.yml up -d
+claude mcp add --transport sse tckit http://localhost:8000/sse
+```
+
+You can install the plugin separately just for the skills.
+
+### Bridge (both paths)
+
+For write/build/deploy/test, run the bridge in a separate PowerShell window with TcXaeShell open:
 
 ```powershell
 .\bridge\Start-Bridge.ps1
-```
-
-Add to your MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "tckit": {
-      "url": "http://localhost:8000/sse"
-    }
-  }
-}
 ```
 
 ---

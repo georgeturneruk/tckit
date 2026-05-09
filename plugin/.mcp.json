@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tckit": {
+      "command": "uvx",
+      "args": ["tckit", "--transport", "stdio"]
+    }
+  }
+}
