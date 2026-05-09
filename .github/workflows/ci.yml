@@ -25,3 +25,6 @@ jobs:
 
       - name: Unit tests
         run: docker compose -f docker/docker-compose.ci.yml run --rm tckit pytest tests/unit/ -v
+
+      - name: Skills drift check (.claude/skills/ vs plugin/skills/)
+        run: diff -r .claude/skills/ plugin/skills/

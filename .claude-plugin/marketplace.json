@@ -1,0 +1,15 @@
+{
+  "name": "tckit",
+  "owner": {
+    "name": "George Turner",
+    "url": "https://georgeturner.uk"
+  },
+  "plugins": [
+    {
+      "name": "tckit",
+      "source": "./plugin",
+      "description": "MCP server + skills for TwinCAT 3 PLC projects: read structure, write ST, build, deploy, run TcUnit tests.",
+      "version": "0.2.0"
+    }
+  ]
+}
