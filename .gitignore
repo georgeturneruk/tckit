@@ -54,3 +54,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Claude Code (per-user repo-specific instructions; CLAUDE.md is committed)
+CLAUDE.local.md
