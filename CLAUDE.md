@@ -79,6 +79,44 @@ See the linked SKILL.md for the full step-by-step.
 
 ---
 
+## Design Decisions (ADRs)
+
+Non-trivial design decisions live as Architecture Decision Records under
+`adrs/`. One Markdown file per decision, with frontmatter status
+(`Proposed | Accepted | Implemented | Superseded`). Template at
+`adrs/0000-template.md`.
+
+**When to write one.** Only if you would lose meaningful context by not
+writing it down before stopping. Single-session work doesn't qualify.
+Routine bug fixes don't qualify. ADRs are for design choices that span
+multiple sessions or that future-you will need to understand the *why* of.
+
+**At session start.** If `adrs/` contains any ADR with `status: Proposed`
+or `status: Accepted` relevant to the user's request, read those before
+doing work and propose an orientation: which ADRs intersect with the
+request, and a suggested sequence for this session. Do not write the
+session orientation to disk; it is verbal context.
+
+**Decisions flow back into the ADR.** When a session lands on something
+that contradicts or extends an ADR (tried X, switched to Y), update its
+Status notes section before moving on. This is the rule that keeps ADRs
+honest.
+
+**Mark Implemented when the PR lands.** Set `status: Implemented` and fill
+in `pr:`. If an ADR is abandoned, set `status: Superseded` with a note
+explaining why; do not delete it.
+
+**Source-of-truth split:**
+
+- `adrs/*.md`: design rationale (how something should work, why this approach)
+- GitHub issues / PRs: tracked work (what is open, what shipped)
+- Code: implemented behaviour (the truth on what currently exists)
+- `CLAUDE.md`: cross-session rules and conventions
+
+If two artefacts try to own the same thing, one is wrong.
+
+---
+
 ## Adding a New Adapter
 
 Adapters live under `tckit/adapters/<port_kind>/`. The one hard rule: adapters import only from `tckit.ports` and stdlib. Never from another adapter (linting enforces this).
