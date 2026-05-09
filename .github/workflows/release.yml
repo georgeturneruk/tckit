@@ -11,6 +11,14 @@ jobs:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
 
+    # Scope this job to the `pypi` deployment environment so PyPI's Trusted
+    # Publisher constraint is satisfied. The environment is also the hook for
+    # adding required reviewers, branch/tag restrictions, or wait timers later
+    # — leave it empty in GitHub repo settings for fully automated releases.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tckit/
+
     # Trusted Publisher (OIDC) requires id-token: write.
     # No PyPI API token is stored as a GitHub secret.
     permissions:
