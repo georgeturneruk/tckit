@@ -45,7 +45,7 @@ docs = [
 ]
 
 [project.scripts]
-tckit = "tckit.server:main"
+tckit = "tckit.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/turb5/tckit"
