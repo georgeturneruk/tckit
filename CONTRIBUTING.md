@@ -29,11 +29,24 @@ Only do this if there is a genuinely new external concern — not a variation of
 - RST-format docstrings on all public methods
 - No comments explaining what the code does — only why (non-obvious constraints, workarounds)
 
+## Editing skills
+
+Skills live in two places by necessity: `.claude/skills/` is read by Claude Code when working in this repo, and `plugin/skills/` is the copy that ships to end users via the Claude Code plugin marketplace. The plugin manifest expects its own bundled copy, so both must be in git and identical.
+
+After editing `.claude/skills/`, run:
+
+```bash
+python scripts/sync-skills.py
+```
+
+CI verifies parity with `python scripts/sync-skills.py --check` and rejects PRs that have drifted.
+
 ## Running the full check locally
 
 ```bash
 docker compose -f docker/docker-compose.yml run tckit ruff check tckit/
 python scripts/check-adapter-isolation.py
+python scripts/sync-skills.py --check
 docker compose -f docker/docker-compose.yml run tckit pytest tests/unit/ -v
 ```
 
