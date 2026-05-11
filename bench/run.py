@@ -59,7 +59,13 @@ def run_one(prompt: str, config: pathlib.Path, tcunit_path: str) -> dict[str, An
         "--add-dir", tcunit_path,
     ]
     t0 = time.monotonic()
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # Force UTF-8 decoding of the claude CLI's stdout. On Windows the
+    # default text= decoding is the system locale (cp1252), which mojibakes
+    # any non-ASCII characters Claude writes (em-dashes, smart quotes, etc).
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, check=False,
+        encoding="utf-8", errors="replace",
+    )
     duration = time.monotonic() - t0
 
     events: list[dict[str, Any]] = []
