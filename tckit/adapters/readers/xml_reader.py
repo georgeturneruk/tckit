@@ -49,6 +49,14 @@ class XmlReader(ProjectReader):
         # Maps POU/GVL/DUT name → absolute file path.
         # Populated by get_structure(); reused by all subsequent calls.
         self._file_index: dict[str, Path] = {}
+        # Remembered context for the index: the project path it was built
+        # for, and the .plcproj file (plus its mtime) we use as a staleness
+        # signal. TwinCAT rewrites .plcproj on any structural change
+        # (add/remove/rename of POUs), so its mtime is a cheap and
+        # semantically meaningful invalidation trigger. See ADR-0004.
+        self._index_project_path: str | None = None
+        self._index_plcproj: Path | None = None
+        self._index_mtime: float | None = None
 
     # ------------------------------------------------------------------
     # ProjectReader interface
@@ -118,6 +126,19 @@ class XmlReader(ProjectReader):
 
         libraries = _collect_libraries(plcproj_paths)
         tasks = _collect_tasks(root)
+
+        # Record the staleness context after a successful rebuild so the
+        # next read can decide whether to trust the index.
+        self._index_project_path = project_path
+        if plcproj_paths:
+            self._index_plcproj = plcproj_paths[0]
+            try:
+                self._index_mtime = plcproj_paths[0].stat().st_mtime
+            except OSError:
+                self._index_mtime = None
+        else:
+            self._index_plcproj = None
+            self._index_mtime = None
 
         return ProjectStructure(
             project_path=project_path,
@@ -266,6 +287,25 @@ class XmlReader(ProjectReader):
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _refresh_index_if_stale(self) -> None:
+        """Rebuild the file index if the recorded .plcproj has changed.
+
+        TwinCAT rewrites .plcproj on any structural change (POU added,
+        removed, renamed). Body-only edits do not touch it, so the warm
+        path stays warm. One stat() call per read.
+        """
+        if self._index_plcproj is None or self._index_project_path is None:
+            return
+        try:
+            current = self._index_plcproj.stat().st_mtime
+        except OSError:
+            # .plcproj disappeared since the last build — assume stale and
+            # let get_structure raise FileNotFoundError if the whole tree
+            # has gone away.
+            current = None
+        if current != self._index_mtime:
+            self.get_structure(self._index_project_path)
+
     def _resolve(self, name: str, extension: str) -> Path:
         """Return the file path for a named POU, GVL, or DUT.
 
@@ -274,6 +314,7 @@ class XmlReader(ProjectReader):
         Raises:
             FileNotFoundError: If the file cannot be located.
         """
+        self._refresh_index_if_stale()
         if name in self._file_index:
             return self._file_index[name]
 

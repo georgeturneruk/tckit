@@ -31,12 +31,16 @@ are additionally available.
 ## Tasks
 
 - `tasks/01-orient.md` — project orientation (structural overview).
-- `tasks/02-find-callers.md` — find all callers of
-  `FB_TestSuite.AssertEquals_INT` (16 call sites across `TcUnit/` and
-  `TcUnit-Verifier/`).
+- `tasks/02-pinpoint-method.md` — pinpoint read of a single method body
+  (`FB_TestSuite.AssertEquals_INT`).
+- `tasks/03-explain-fb-api.md` — interface-only summary of an FB's
+  public API (`FB_TestSuite`).
 
 Add a new task by dropping a markdown file in `tasks/`. The placeholder
 `${TCUNIT_PATH}` is substituted at runtime.
+
+Parked tasks live under `tasks/_parked/` and are not part of the active
+run. See `tasks/_parked/README.md` for the parking rationale.
 
 ## Prerequisites
 
@@ -48,13 +52,16 @@ Add a new task by dropping a markdown file in `tasks/`. The placeholder
 
 ## Run
 
-Four invocations cover the two-by-two matrix at three runs each:
+Six invocations cover the three-by-two matrix at one run each (raise
+`--runs` once a task set is stable enough to invest in tighter CIs):
 
 ```powershell
-python bench/run.py --task bench/tasks/01-orient.md       --config bench/configs/tckit.json --runs 3
-python bench/run.py --task bench/tasks/01-orient.md       --config bench/configs/empty.json --runs 3
-python bench/run.py --task bench/tasks/02-find-callers.md --config bench/configs/tckit.json --runs 3
-python bench/run.py --task bench/tasks/02-find-callers.md --config bench/configs/empty.json --runs 3
+python bench/run.py --task bench/tasks/01-orient.md          --config bench/configs/tckit.json --runs 1
+python bench/run.py --task bench/tasks/01-orient.md          --config bench/configs/empty.json --runs 1
+python bench/run.py --task bench/tasks/02-pinpoint-method.md --config bench/configs/tckit.json --runs 1
+python bench/run.py --task bench/tasks/02-pinpoint-method.md --config bench/configs/empty.json --runs 1
+python bench/run.py --task bench/tasks/03-explain-fb-api.md  --config bench/configs/tckit.json --runs 1
+python bench/run.py --task bench/tasks/03-explain-fb-api.md  --config bench/configs/empty.json --runs 1
 ```
 
 Override the TcUnit path with `--tcunit-path C:/some/other/path` if

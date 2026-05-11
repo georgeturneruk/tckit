@@ -29,6 +29,17 @@ def test_reader_returns_project_reader() -> None:
     assert isinstance(_cfg().reader(), ProjectReader)
 
 
+def test_reader_is_cached_across_calls() -> None:
+    """Successive cfg.reader() calls return the same instance.
+
+    The XmlReader caches its file-name index between calls. The MCP server
+    invokes ``cfg.reader()`` once per request, so the instance must persist
+    or get_structure→get_pou_interface chains lose the index. See #42.
+    """
+    cfg = _cfg()
+    assert cfg.reader() is cfg.reader()
+
+
 def test_writer_returns_project_writer() -> None:
     assert isinstance(_cfg().writer(), ProjectWriter)
 

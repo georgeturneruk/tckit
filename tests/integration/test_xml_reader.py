@@ -386,3 +386,85 @@ def test_get_structure_no_project_files_returns_empty_lists(tmp_path: Path) -> N
     structure = XmlReader().get_structure(str(tmp_path))
     assert structure.tasks == []
     assert structure.libraries == []
+
+
+# ---------------------------------------------------------------------------
+# Index staleness — mtime guard on .plcproj
+# ---------------------------------------------------------------------------
+
+
+def _copy_sample_to(tmp_path: Path, sample: Path) -> Path:
+    """Mirror the sample_project fixture into a writable temp directory."""
+    import shutil
+
+    target = tmp_path / "proj"
+    shutil.copytree(sample, target)
+    return target
+
+
+def test_index_rebuilds_when_plcproj_mtime_changes(
+    tmp_path: Path, sample_project_path: Path
+) -> None:
+    """A structural change (recorded as a .plcproj mtime bump) invalidates the index.
+
+    The reader instance lives for the server's lifetime (#42), so a stale
+    file-name index would let a new POU go undiscovered until the next
+    explicit get_structure call. The mtime guard fixes this.
+    """
+    proj = _copy_sample_to(tmp_path, sample_project_path)
+    reader = XmlReader()
+    reader.get_structure(str(proj))
+    assert "FB_Example" in reader._file_index
+
+    # Drop a brand-new POU into the project; TwinCAT would rewrite .plcproj
+    # in the same operation. Simulate that by bumping the mtime forward.
+    new_pou = proj / "FB_New.TcPOU"
+    new_pou.write_text(
+        dedent("""\
+            <?xml version="1.0" encoding="utf-8"?>
+            <TcPlcObject Version="1.1.0.1">
+              <POU Name="FB_New" Id="{00000000-0000-0000-0000-000000000099}" SpecialFunc="None">
+                <Declaration><![CDATA[FUNCTION_BLOCK FB_New
+            VAR_INPUT
+            END_VAR]]></Declaration>
+                <Implementation>
+                  <ST><![CDATA[]]></ST>
+                </Implementation>
+              </POU>
+            </TcPlcObject>
+            """),
+        encoding="utf-8",
+    )
+    plcproj = proj / "SampleProject.plcproj"
+    bumped = plcproj.stat().st_mtime + 5
+    import os
+    os.utime(plcproj, (bumped, bumped))
+
+    # The next read should trigger a transparent rebuild and pick up FB_New.
+    interface = reader.get_pou_interface("FB_New")
+    assert interface.pou_name == "FB_New"
+    assert "FB_New" in reader._file_index
+
+
+def test_index_warm_path_does_not_rebuild_on_body_edits(
+    tmp_path: Path, sample_project_path: Path
+) -> None:
+    """Editing a POU body must not trip the mtime guard.
+
+    Body-only edits don't touch .plcproj, so the cached index stays valid.
+    Verified by observing that a second read against the same POU returns
+    the same file path object identity from the index (no replacement).
+    """
+    proj = _copy_sample_to(tmp_path, sample_project_path)
+    reader = XmlReader()
+    reader.get_structure(str(proj))
+    original_path = reader._file_index["FB_Example"]
+
+    # Touch the POU body file; .plcproj is untouched.
+    pou_file = proj / "FB_Example.TcPOU"
+    bumped = pou_file.stat().st_mtime + 5
+    import os
+    os.utime(pou_file, (bumped, bumped))
+
+    reader.get_pou_interface("FB_Example")
+    assert reader._file_index["FB_Example"] is original_path
