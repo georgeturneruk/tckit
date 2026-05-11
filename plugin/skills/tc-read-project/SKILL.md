@@ -1,10 +1,12 @@
 ---
 name: tc-read-project
-description: Use when inspecting, navigating, mapping, or searching a TwinCAT 3 PLC project through TcKit's MCP tools (get_structure, get_pou_interface, get_pou_item, get_gvl, get_dut). Triggers on requests like "show me FB_X", "what's in this project", "summarise the motor controller POU", "what does ST_Config look like", or any task that requires reading PLC code before writing it. Do NOT use for writing, building, or testing, and do NOT use for researching Beckhoff library FBs (use tc-beckhoff-docs for that).
+description: Use when inspecting, navigating, or searching a TwinCAT 3 PLC project through TcKit's MCP tools (get_structure, get_pou_interface, get_pou_item, get_gvl, get_dut) AFTER orientation. Triggers on requests like "show me FB_X", "summarise the motor controller POU", "what does ST_Config look like", or any task that requires reading specific PLC code before writing it. Do NOT use for first-touch orientation (use tc-orient-project), and do NOT use for researching Beckhoff library FBs (use tc-beckhoff-docs).
 allowed-tools: mcp__tckit__get_structure, mcp__tckit__get_pou_interface, mcp__tckit__get_pou_item, mcp__tckit__get_gvl, mcp__tckit__get_dut, Read, Grep, Glob
 ---
 
 # Reading TwinCAT projects through TcKit
+
+First-touch orientation belongs to `tc-orient-project`. This skill picks up once orientation is done and the user asks for something specific.
 
 Always read in layers. Never fetch a full POU when one method suffices.
 
