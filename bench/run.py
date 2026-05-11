@@ -166,6 +166,53 @@ def extract_metrics(result: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Markdown sibling
+# ---------------------------------------------------------------------------
+
+
+def render_markdown(
+    *,
+    task: str,
+    config: str,
+    run: int,
+    timestamp: str,
+    tcunit_path: str,
+    metrics: dict[str, Any],
+    final_text: str | None,
+) -> str:
+    """Render the per-run final text as a Markdown document.
+
+    The .md sibling exists so reviewers can read the actual answer
+    Claude produced without parsing the JSON. Headline metrics go in
+    a short preamble; the body is the unmodified ``final_text``.
+    """
+    tool_breakdown = metrics.get("tool_breakdown") or {}
+    if tool_breakdown:
+        breakdown_line = ", ".join(
+            f"{name}×{count}" for name, count in sorted(tool_breakdown.items())
+        )
+    else:
+        breakdown_line = "(none)"
+
+    wall = metrics.get("wall_clock_seconds")
+    wall_str = f"{wall:.1f}s" if isinstance(wall, (int, float)) else "n/a"
+
+    header = (
+        f"# {task} — {config} — run {run}\n\n"
+        f"- Timestamp (UTC): {timestamp}\n"
+        f"- TcUnit path: {tcunit_path}\n"
+        f"- Tool calls: {metrics.get('tool_call_count', 'n/a')}\n"
+        f"- Total tokens: {metrics.get('total_tokens', 'n/a')}\n"
+        f"- Wall clock: {wall_str}\n"
+        f"- Exit code: {metrics.get('exit_code', 'n/a')}\n"
+        f"- Tool breakdown: {breakdown_line}\n\n"
+        "---\n\n"
+    )
+    body = final_text if isinstance(final_text, str) and final_text else "_(no final text)_"
+    return header + body + "\n"
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -224,6 +271,20 @@ def main() -> int:
         }
         out_path = args.results_dir / f"{task_stem}__{config_stem}__{timestamp}__run{n}.json"
         out_path.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        md_path = out_path.with_suffix(".md")
+        md_path.write_text(
+            render_markdown(
+                task=task_stem,
+                config=config_stem,
+                run=n,
+                timestamp=timestamp,
+                tcunit_path=args.tcunit_path,
+                metrics=metrics,
+                final_text=metrics.get("final_text"),
+            ),
+            encoding="utf-8",
+        )
 
         if metrics["exit_code"] == 0:
             print(

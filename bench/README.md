@@ -78,8 +78,14 @@ includes per-(task, config) means and per-task ratio lines.
 
 ## Output
 
-Per-run results land in `bench/results/` as JSON, one file per run.
-Aggregate prints to stdout.
+Each run writes two files into `bench/results/`:
+
+- `<task>__<config>__<timestamp>__run<n>.json` — full event log, metrics, raw
+  stdout/stderr. Used by `aggregate.py`.
+- `<task>__<config>__<timestamp>__run<n>.md` — small metrics header plus
+  Claude's final answer (`final_text`) as Markdown. Useful for eyeballing
+  whether the answer is actually any good, and for diffing two configs'
+  answers side-by-side without parsing JSON.
 
 `bench/results/` is gitignored — don't commit individual runs.
 
@@ -88,7 +94,7 @@ Aggregate prints to stdout.
 - Tool *results* are not captured (Claude Code's stream-json omits tool
   outputs by default). We measure call shape, not content.
 - Subjective output quality (e.g. "did the orientation summary actually
-  help?") is not scored automatically. Eyeball the `final_text` field
-  in the per-run JSON for that.
+  help?") is not scored automatically. Open the `.md` sibling for the
+  human-readable answer; diff two configs' `.md` files to compare them.
 - Three runs per pair bounds variance loosely. Bump `--runs` if you need
   tighter confidence intervals.
