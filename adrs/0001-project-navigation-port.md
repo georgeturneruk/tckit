@@ -9,38 +9,65 @@ pr:
 
 ## Context
 
-TcKit's `ProjectReader` exposes a layered just-in-time read pattern that
-matches Claude's Python workflow well: `get_structure` for discovery,
-`get_pou_interface` for API surface, `get_pou_item` for one method body.
-This covers the "Read with offset/limit" half of how Claude navigates
-code.
+TcKit's `ProjectReader` exposes a layered just-in-time read pattern:
+`get_structure` for discovery, `get_pou_interface` for API surface,
+`get_pou_item` for one method body. This is the project's answer to
+context rot. Claude pulls the slice it needs, not the whole file.
 
-The other half, content search, has no TcKit equivalent. On a Python
-project Claude reaches for `Grep` after `Glob`. On a TwinCAT project the
-same question ("where is FB_Motor instantiated?", "every place that
-writes `GVL_Params.nMaxRetries`") has no answer that doesn't require
-reading every POU body, which collapses the whole point of the
-layered-read design.
+Content search across the project has no TcKit-native equivalent.
+"Where is FB_Motor instantiated?", "every place that writes
+`GVL_Params.nMaxRetries`", "find references to *this* `Execute` method
+specifically." On a Python project Claude reaches for `Grep`. On a
+TwinCAT project the same question has no TcKit answer.
 
-This is the largest gap measured against Python-project parity. Beyond
-pure pattern matching, TwinCAT's structure (XML-wrapped ST,
-POU/method/property scopes, library namespaces) means a semantic
-find-symbol capability would resolve queries that regex cannot answer
-accurately ("find references to *this* `Execute` method on FB_Motor
-specifically, not the seven others with the same name").
+Two clarifications surfaced in review (2026-05-10) sharpen the problem
+before we build for it.
+
+1. **Stock `Grep` already works on `.TcPOU` files.** They are text on
+   disk; ripgrep returns line-numbered matches over the CDATA-wrapped
+   ST. The XML envelope adds bounded noise but is not a blocker. Grep
+   alone does not pollute context, it returns matching lines.
+
+2. **`Grep` + `get_pou_item` together cover most navigation cleanly.**
+   Grep finds the symbol; the filename and line locate the POU and
+   item; `get_pou_item` retrieves the clean ST body. No whole-file
+   dump.
+
+Two residual gaps remain:
+
+- **Result noise and missing structure.** Stock `Grep` matches in XML
+  attributes and `<Comment>` blocks alongside ST. A TwinCAT-aware
+  search could filter to CDATA, optionally to code-not-comments, and
+  return `(pou_name, item_name)` directly instead of asking Claude to
+  infer them from filename and line.
+- **Cross-instance disambiguation.** Stock `Grep` cannot bind
+  `motor.Execute` to `FB_Motor.Execute` rather than the seven other
+  `Execute` methods. Only a symbol table with scope awareness can.
+
+Both are real but narrow. When Claude's actual TwinCAT workflows are
+listed against where each gets stuck, search addresses the *refactor*
+row, and refactor is bounded by the project rule that Claude does not
+execute cross-project renames autonomously. The other rows
+(orientation on a new project, runtime debugging, adding a feature)
+have larger gaps that a search port does not fix: folder/subsystem
+grouping, task and library context, IO mapping, live runtime state.
+
+The question this ADR answers therefore shifts from "which
+implementation should we build?" to "is search the right next thing
+to build?". Option comparison and spike data are preserved below as
+durable research; the recommendation reflects the new framing.
 
 ## Goals
 
-- Match Claude Code's existing tool surface (`Grep`) where it makes
-  sense, so Claude can apply the same mental model it uses on Python
-  projects.
-- Add semantic find-symbol capability that goes beyond what generic Grep
-  can do, exploiting the TwinCAT structure we have access to.
+- Make the residual search-shaped gaps (envelope noise, cross-instance
+  disambiguation) addressable when a concrete need emerges, without
+  committing to the work before that need is real.
+- Preserve the implementation research (Options A through G) so
+  whoever picks the work back up does not redo the spikes.
 - Fit the existing ports/adapters architecture: adapter-isolated, port
   contract stable, implementation swappable.
-- Build a strong base: optimise for time-to-learning the right port
-  shape now; design so the implementation can be swapped later without
-  breaking consumers.
+- Establish what a future Stage 2 actually means and what would
+  trigger promoting it.
 
 ## Port shape (provisional)
 
@@ -287,19 +314,40 @@ Skip.
 
 ## Provisional recommendation
 
-Strongly lean: **Option B (blark + pytmc) for Stage 1**, with vendoring,
-single adapter, and an explicit migration plan documented for the day
-the limits bite. Validation steps before fully committing:
+**Defer.** The two narrow gaps that survive scrutiny (envelope noise,
+cross-instance disambiguation) are real but bounded. Claude's actual
+TwinCAT workflows (orientation, debugging, feature add) are
+bottlenecked on different things — subsystem framing from project
+files, task and library context, IO mapping, live PLC state — not on
+search.
 
-1. Re-run blark on TcOpen with tighter scope to measure the actual
+The next investment should target those. See **ADR-0002** for the
+orientation track (extending `get_structure` with task, library, and
+folder grouping; pairing it with a `tc-orient-project` skill).
+
+If a concrete need for search emerges from real Claude sessions
+(repeated brittle disambiguation, or "who calls X" queries that stock
+`Grep` cannot answer cleanly), return here. When that happens, the
+work should start narrow:
+
+- `find_callers(pou_name, item_name)` and `find_instantiations(fb_name)`
+  only, on the blark + pytmc foundation already characterised in
+  Options A and B.
+- Skip the general `search()` surface and the broader
+  `find_symbol(kind=...)` taxonomy unless a separate need for them
+  appears.
+
+Validation gates if the work is picked up:
+
+1. Re-run blark on TcOpen with tighter scope to measure actual
    failure rate (a few hours of work).
 2. Build a tiny end-to-end "find references to FB_X" prototype to
-   validate the blark + pytmc composition for the load-bearing use
-   case (a day or two).
+   validate the blark + pytmc composition (a day or two).
 
-If both succeed, promote this ADR to `Proposed` with a clear Decision
-section and proceed with implementation. If either fails, fall back to
-Option A (ANTLR + ST.g4) and reassess.
+If both succeed, promote with a Decision section scoped to the two
+narrow methods. If either fails, fall back to Option A (ANTLR + ST.g4)
+and reassess. The full `search()` and general `find_symbol(kind=...)`
+surface as drafted above remain on the shelf, not the next step.
 
 ## Status notes
 
@@ -316,3 +364,13 @@ Option A (ANTLR + ST.g4) and reassess.
   pytmc parses both projects instantly (0.07s for TcUnit, 0.37s for
   TcOpen TcoCore). truST source-code reality check passed; the source
   is real, not docs-only as one external research summary had claimed.
+- 2026-05-10: Recommendation revised after framing review. Stock
+  `Grep` on `.TcPOU` files plus `get_pou_item` was confirmed to cover
+  most navigation without context pollution; the residual gaps are
+  narrower than the original framing suggested. The orientation
+  problem (subsystem grouping, task layout, library refs) is the
+  higher-leverage navigation investment and is split out into
+  ADR-0002. This ADR remains `Exploring` with research preserved;
+  the recommendation has moved from "Stage 1 = blark + pytmc" to
+  "defer until a concrete narrow need emerges, then start with
+  `find_callers` and `find_instantiations` only".
