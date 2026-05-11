@@ -124,6 +124,10 @@ class TcKitConfig:
         # underlying httpx.Client (and its connection pool) lives for the
         # server's lifetime instead of being re-created per MCP call.
         self._bridge_client: BridgeClient | None = None
+        # Single ProjectReader shared across MCP requests so the file-name
+        # index populated by get_structure survives long enough for the
+        # follow-up get_pou_interface / get_pou_item calls to use it.
+        self._reader: ProjectReader | None = None
 
     def get(self, key: str, default: Any = None) -> Any:
         """Resolve ``key`` from env (uppercased) first, then file values, then default."""
@@ -142,12 +146,14 @@ class TcKitConfig:
     # ------------------------------------------------------------------
 
     def reader(self) -> ProjectReader:
-        _ensure_registries()
-        name = self.get("reader", "xml")
-        cls = _READER_REGISTRY.get(name)
-        if cls is None:
-            raise ValueError(f"Unknown reader adapter: {name!r}")
-        return cls()
+        if self._reader is None:
+            _ensure_registries()
+            name = self.get("reader", "xml")
+            cls = _READER_REGISTRY.get(name)
+            if cls is None:
+                raise ValueError(f"Unknown reader adapter: {name!r}")
+            self._reader = cls()
+        return self._reader
 
     def writer(self) -> ProjectWriter:
         _ensure_registries()

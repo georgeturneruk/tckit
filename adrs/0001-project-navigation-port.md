@@ -374,3 +374,9 @@ surface as drafted above remain on the shelf, not the next step.
   the recommendation has moved from "Stage 1 = blark + pytmc" to
   "defer until a concrete narrow need emerges, then start with
   `find_callers` and `find_instantiations` only".
+- 2026-05-11: Bench harness's `02-find-callers` task parked
+  (`bench/tasks/_parked/02-find-callers.md`). The bench cannot
+  discriminate TcKit-on from TcKit-off on find-callers workflows until
+  this ADR is promoted to Implemented; both configs default to `Grep`.
+  Re-instate the task when a `find_callers` / `find_instantiations`
+  surface lands.

@@ -27,6 +27,18 @@ Always read in layers. Never fetch a full POU when one method suffices.
 - Calling `get_structure` at the start of every turn.
 - Quoting Beckhoff FB behaviour from memory — that's `tc-beckhoff-docs` territory.
 - Using `get_pou_item` for an enum or struct (use `get_dut`).
+- Using `Read` or `Grep` on `.TcPOU` / `.TcGVL` / `.TcDUT` files **as a substitute for `get_pou_interface` / `get_pou_item` / `get_gvl` / `get_dut`** when those tools are available. The MCP calls return just the slice you need; the raw XML files contain a lot of envelope noise.
+
+## When TcKit MCP tools are unavailable
+
+If the TcKit MCP tools (`mcp__tckit__get_structure` and friends) are not registered in this session, fall back to disciplined stock-tool reads:
+
+1. **Locate** the symbol with `Glob` (e.g. `**/FB_Motor.TcPOU`). One call.
+2. **Interface first.** `Read` the file with a `limit` that catches the `<Declaration>` block (typically the first ~80 lines of a POU file). Don't pull the whole file.
+3. **Body when needed.** If you need a specific method body, search inside the file with `Grep` for the method name and `Read` with `offset`/`limit` around the match. Resist pulling the whole POU.
+4. **GVLs and DUTs.** Read the file in full; these are usually small.
+
+Same layered discipline as with the MCP tools, just done with `Glob`/`Grep`/`Read`. The anti-pattern is using raw XML reads *instead of TcKit when TcKit is available*, not using them as a fallback when it isn't.
 
 ## Next
 
