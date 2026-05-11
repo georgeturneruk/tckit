@@ -98,12 +98,17 @@ def _err(message: str) -> str:
 
 
 def get_structure(project_path: str) -> str:
-    """Return the top-level map of POUs, GVLs, and tasks in a TwinCAT project.
+    """Return the project map: POUs by folder, tasks, libraries, plus GVL and DUT names.
 
-    Always call this first when you need to orient yourself in a project.
-    Returns names and types only — no code bodies.
+    The single call that orients you on an unfamiliar TwinCAT project.
+    Subsystems are visible in each POURef.folder (e.g. "POUs/Axes"); task
+    layout includes cycle_time_us, priority, and the POUs each task runs;
+    libraries lists Beckhoff and third-party refs. Call once at the start
+    of a session; do not refresh per turn. Returns names and metadata
+    only, no code bodies; use get_pou_interface / get_pou_item for those.
 
-    :param project_path: Absolute path to the .tsproj or .plcproj file.
+    :param project_path: Absolute path to the project root (parent of the
+        .plcproj / .tsproj).
     """
     try:
         result = _cfg.reader().get_structure(project_path)

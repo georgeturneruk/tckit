@@ -19,6 +19,7 @@ from tckit.ports.reader import ProjectReader
 from tckit.ports.types import (
     DUT,
     GVL,
+    LibraryRef,
     MethodSignature,
     POUInterface,
     POUItem,
@@ -26,13 +27,17 @@ from tckit.ports.types import (
     POUType,
     ProjectStructure,
     PropertySignature,
+    TaskInfo,
 )
 from tckit.utils.tc_file_parser import (
     extract_method_return_type,
     extract_property_return_type,
+    parse_plcproj,
     parse_tcdut,
     parse_tcgvl,
     parse_tcpou,
+    parse_tctto,
+    parse_tsproj,
     strip_method_locals,
 )
 
@@ -50,7 +55,14 @@ class XmlReader(ProjectReader):
     # ------------------------------------------------------------------
 
     def get_structure(self, project_path: str) -> ProjectStructure:
-        """Scan project_path for .TcPOU, .TcGVL, and .TcDUT files, build file index.
+        """Scan project_path for TwinCAT project files and build the structure.
+
+        Walks the tree once for .TcPOU / .TcGVL / .TcDUT (code) and once for
+        the project-shaping files .plcproj / .tsproj / .TcTTO (subsystem
+        context). POU folder is computed relative to the .plcproj directory
+        when one is found, falling back to ``project_path`` otherwise. Tasks
+        prefer .TcTTO data (cycle in µs, POU binding) and merge in any extra
+        .tsproj tasks not already represented.
 
         Raises:
             FileNotFoundError: If project_path does not exist.
@@ -59,11 +71,16 @@ class XmlReader(ProjectReader):
         if not root.exists():
             raise FileNotFoundError(f"Project path not found: {project_path}")
 
+        # The .plcproj directory anchors the POU folder calculation. If
+        # multiple .plcproj files live under project_path, pick the
+        # shallowest so we end up with a sensible common root.
+        plcproj_paths = sorted(root.rglob("*.plcproj"), key=lambda p: len(p.parts))
+        folder_root = plcproj_paths[0].parent if plcproj_paths else root
+
         self._file_index = {}
         pous: list[POURef] = []
         gvls: list[str] = []
         duts: list[str] = []
-        tasks: list[str] = []
 
         for tc_pou in sorted(root.rglob("*.TcPOU")):
             try:
@@ -77,6 +94,7 @@ class XmlReader(ProjectReader):
                     name=name,
                     pou_type=POUType(info["pou_type"]),
                     path=str(tc_pou),
+                    folder=_folder_for(tc_pou, folder_root),
                 )
             )
 
@@ -98,12 +116,16 @@ class XmlReader(ProjectReader):
             self._file_index[name] = tc_dut
             duts.append(name)
 
+        libraries = _collect_libraries(plcproj_paths)
+        tasks = _collect_tasks(root)
+
         return ProjectStructure(
             project_path=project_path,
             pous=pous,
             gvls=gvls,
             duts=duts,
             tasks=tasks,
+            libraries=libraries,
         )
 
     def get_pou_interface(self, pou_name: str) -> POUInterface:
@@ -269,3 +291,86 @@ class XmlReader(ProjectReader):
             f"Call get_structure() first, or set PLC_PROJECT_PATH. "
             f"Searched: {searched}"
         )
+
+
+# ----------------------------------------------------------------------------
+# Module-level helpers for project-shaping data
+# ----------------------------------------------------------------------------
+
+
+def _folder_for(pou_path: Path, folder_root: Path) -> str:
+    """Folder of a POU relative to the PLC project root, posix-style.
+
+    Returns "" when the POU sits directly at folder_root or when the path
+    cannot be made relative to it.
+    """
+    try:
+        rel = pou_path.parent.relative_to(folder_root)
+    except ValueError:
+        return ""
+    if str(rel) in ("", "."):
+        return ""
+    return rel.as_posix()
+
+
+def _collect_libraries(plcproj_paths: list[Path]) -> list[LibraryRef]:
+    """Aggregate libraries across one or more .plcproj files (deduplicated)."""
+    seen: dict[tuple[str, str | None], LibraryRef] = {}
+    for plcproj in plcproj_paths:
+        try:
+            data = parse_plcproj(plcproj)
+        except (ValueError, FileNotFoundError):
+            continue
+        for lib in data["libraries"]:
+            key = (lib["name"], lib["placeholder"])
+            if key in seen:
+                continue
+            seen[key] = LibraryRef(
+                name=lib["name"],
+                version=lib["version"],
+                placeholder=lib["placeholder"],
+            )
+    return list(seen.values())
+
+
+def _collect_tasks(root: Path) -> list[TaskInfo]:
+    """Build TaskInfo list, preferring .TcTTO over .tsproj for richness.
+
+    .TcTTO carries cycle in µs plus the bound POU; .tsproj carries cycle in
+    100ns ticks with no binding. We start from .TcTTO and merge any extra
+    .tsproj tasks that lack a .TcTTO counterpart.
+    """
+    tasks: dict[str, TaskInfo] = {}
+
+    for tctto in sorted(root.rglob("*.TcTTO")):
+        try:
+            data = parse_tctto(tctto)
+        except (ValueError, FileNotFoundError):
+            continue
+        name = data["name"]
+        if not name or name in tasks:
+            continue
+        tasks[name] = TaskInfo(
+            name=name,
+            cycle_time_us=data["cycle_time_us"],
+            priority=data["priority"],
+            programs=list(data["programs"]),
+        )
+
+    for tsproj in sorted(root.rglob("*.tsproj")):
+        try:
+            data = parse_tsproj(tsproj)
+        except (ValueError, FileNotFoundError):
+            continue
+        for entry in data["tasks"]:
+            name = entry["name"]
+            if not name or name in tasks:
+                continue
+            tasks[name] = TaskInfo(
+                name=name,
+                cycle_time_us=entry["cycle_time_us"],
+                priority=entry["priority"],
+                programs=list(entry["programs"]),
+            )
+
+    return list(tasks.values())

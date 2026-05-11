@@ -1,6 +1,7 @@
 """Integration tests for XmlReader — runs against fixture files, no network."""
 
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
@@ -285,3 +286,103 @@ def test_get_structure_bad_path_raises() -> None:
     reader = XmlReader()
     with pytest.raises(FileNotFoundError):
         reader.get_structure("/nonexistent/path/to/project")
+
+
+# ---------------------------------------------------------------------------
+# get_structure — tasks, libraries, folder (ADR-0002)
+# ---------------------------------------------------------------------------
+
+
+def test_get_structure_extracts_tctto_task(sample_project_path: Path) -> None:
+    structure = XmlReader().get_structure(str(sample_project_path))
+    plc_task = next(t for t in structure.tasks if t.name == "PlcTask")
+    assert plc_task.cycle_time_us == 10000
+    assert plc_task.priority == 20
+    assert plc_task.programs == ["PRG_MAIN"]
+
+
+def test_get_structure_merges_tsproj_only_tasks(sample_project_path: Path) -> None:
+    # SlowTask exists in .tsproj but has no .TcTTO; it should still appear,
+    # with the .tsproj CycleTime converted from 100ns ticks to microseconds.
+    structure = XmlReader().get_structure(str(sample_project_path))
+    slow = next(t for t in structure.tasks if t.name == "SlowTask")
+    assert slow.cycle_time_us == 50000
+    assert slow.priority == 30
+    assert slow.programs == []
+
+
+def test_get_structure_extracts_placeholder_libraries(sample_project_path: Path) -> None:
+    structure = XmlReader().get_structure(str(sample_project_path))
+    by_name = {lib.name: lib for lib in structure.libraries}
+    assert by_name["Tc2_Standard"].placeholder == "Tc2_Standard"
+    assert by_name["Tc2_Standard"].version == "*"
+    assert by_name["Tc2_System"].version == "3.4.20.0"
+
+
+def test_get_structure_extracts_direct_library_reference(
+    sample_project_path: Path,
+) -> None:
+    structure = XmlReader().get_structure(str(sample_project_path))
+    base = next(lib for lib in structure.libraries if lib.name == "Base Interfaces")
+    assert base.version == "newest"
+    assert base.placeholder is None
+
+
+def test_get_structure_folder_empty_for_root_pou(sample_project_path: Path) -> None:
+    structure = XmlReader().get_structure(str(sample_project_path))
+    fb = next(p for p in structure.pous if p.name == "FB_Example")
+    assert fb.folder == ""
+
+
+def test_get_structure_folder_set_for_nested_pou(tmp_path: Path) -> None:
+    # Project root with a .plcproj at the top and a POU one level deep.
+    (tmp_path / "Sample.plcproj").write_text(
+        '<?xml version="1.0"?>\n<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" />\n',
+        encoding="utf-8",
+    )
+    nested_dir = tmp_path / "POUs" / "Axes"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "FB_Motor.TcPOU").write_text(
+        dedent("""\
+            <?xml version="1.0" encoding="utf-8"?>
+            <TcPlcObject Version="1.1.0.1">
+              <POU Name="FB_Motor" Id="{00000000-0000-0000-0000-000000000001}" SpecialFunc="None">
+                <Declaration><![CDATA[FUNCTION_BLOCK FB_Motor
+            VAR_INPUT
+            END_VAR]]></Declaration>
+                <Implementation>
+                  <ST><![CDATA[]]></ST>
+                </Implementation>
+              </POU>
+            </TcPlcObject>
+            """),
+        encoding="utf-8",
+    )
+
+    structure = XmlReader().get_structure(str(tmp_path))
+    motor = next(p for p in structure.pous if p.name == "FB_Motor")
+    assert motor.folder == "POUs/Axes"
+
+
+def test_get_structure_no_project_files_returns_empty_lists(tmp_path: Path) -> None:
+    # Code files but no .plcproj/.tsproj/.TcTTO. Adapter must degrade gracefully.
+    (tmp_path / "FB_Bare.TcPOU").write_text(
+        dedent("""\
+            <?xml version="1.0" encoding="utf-8"?>
+            <TcPlcObject Version="1.1.0.1">
+              <POU Name="FB_Bare" Id="{00000000-0000-0000-0000-000000000002}" SpecialFunc="None">
+                <Declaration><![CDATA[FUNCTION_BLOCK FB_Bare
+            VAR_INPUT
+            END_VAR]]></Declaration>
+                <Implementation>
+                  <ST><![CDATA[]]></ST>
+                </Implementation>
+              </POU>
+            </TcPlcObject>
+            """),
+        encoding="utf-8",
+    )
+
+    structure = XmlReader().get_structure(str(tmp_path))
+    assert structure.tasks == []
+    assert structure.libraries == []

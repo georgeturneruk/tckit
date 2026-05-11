@@ -268,3 +268,157 @@ def parse_tcdut(path: Path) -> dict:
         raise ValueError(f"No <DUT> element found in {path}")
 
     return {"name": dut_el.get("Name", ""), "declaration": get_declaration(dut_el)}
+
+
+# ---------------------------------------------------------------------------
+# Project-file parsers (.plcproj / .tsproj / .TcTTO)
+# ---------------------------------------------------------------------------
+
+
+def _local(tag: str) -> str:
+    """Strip XML namespace from a tag, e.g. '{ns}Project' -> 'Project'."""
+    return tag.split("}", 1)[-1] if "}" in tag else tag
+
+
+def _to_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value.strip())
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _child_text(element: ET.Element, local_name: str) -> str:
+    for child in element:
+        if _local(child.tag) == local_name:
+            return (child.text or "").strip()
+    return ""
+
+
+def _split_resolution(resolution: str, fallback_name: str) -> tuple[str, str]:
+    """Parse a placeholder DefaultResolution like 'Name, * (Vendor)' into (version, name)."""
+    if not resolution:
+        return "", fallback_name
+    if "," in resolution:
+        name_part, rest = resolution.split(",", 1)
+        version_part = rest.strip()
+        paren_idx = version_part.find("(")
+        version = version_part[:paren_idx].strip() if paren_idx >= 0 else version_part
+        return version, name_part.strip()
+    return "", resolution.strip()
+
+
+def parse_plcproj(path: Path) -> dict:
+    """Parse a .plcproj for library references.
+
+    The .plcproj uses the MSBuild XML namespace
+    (http://schemas.microsoft.com/developer/msbuild/2003). Library refs live
+    in <ItemGroup> elements as either <PlaceholderReference> (versioned via a
+    DefaultResolution string of the form 'Name, version (Vendor)') or
+    <LibraryReference> (Include attribute formatted 'Name,version,Vendor').
+
+    Returns:
+        {"libraries": [{"name": str, "version": str, "placeholder": str | None}]}
+    """
+    root = parse_file(path)
+    libraries: list[dict] = []
+
+    for item_group in root:
+        if _local(item_group.tag) != "ItemGroup":
+            continue
+        for ref in item_group:
+            tag = _local(ref.tag)
+            include = ref.get("Include", "").strip()
+            if tag == "PlaceholderReference":
+                resolution = _child_text(ref, "DefaultResolution")
+                version, resolved_name = _split_resolution(resolution, include)
+                libraries.append({
+                    "name": resolved_name or include,
+                    "version": version,
+                    "placeholder": include or None,
+                })
+            elif tag == "LibraryReference":
+                parts = [p.strip() for p in include.split(",")]
+                name = parts[0] if parts else include
+                version = parts[1] if len(parts) > 1 else ""
+                libraries.append({
+                    "name": name,
+                    "version": version,
+                    "placeholder": None,
+                })
+
+    return {"libraries": libraries}
+
+
+def parse_tsproj(path: Path) -> dict:
+    """Parse a .tsproj for System Manager task definitions.
+
+    .tsproj CycleTime is in 100ns ticks; converted to microseconds here for
+    consistency with .TcTTO. POU bindings live in .TcTTO, not .tsproj, so the
+    'programs' list is always empty from this source.
+
+    Returns:
+        {"tasks": [{"name": str, "cycle_time_us": int | None,
+                    "priority": int | None, "programs": []}]}
+    """
+    root = parse_file(path)
+    tasks: list[dict] = []
+
+    for task_el in root.iter():
+        if _local(task_el.tag) != "Task":
+            continue
+        # System-manager tasks carry numeric Id + CycleTime attributes;
+        # filters out unrelated <Task> nodes that may appear elsewhere.
+        if task_el.get("Id") is None or task_el.get("CycleTime") is None:
+            continue
+        name = _child_text(task_el, "Name")
+        if not name:
+            continue
+        cycle_ticks = _to_int(task_el.get("CycleTime"))
+        cycle_us = cycle_ticks // 10 if cycle_ticks is not None else None
+        priority = _to_int(task_el.get("Priority"))
+        tasks.append({
+            "name": name,
+            "cycle_time_us": cycle_us,
+            "priority": priority,
+            "programs": [],
+        })
+
+    return {"tasks": tasks}
+
+
+def parse_tctto(path: Path) -> dict:
+    """Parse a .TcTTO PLC task object file.
+
+    Authoritative source for PLC task layout: contains the cycle time
+    (already in microseconds per Beckhoff's own comment), priority, and the
+    POU bound to the task via <PouCall><Name>.
+
+    Returns:
+        {"name": str, "cycle_time_us": int | None,
+         "priority": int | None, "programs": list[str]}
+    """
+    root = parse_file(path)
+    task_el = root.find("Task")
+    if task_el is None:
+        raise ValueError(f"No <Task> element found in {path}")
+
+    name = task_el.get("Name", "")
+    cycle_us = _to_int(_child_text(task_el, "CycleTime"))
+    priority = _to_int(_child_text(task_el, "Priority"))
+
+    programs: list[str] = []
+    for child in task_el:
+        if _local(child.tag) != "PouCall":
+            continue
+        pou_name = _child_text(child, "Name")
+        if pou_name:
+            programs.append(pou_name)
+
+    return {
+        "name": name,
+        "cycle_time_us": cycle_us,
+        "priority": priority,
+        "programs": programs,
+    }
