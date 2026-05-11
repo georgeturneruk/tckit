@@ -72,7 +72,8 @@ See the linked SKILL.md for the full step-by-step.
 
 | Skill | When it loads | What it owns |
 |-------|---------------|--------------|
-| [`tc-read-project`](.claude/skills/tc-read-project/SKILL.md) | Inspecting / navigating / searching a TwinCAT project | Layered read pattern (`get_structure → get_pou_interface → get_pou_item`), `get_dut` and `get_gvl` use |
+| [`tc-orient-project`](.claude/skills/tc-orient-project/SKILL.md) | First touch on a TwinCAT project, or any "structural overview" / "what's in this project" request | Single `get_structure` call, subsystems by folder, tasks with cycle/priority, libraries, sample one FB per subsystem, then stop |
+| [`tc-read-project`](.claude/skills/tc-read-project/SKILL.md) | Follow-up reads once orientation is done; specific POU / GVL / DUT lookups | Layered read pattern (`get_structure → get_pou_interface → get_pou_item`), `get_dut` and `get_gvl` use |
 | [`tc-beckhoff-docs`](.claude/skills/tc-beckhoff-docs/SKILL.md) | Researching a Beckhoff library FB / function / TF library | `find_fb` precondition for unfamiliar FBs, `search_docs` / `get_doc_page` etiquette, source-URL citations |
 | [`tc-write-st`](.claude/skills/tc-write-st/SKILL.md) | Writing or modifying ST code | Comment style (RST line preferred; Beckhoff XML accepted), naming, `bError` propagation pattern, rename guard, safety-name guard, "never edit XML directly" |
 | [`tc-build-test-loop`](.claude/skills/tc-build-test-loop/SKILL.md) | Building, deploying, running TcUnit tests | Build-before-deploy, 2-attempt build-fix cap, 5-iteration test cap, `awaiting_confirmation` handshake for deploy/start_runtime, tolerating `docs_warning` on a successful build |

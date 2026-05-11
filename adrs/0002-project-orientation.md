@@ -1,7 +1,7 @@
 ---
 adr: 0002
 title: Project orientation — extend get_structure with subsystem context
-status: Exploring
+status: Implemented
 created: 2026-05-10
 issue:
 pr:
@@ -167,3 +167,19 @@ without breaking the contract.
     2. Draft the `tc-orient-project` skill flow against a real
        project and confirm the orientation completes in
        under five tool calls on a 50+ POU project.
+- 2026-05-11: Implemented. Skipped pytmc; stdlib
+  `xml.etree.ElementTree` parses `.plcproj` / `.tsproj` / `.TcTTO`
+  directly and matches `XmlReader`'s existing dependency posture.
+  `.TcTTO` (which the spike found on the TcUnit-Verifier project)
+  turned out to be the authoritative task source - cycle time is
+  already in microseconds and the `<PouCall><Name>` element binds a
+  POU to the task. `.tsproj` task data is used as a fallback when no
+  `.TcTTO` is present. `get_pou_summary` deferred per plan; no
+  current need on the orientation flow.
+  Bench validation (see `bench/findings/2026-05-11-adr-0002-post-impl.md`):
+  Task A token spend dropped from a 24-call / 8.5k-token vanilla
+  baseline to 5 calls / 4.0k tokens on TcKit, 6 calls / 4.9k tokens
+  on vanilla. TcKit is 1.24× more efficient than vanilla on this
+  N=1 run; the remaining gap to the 1.5× target is held back by
+  issue #42 (XmlReader file_index not persisted across MCP
+  requests).

@@ -43,6 +43,26 @@ class POURef:
     name: str
     pou_type: POUType
     path: str
+    folder: str = ""  # Path relative to the PLC project root, e.g. "POUs/Functions".
+
+
+@dataclass
+class TaskInfo:
+    """A PLC task: cycle time in microseconds, priority, and bound programs."""
+
+    name: str
+    cycle_time_us: int | None = None
+    priority: int | None = None
+    programs: list[str] = field(default_factory=list)
+
+
+@dataclass
+class LibraryRef:
+    """A library reference declared in the .plcproj."""
+
+    name: str
+    version: str = ""
+    placeholder: str | None = None  # e.g. "Tc2_Standard" for placeholder refs.
 
 
 @dataclass
@@ -51,7 +71,8 @@ class ProjectStructure:
     pous: list[POURef] = field(default_factory=list)
     gvls: list[str] = field(default_factory=list)
     duts: list[str] = field(default_factory=list)
-    tasks: list[str] = field(default_factory=list)
+    tasks: list[TaskInfo] = field(default_factory=list)
+    libraries: list[LibraryRef] = field(default_factory=list)
 
 
 @dataclass

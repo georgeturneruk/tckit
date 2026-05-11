@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4024.59">
+	<Project ProjectGUID="{00000000-0000-0000-0000-000000000001}" TargetNetId="127.0.0.1.1.1" Target64Bit="true">
+		<System>
+			<Tasks>
+				<Task Id="3" Priority="20" CycleTime="100000" AmsPort="350">
+					<Name>PlcTask</Name>
+				</Task>
+				<Task Id="4" Priority="30" CycleTime="500000">
+					<Name>SlowTask</Name>
+				</Task>
+			</Tasks>
+		</System>
+		<Plc>
+			<Project File="SampleProject.xti"/>
+		</Plc>
+	</Project>
+</TcSmProject>
