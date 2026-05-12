@@ -44,14 +44,15 @@ also exercises the template during benching.
 
 ### Content scope
 
-Same conventions as the `tc-write-st` skill, restructured for a
-CLAUDE.md audience. The template does not assume TcKit's MCP
-tools are present; it reads as project conventions, not as a
-workflow:
+Bare minimum for the first cut: the rules a downstream Claude
+session needs to know in a fresh TwinCAT project, nothing more.
+The template does not assume TcKit's MCP tools are present; it
+reads as project conventions, not as a workflow:
 
-- Naming conventions: `FB_`, `PRG_`, `GVL_`, `E_`, `ST_`, `I_`
-  prefixes; PascalCase methods; camelCase vars with type prefix
-  (`b/n/f/s/e/st/a/p/i`).
+- Naming: `FB_`, `PRG_`, `GVL_`, `E_`, `ST_`, `I_` POU prefixes;
+  PascalCase methods; **camelCase variables with no type prefix**
+  (e.g. `enableMotor`, `targetSpeed`); match existing style when
+  editing.
 - Comment style: RST line comments (`// :Description:`) preferred;
   Beckhoff XML `(*~ <docu> ~*)` accepted; match the file's
   existing style.
@@ -62,15 +63,14 @@ workflow:
 - Rename guard: never execute a cross-project rename
   autonomously; report references and ask.
 - "Do not edit `.TcPOU` or `.plcproj` XML by hand if a TwinCAT
-  automation interface is available; otherwise edit only with
-  full understanding of the GUID-tracking implications." A
-  pointer to TcKit follows for teams who want the tooling.
-- A short pointer to `TcUnit-ResultExportXmlPath` for projects
-  that want to run TcUnit results through TcKit (per ADR-0006).
+  automation interface is available."
 
-The template lands ~80-120 lines of markdown. Project-specific
+The template lands ~50 lines of markdown. No TcUnit pointer, no
+TcKit pointer, no verbose explanations. Project-specific
 guidance (which FBs to look at, how to run things, etc.) is left
-as a marker so each operator adds their own.
+as a marker so each operator adds their own. Expand the template
+later as concrete needs surface; do not pre-load it with content
+nobody has asked for.
 
 ### Sync with the skill
 
@@ -135,3 +135,12 @@ add a `scripts/check-twincat-claude-sync.py` to CI.
   the same PR. The template file ships alongside this ADR; no
   separate implementation step. Bench-fixture mirrors arrive
   with the ADR-0007 implementation PR.
+- 2026-05-12: Trimmed to a bare-minimum first cut (~50 lines).
+  Variable naming convention dropped the type-prefix style
+  (`bEnable`, `nCount`, `fGain`...) in favour of plain camelCase
+  (`enableMotor`, `count`, `gain`). The `tc-write-st` skill was
+  updated to match. Existing code in the repo (bench fixtures
+  and earlier writer-bench tasks) keeps its type-prefixed names;
+  the "match existing style" rule covers extension of legacy
+  files. Expand the template only when concrete operator needs
+  surface, not speculatively.

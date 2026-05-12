@@ -42,7 +42,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 - **Naming.**
   - `FB_` function blocks, `PRG_` programs, `GVL_` globals, `E_` enums, `ST_` structs, `I_` interfaces.
   - Methods: PascalCase, no prefix.
-  - Variables: camelCase with type prefix; `b` BOOL, `n` INT/UINT, `f` REAL/LREAL, `s` STRING, `e` ENUM, `st` STRUCT, `a` ARRAY, `p` POINTER, `i` interface.
+  - Variables: camelCase, no type prefix (e.g. `enableMotor`, `targetSpeed`, `nextState`). Match existing style in the file you are editing if it differs.
 - **Error propagation.** Always check `.bError` and surface `.nErrorId`:
   ```pascal
   IF fbOp.bError THEN
