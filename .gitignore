@@ -63,3 +63,7 @@ CLAUDE.local.md
 
 # Benchmark results (one file per run; don't commit individuals)
 bench/results/
+
+# Local server logs from bench setup
+bridge.log
+tckit-server.log
