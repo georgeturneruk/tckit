@@ -10,11 +10,21 @@ Usage::
     python bench/run.py --task bench/tasks/01-orient.md \
         --config bench/configs/tckit.json --runs 3
 
-Each run produces::
+Each run produces (under bench/results/)::
 
-    bench/results/<task>__<config>__<utc-timestamp>__run<n>.json
+    <task>__<config>__<utc-timestamp>__run<n>.json   — events + metrics
+    <task>__<config>__<utc-timestamp>__run<n>.md     — Markdown preview
+    <task>__<config>__<utc-timestamp>__run<n>.diff   — git diff of the project
+    <task>__<config>__<utc-timestamp>__run<n>.build.json — bridge build result
 
-See bench/README.md for the full task list and prerequisites.
+The ``.diff`` sibling is written whenever the project path is a git
+working tree (no-op for non-git targets). The ``.build.json`` sibling
+is only written when ``--build-after-each`` is set; that flag also
+implies a one-off pre-bench POST to ``/open`` so XAE has the target
+solution loaded before runs begin.
+
+See bench/README.md for the full task list, writer-bench setup, and
+prerequisites.
 """
 
 from __future__ import annotations
@@ -27,6 +37,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import Any
+
+# Imported lazily inside the build-helper functions so that reader-only
+# benches don't require the tckit package to be importable from this venv.
+# (Most reader bench runs hit a separate uv/pip environment.)
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +186,86 @@ def extract_metrics(result: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Reset hook and bridge-driven verification (writer bench)
+# ---------------------------------------------------------------------------
+
+
+def run_reset_cmd(reset_cmd: str) -> None:
+    """Run a shell command before each bench run; abort on non-zero exit.
+
+    The contract for writer bench: a clean project state is a precondition
+    for every run. If the reset fails (typo, missing path, dirty index that
+    refuses to clean), surface it loudly rather than benching against a
+    partially-mutated tree.
+    """
+    proc = subprocess.run(
+        reset_cmd, shell=True, capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        print(f"  reset-cmd failed (exit {proc.returncode}):", file=sys.stderr)
+        if proc.stdout:
+            print(proc.stdout, file=sys.stderr)
+        if proc.stderr:
+            print(proc.stderr, file=sys.stderr)
+        raise SystemExit(3)
+
+
+def capture_git_diff(project_path: str) -> str | None:
+    """Return ``git diff`` of the project tree, or None if not a git repo.
+
+    Returns an empty string for a clean tree. We do this unconditionally on
+    every run because it's cheap and the post-write diff is the human-facing
+    artefact that says what each config actually did to the project.
+    """
+    proc = subprocess.run(
+        ["git", "-C", project_path, "diff", "--no-color"],
+        capture_output=True, text=True, check=False,
+        encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        # Not a git repo, or git itself failed. Either way, no diff to write.
+        return None
+    return proc.stdout
+
+
+def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
+    """POST /open once before the bench run loop. Idempotent on XAE side."""
+    from tckit.utils.bridge_client import BridgeClient
+
+    client = BridgeClient(base_url=bridge_url)
+    try:
+        if not client.health():
+            raise SystemExit(
+                f"Bridge not reachable at {bridge_url}; start the bridge first."
+            )
+        return client.post("/open", {"SolutionPath": sln_path})
+    finally:
+        client.close()
+
+
+def build_project(bridge_url: str, sln_path: str) -> dict[str, Any]:
+    """POST /build via the bridge and return the parsed response.
+
+    Uses the longer build timeout from tckit.utils.bridge_client so XAE has
+    room to rebuild larger projects. Any bridge-level error is captured into
+    the returned dict so the caller can persist it in the .build.json sibling.
+    """
+    from tckit.utils.bridge_client import (
+        BridgeClient,
+        BridgeError,
+        build_timeout,
+    )
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
+    try:
+        return client.post("/build", {"ProjectPath": sln_path})
+    except BridgeError as exc:
+        return {"success": False, "error": str(exc)}
+    finally:
+        client.close()
+
+
+# ---------------------------------------------------------------------------
 # Markdown sibling
 # ---------------------------------------------------------------------------
 
@@ -236,7 +330,31 @@ def main() -> int:
     parser.add_argument("--results-dir", type=pathlib.Path,
                         default=pathlib.Path(__file__).parent / "results",
                         help="Directory to write per-run result JSONs.")
+    parser.add_argument("--reset-cmd", default="",
+                        help=(
+                            "Shell command to run before every bench run. "
+                            "Required for writer benches; pair with a writable "
+                            "clone of the target project. Non-zero exit aborts."
+                        ))
+    parser.add_argument("--sln-path", default="",
+                        help=(
+                            "Absolute path to the .sln. When set, the harness "
+                            "POSTs /open once before the run loop and uses this "
+                            "path for the build call. Required with --build-after-each."
+                        ))
+    parser.add_argument("--build-after-each", action="store_true",
+                        help=(
+                            "After each run, POST /build via the bridge and "
+                            "write the parsed result as a <stem>.build.json "
+                            "sibling. Requires --sln-path."
+                        ))
+    parser.add_argument("--bridge-url", default="http://localhost:8765",
+                        help="Bridge service URL. Default: http://localhost:8765")
     args = parser.parse_args()
+
+    if args.build_after_each and not args.sln_path:
+        print("--build-after-each requires --sln-path", file=sys.stderr)
+        return 2
 
     if not args.task.exists():
         print(f"task not found: {args.task}", file=sys.stderr)
@@ -256,10 +374,27 @@ def main() -> int:
 
     print(f"Task: {task_stem}  Config: {config_stem}  Runs: {args.runs}")
     print(f"TcUnit path: {args.tcunit_path}")
+    if args.reset_cmd:
+        print(f"Reset cmd: {args.reset_cmd}")
+    if args.sln_path:
+        print(f"Sln path: {args.sln_path}")
     print()
+
+    # One-off pre-bench /open so XAE is on the right solution before any run.
+    # Cheap and idempotent on the bridge side; the operator can rely on a
+    # single command for setup rather than alt-tabbing into XAE.
+    if args.sln_path:
+        print(f"  Pre-bench: opening {args.sln_path} via {args.bridge_url}...", flush=True)
+        open_resp = open_solution(args.bridge_url, args.sln_path)
+        if not open_resp.get("success", False):
+            print(f"  /open failed: {open_resp.get('error', open_resp)}", file=sys.stderr)
+            return 3
+        print("  OK")
 
     for n in range(1, args.runs + 1):
         print(f"  Run {n}/{args.runs}...", end=" ", flush=True)
+        if args.reset_cmd:
+            run_reset_cmd(args.reset_cmd)
         result = run_one(prompt, args.config, args.tcunit_path)
         metrics = extract_metrics(result)
 
@@ -291,6 +426,25 @@ def main() -> int:
             ),
             encoding="utf-8",
         )
+
+        # Project diff: always attempted, no-op outside git. Cheap, always
+        # useful when a write actually happened.
+        diff = capture_git_diff(args.tcunit_path)
+        if diff is not None:
+            diff_path = out_path.with_suffix(".diff")
+            diff_path.write_text(diff, encoding="utf-8")
+
+        # Bridge-driven build verification: explicit opt-in, gated on a
+        # solution path. Result lands in <stem>.build.json so the reviewer
+        # can see whether each config's change actually compiles.
+        if args.build_after_each:
+            print(" build...", end="", flush=True)
+            build_resp = build_project(args.bridge_url, args.sln_path)
+            build_path = out_path.with_suffix(".build.json")
+            build_path.write_text(
+                json.dumps(build_resp, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
         if metrics["exit_code"] == 0:
             print(

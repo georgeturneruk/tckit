@@ -51,8 +51,13 @@ def main() -> int:
         return 1
 
     by_pair: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    builds_by_pair: dict[tuple[str, str], list[bool]] = defaultdict(list)
 
     for path in sorted(args.results_dir.glob("*.json")):
+        # Skip the build-result siblings — they're aggregated separately,
+        # below, via their (task, config) match against the main run JSON.
+        if path.name.endswith(".build.json"):
+            continue
         if args.filter and args.filter not in path.name:
             continue
         try:
@@ -62,6 +67,17 @@ def main() -> int:
             continue
         key = (data.get("task", "?"), data.get("config", "?"))
         by_pair[key].append(data.get("metrics", {}))
+
+        # If this run wrote a sibling build result, fold it into the
+        # per-pair success rate. Missing sibling = build wasn't requested
+        # for this run, not a failure.
+        build_sibling = path.with_suffix(".build.json")
+        if build_sibling.exists():
+            try:
+                build_data = json.loads(build_sibling.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            builds_by_pair[key].append(bool(build_data.get("success", False)))
 
     if not by_pair:
         print("No results found.")
@@ -76,6 +92,7 @@ def main() -> int:
         ("OUT TOK", 14),
         ("TOTAL TOK", 16),
         ("WALL (s)", 14),
+        ("BUILDS", 12),
     ]
     header = "".join(f"{label:<{width}}" for label, width in columns)
     print(header)
@@ -89,6 +106,12 @@ def main() -> int:
         total_toks = [r.get("total_tokens", 0) for r in runs]
         walls = [r.get("wall_clock_seconds") or 0.0 for r in runs]
 
+        builds = builds_by_pair.get((task, config), [])
+        if builds:
+            build_cell = f"{sum(builds)}/{len(builds)}"
+        else:
+            build_cell = "n/a"
+
         row = (
             f"{task:<28}"
             f"{config:<12}"
@@ -98,6 +121,7 @@ def main() -> int:
             f"{_fmt(out_toks):<14}"
             f"{_fmt(total_toks):<16}"
             f"{_fmt(walls, decimals=1):<14}"
+            f"{build_cell:<12}"
         )
         print(row)
 
