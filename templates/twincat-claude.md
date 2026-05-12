@@ -27,25 +27,6 @@ Use RST line comments for method and FB documentation:
 
 Beckhoff XML `(*~ <docu> ~*)` is also accepted. Match the style already present in the file.
 
-## bError propagation
-
-When wrapping another FB, surface its error state:
-
-```pascal
-fbInner();
-IF fbInner.bError THEN
-    bError   := TRUE;
-    nErrorId := fbInner.nErrorId;
-END_IF
-```
-
-Do not silently swallow errors.
-
-## Stop and ask
-
-- **Safety-critical code.** If a name in the change touches `Safety`, `SIL`, `TÜV`/`TUV`, `Emergency`, `EStop`, `SafetyDoor`, or anything similar, stop and ask before any write.
-- **Cross-file renames.** The TwinCAT automation interface has no rename API. If a rename touches references in more than one file, stop and ask. Never execute a cross-project rename autonomously.
-
 ## Editing project files
 
 If a TwinCAT automation interface (such as TcKit) is available, use it for any structural change. Direct edits to `.TcPOU` and `.plcproj` XML break GUID tracking in ways that may survive a build but corrupt later operations. When in doubt, ask before editing those files by hand.

@@ -36,20 +36,10 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 2. **Rename guard.** TcKit's automation interface has no rename API. If the change involves renaming a symbol that exists elsewhere in the project, STOP. Report how many references you found and ask the user to approve before any manual find-and-replace. Never execute a cross-project rename autonomously.
 3. **Unfamiliar Beckhoff FB.** If the new code instantiates a Beckhoff library FB you have not just researched via `tc-beckhoff-docs`, hand off to `tc-beckhoff-docs` now. Do not write code against a Beckhoff FB whose inputs/outputs/timing you only know from memory.
 
-## Style rules
+## Style
 
-- **Comments.** Prefer RST line comments (`// :Description:`, `// :param x:`, `// :returns:`) for new code. Beckhoff XML `<docu>` is also accepted; the doc generator auto-detects both. Match the style already present in the file you are editing. See `examples/fb_template.st` for the RST line layout.
-- **Naming.**
-  - `FB_` function blocks, `PRG_` programs, `GVL_` globals, `E_` enums, `ST_` structs, `I_` interfaces.
-  - Methods: PascalCase, no prefix.
-  - Variables: camelCase, no type prefix (e.g. `enableMotor`, `targetSpeed`, `nextState`). Match existing style in the file you are editing if it differs.
-- **Error propagation.** Always check `.bError` and surface `.nErrorId`:
-  ```pascal
-  IF fbOp.bError THEN
-      eState := E_State.Error;
-      nErrorId := fbOp.nErrorId;
-  END_IF
-  ```
+- **Project conventions.** Follow the conventions in the project's `CLAUDE.md` if it specifies any (naming, error pattern, public/private boundaries, etc.). Where the project does not specify, match the existing style of the file you are editing. The skill does not impose a default naming or error-handling convention.
+- **Comments.** The doc generator detects both RST line comments (`// :Description:`, `// :param x:`, `// :returns:`) and Beckhoff XML (`(*~ <docu> ~*)`). Match the file's existing style.
 
 ## Write procedure
 

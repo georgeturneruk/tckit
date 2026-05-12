@@ -44,33 +44,32 @@ also exercises the template during benching.
 
 ### Content scope
 
-Bare minimum for the first cut: the rules a downstream Claude
-session needs to know in a fresh TwinCAT project, nothing more.
-The template does not assume TcKit's MCP tools are present; it
-reads as project conventions, not as a workflow:
+The template captures only the project-level style choices a
+downstream session needs to read. Universal safety rules and
+tool-level guidance stay in the `tc-write-st` skill, not in the
+template, because they apply regardless of project preference:
 
-- Naming: `FB_`, `PRG_`, `GVL_`, `E_`, `ST_`, `I_` POU prefixes;
-  PascalCase methods; **camelCase variables with no type prefix**
-  (e.g. `enableMotor`, `targetSpeed`); match existing style when
-  editing.
-- Comment style: RST line comments (`// :Description:`) preferred;
-  Beckhoff XML `(*~ <docu> ~*)` accepted; match the file's
-  existing style.
-- bError / nErrorId propagation with a short code sketch.
-- Safety-name guard: if any name in the change touches `Safety`,
-  `SIL`, `TÜV`/`TUV`, `Emergency`, `EStop`, `SafetyDoor`, stop
-  and ask before any write.
-- Rename guard: never execute a cross-project rename
-  autonomously; report references and ask.
-- "Do not edit `.TcPOU` or `.plcproj` XML by hand if a TwinCAT
-  automation interface is available."
+- Naming: POU prefixes (`FB_`, `PRG_`, `GVL_`, `E_`, `ST_`, `I_`),
+  PascalCase methods, camelCase variables (no type prefix). The
+  example a project can keep, override, or remove.
+- Comment style: doc generator detects RST line and Beckhoff XML;
+  match the file's existing style.
+- Note that direct edits to `.TcPOU`/`.plcproj` XML break GUID
+  tracking when no automation interface is used.
+- A `Project notes` placeholder for operator-specific guidance.
 
-The template lands ~50 lines of markdown. No TcUnit pointer, no
-TcKit pointer, no verbose explanations. Project-specific
-guidance (which FBs to look at, how to run things, etc.) is left
-as a marker so each operator adds their own. Expand the template
-later as concrete needs surface; do not pre-load it with content
-nobody has asked for.
+Out of the template (stays in the skill or is the project's own
+choice):
+
+- Safety-name guard, rename guard. Universal safety rules; live in
+  the `tc-write-st` skill's Pre-write checks. Not project-style.
+- Error-handling pattern (bError propagation, public-via-property,
+  private-underscore, etc.). Project-specific style choice. If a
+  project wants a specific pattern, it documents it in its own
+  `CLAUDE.md` under Project notes.
+
+The template lands ~40 lines of markdown. No verbose explanations.
+Expand only when concrete operator needs surface.
 
 ### Sync with the skill
 
@@ -144,3 +143,21 @@ add a `scripts/check-twincat-claude-sync.py` to CI.
   the "match existing style" rule covers extension of legacy
   files. Expand the template only when concrete operator needs
   surface, not speculatively.
+- 2026-05-12: Further trim. The error-propagation pattern
+  (bError / nErrorId) and the safety-name + rename guards moved
+  out of the template. The guards stay in the `tc-write-st`
+  skill because they are universal safety rules, not project
+  style. The error pattern is a project-level style choice; any
+  project that wants a specific pattern documents it in its own
+  CLAUDE.md. The skill no longer imposes a default naming or
+  error-handling convention; it defers to the project's
+  CLAUDE.md and falls back to "match surrounding code".
+
+  The TcKit-team convention for the bug-hunting bench fixtures
+  (ADR-0007) will be captured in the bench-fixture CLAUDE.md
+  files when those land. Anticipated shape: camelCase variables
+  with no type prefix, private members prefixed `_` (e.g.
+  `_error`, `_state`), public state exposed via properties
+  rather than VAR_OUTPUT (so callers read `myFB.Error`, with
+  the property getter returning `_error`). Documented here as
+  context; not part of the template or the skill.
