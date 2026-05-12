@@ -6,6 +6,12 @@ Runs in Docker. No XAE, Windows, or blark dependency.
 All structural information is extracted from XML attributes and element names.
 ST code is returned as raw strings — no ST grammar parsing is performed.
 
+Multi-project sln support (ADR-0005): every per-symbol method accepts an
+optional ``plc_name`` keyword. ``None`` resolves via ``PLC_PROJECT_NAME``
+env var, then auto-resolves on single-PLC-project solutions, then raises.
+The PLC-project name is the ``.plcproj`` filename stem (matches the TIPC
+child name in standard TwinCAT solutions).
+
 Property access via get_pou_item():
   "PropName"      → property header declaration (no body)
   "PropName.Get"  → getter declaration + body
@@ -21,6 +27,7 @@ from tckit.ports.types import (
     GVL,
     LibraryRef,
     MethodSignature,
+    PLCSection,
     POUDeclaration,
     POUInterface,
     POUItem,
@@ -47,117 +54,109 @@ class XmlReader(ProjectReader):
     """Reads TwinCAT project structure and code via XML parsing (stdlib only)."""
 
     def __init__(self) -> None:
-        # Maps POU/GVL/DUT name → absolute file path.
-        # Populated by get_structure(); reused by all subsequent calls.
-        self._file_index: dict[str, Path] = {}
-        # Remembered context for the index: the project path it was built
-        # for, and the .plcproj file (plus its mtime) we use as a staleness
-        # signal. TwinCAT rewrites .plcproj on any structural change
-        # (add/remove/rename of POUs), so its mtime is a cheap and
-        # semantically meaningful invalidation trigger. See ADR-0004.
+        # Per-PLC-project file indices. Outer key is the PLC-project name
+        # (.plcproj filename stem), inner key is the symbol name (POU /
+        # GVL / DUT). Populated by get_structure(); reused by all
+        # subsequent calls.
+        self._file_index: dict[str, dict[str, Path]] = {}
+        # Discovered .plcproj files keyed by PLC-project name, plus their
+        # mtimes for staleness checks. TwinCAT rewrites a .plcproj on any
+        # structural change to its PLC project (add/remove/rename of POUs),
+        # so per-.plcproj mtime is a cheap, semantically meaningful
+        # invalidation trigger. ADR-0004 introduced the mtime guard for
+        # single-project solutions; ADR-0005 extends it to per-.plcproj.
+        self._plcproj_by_name: dict[str, Path] = {}
+        self._plcproj_mtimes: dict[str, float] = {}
         self._index_project_path: str | None = None
-        self._index_plcproj: Path | None = None
-        self._index_mtime: float | None = None
 
     # ------------------------------------------------------------------
     # ProjectReader interface
     # ------------------------------------------------------------------
 
-    def get_structure(self, project_path: str) -> ProjectStructure:
+    def get_structure(
+        self, project_path: str, *, plc_name: str | None = None
+    ) -> ProjectStructure:
         """Scan project_path for TwinCAT project files and build the structure.
 
-        Walks the tree once for .TcPOU / .TcGVL / .TcDUT (code) and once for
-        the project-shaping files .plcproj / .tsproj / .TcTTO (subsystem
-        context). POU folder is computed relative to the .plcproj directory
-        when one is found, falling back to ``project_path`` otherwise. Tasks
-        prefer .TcTTO data (cycle in µs, POU binding) and merge in any extra
-        .tsproj tasks not already represented.
+        Walks every ``.plcproj`` under the project root and indexes each PLC
+        project's POUs / GVLs / DUTs separately. Tasks come from .TcTTO
+        (preferred) and .tsproj (fallback) and live at the solution level —
+        not per PLC project — because TwinCAT tasks are sln-wide.
+
+        :param project_path: Absolute path to the solution root.
+        :param plc_name: When given, restrict the index and the returned
+            ProjectStructure to a single PLC project. Otherwise scan
+            every .plcproj.
 
         Raises:
-            FileNotFoundError: If project_path does not exist.
+            FileNotFoundError: If project_path does not exist or contains
+                no .plcproj.
         """
         root = Path(project_path)
         if not root.exists():
             raise FileNotFoundError(f"Project path not found: {project_path}")
 
-        # The .plcproj directory anchors the POU folder calculation. If
-        # multiple .plcproj files live under project_path, pick the
-        # shallowest so we end up with a sensible common root.
-        plcproj_paths = sorted(root.rglob("*.plcproj"), key=lambda p: len(p.parts))
-        folder_root = plcproj_paths[0].parent if plcproj_paths else root
+        plcproj_paths = sorted(root.rglob("*.plcproj"))
 
+        # Reset the index. Even on a scoped (plc_name=...) walk we rebuild
+        # everything: the cost of indexing the rest of the sln is small,
+        # and it keeps the index coherent for follow-up calls that switch
+        # PLC project.
         self._file_index = {}
-        pous: list[POURef] = []
-        gvls: list[str] = []
-        duts: list[str] = []
+        self._plcproj_by_name = {}
+        self._plcproj_mtimes = {}
 
-        for tc_pou in sorted(root.rglob("*.TcPOU")):
+        for plcproj in plcproj_paths:
+            name = plcproj.stem
+            self._plcproj_by_name[name] = plcproj
             try:
-                info = parse_tcpou(tc_pou)
-            except (ValueError, FileNotFoundError):
-                continue
-            name = info["name"]
-            self._file_index[name] = tc_pou
-            pous.append(
-                POURef(
-                    name=name,
-                    pou_type=POUType(info["pou_type"]),
-                    path=str(tc_pou),
-                    folder=_folder_for(tc_pou, folder_root),
+                self._plcproj_mtimes[name] = plcproj.stat().st_mtime
+            except OSError:
+                self._plcproj_mtimes[name] = 0.0
+
+        # Build per-PLC sections.
+        plcs: dict[str, PLCSection] = {}
+        if self._plcproj_by_name:
+            for name, plcproj in self._plcproj_by_name.items():
+                if plc_name is not None and name != plc_name:
+                    continue
+                plcs[name] = _build_section(name, plcproj, self._file_index)
+
+            if plc_name is not None and plc_name not in plcs:
+                available = ", ".join(sorted(self._plcproj_by_name)) or "(none)"
+                raise ValueError(
+                    f"plc_name {plc_name!r} does not match any PLC project. "
+                    f"Available: {available}."
                 )
+        else:
+            # No .plcproj anywhere — fall back to an anonymous walk so loose
+            # project trees (used by some tests and the doc generator's
+            # degraded path) still produce a usable structure. The synthetic
+            # PLC takes the directory basename as its name.
+            anon_name = plc_name or root.name
+            plcs[anon_name] = _build_section_from_root(
+                anon_name, root, self._file_index
             )
 
-        for tc_gvl in sorted(root.rglob("*.TcGVL")):
-            try:
-                info = parse_tcgvl(tc_gvl)
-            except (ValueError, FileNotFoundError):
-                continue
-            name = info["name"]
-            self._file_index[name] = tc_gvl
-            gvls.append(name)
-
-        for tc_dut in sorted(root.rglob("*.TcDUT")):
-            try:
-                info = parse_tcdut(tc_dut)
-            except (ValueError, FileNotFoundError):
-                continue
-            name = info["name"]
-            self._file_index[name] = tc_dut
-            duts.append(name)
-
-        libraries = _collect_libraries(plcproj_paths)
         tasks = _collect_tasks(root)
-
-        # Record the staleness context after a successful rebuild so the
-        # next read can decide whether to trust the index.
         self._index_project_path = project_path
-        if plcproj_paths:
-            self._index_plcproj = plcproj_paths[0]
-            try:
-                self._index_mtime = plcproj_paths[0].stat().st_mtime
-            except OSError:
-                self._index_mtime = None
-        else:
-            self._index_plcproj = None
-            self._index_mtime = None
 
         return ProjectStructure(
             project_path=project_path,
-            pous=pous,
-            gvls=gvls,
-            duts=duts,
+            plcs=plcs,
             tasks=tasks,
-            libraries=libraries,
         )
 
-    def get_pou_interface(self, pou_name: str) -> POUInterface:
+    def get_pou_interface(
+        self, pou_name: str, *, plc_name: str | None = None
+    ) -> POUInterface:
         """Return declarations and method/property signatures for a POU or interface.
 
         Raises:
             FileNotFoundError: If pou_name is not in the file index.
             ValueError: If the file cannot be parsed.
         """
-        path = self._resolve(pou_name, ".TcPOU")
+        path = self._resolve(pou_name, ".TcPOU", plc_name)
         info = parse_tcpou(path)
 
         methods = [
@@ -191,7 +190,9 @@ class XmlReader(ProjectReader):
             actions=[a["name"] for a in info["actions"]],
         )
 
-    def get_pou_declaration(self, pou_name: str) -> POUDeclaration:
+    def get_pou_declaration(
+        self, pou_name: str, *, plc_name: str | None = None
+    ) -> POUDeclaration:
         """Return only the FB-level declaration of a POU.
 
         Subset of ``get_pou_interface``: no methods, no signatures, no body.
@@ -201,7 +202,7 @@ class XmlReader(ProjectReader):
             FileNotFoundError: If pou_name is not in the file index.
             ValueError: If the file cannot be parsed.
         """
-        path = self._resolve(pou_name, ".TcPOU")
+        path = self._resolve(pou_name, ".TcPOU", plc_name)
         info = parse_tcpou(path)
         return POUDeclaration(
             pou_name=pou_name,
@@ -209,7 +210,13 @@ class XmlReader(ProjectReader):
             declaration=info["declaration"],
         )
 
-    def get_pou_item(self, pou_name: str, item_name: str) -> POUItem:
+    def get_pou_item(
+        self,
+        pou_name: str,
+        item_name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> POUItem:
         """Return declaration + body for a single method, action, or property accessor.
 
         item_name formats:
@@ -222,7 +229,7 @@ class XmlReader(ProjectReader):
             FileNotFoundError: If pou_name or item_name is not found.
             ValueError: If the file cannot be parsed.
         """
-        path = self._resolve(pou_name, ".TcPOU")
+        path = self._resolve(pou_name, ".TcPOU", plc_name)
         info = parse_tcpou(path)
 
         # Check for property accessor syntax first ("PropName.Get" / "PropName.Set")
@@ -280,25 +287,25 @@ class XmlReader(ProjectReader):
             f"Item {item_name!r} not found in POU {pou_name!r} ({path})"
         )
 
-    def get_gvl(self, gvl_name: str) -> GVL:
+    def get_gvl(self, gvl_name: str, *, plc_name: str | None = None) -> GVL:
         """Return declaration for a Global Variable List.
 
         Raises:
             FileNotFoundError: If gvl_name is not in the file index.
             ValueError: If the file cannot be parsed.
         """
-        path = self._resolve(gvl_name, ".TcGVL")
+        path = self._resolve(gvl_name, ".TcGVL", plc_name)
         info = parse_tcgvl(path)
         return GVL(name=gvl_name, path=str(path), declaration=info["declaration"])
 
-    def get_dut(self, dut_name: str) -> DUT:
+    def get_dut(self, dut_name: str, *, plc_name: str | None = None) -> DUT:
         """Return declaration for a Data Unit Type (STRUCT, ENUM, UNION).
 
         Raises:
             FileNotFoundError: If dut_name is not in the file index.
             ValueError: If the file cannot be parsed.
         """
-        path = self._resolve(dut_name, ".TcDUT")
+        path = self._resolve(dut_name, ".TcDUT", plc_name)
         info = parse_tcdut(path)
         return DUT(name=dut_name, path=str(path), declaration=info["declaration"])
 
@@ -307,55 +314,198 @@ class XmlReader(ProjectReader):
     # ------------------------------------------------------------------
 
     def _refresh_index_if_stale(self) -> None:
-        """Rebuild the file index if the recorded .plcproj has changed.
+        """Rebuild the index if any tracked .plcproj has changed on disk.
 
-        TwinCAT rewrites .plcproj on any structural change (POU added,
-        removed, renamed). Body-only edits do not touch it, so the warm
-        path stays warm. One stat() call per read.
+        TwinCAT rewrites a .plcproj on any structural change (POU added,
+        removed, renamed) within that PLC project. Body-only edits do not
+        touch it, so the warm path stays warm. One stat() per tracked
+        .plcproj per read.
         """
-        if self._index_plcproj is None or self._index_project_path is None:
+        if not self._plcproj_by_name or self._index_project_path is None:
             return
-        try:
-            current = self._index_plcproj.stat().st_mtime
-        except OSError:
-            # .plcproj disappeared since the last build — assume stale and
-            # let get_structure raise FileNotFoundError if the whole tree
-            # has gone away.
-            current = None
-        if current != self._index_mtime:
-            self.get_structure(self._index_project_path)
+        for name, plcproj in self._plcproj_by_name.items():
+            try:
+                current = plcproj.stat().st_mtime
+            except OSError:
+                current = None
+            if current != self._plcproj_mtimes.get(name):
+                # Any single PLC project being stale forces a full rebuild.
+                # Finer granularity would be more code for little gain at
+                # this scale — see ADR-0005.
+                self.get_structure(self._index_project_path)
+                return
 
-    def _resolve(self, name: str, extension: str) -> Path:
+    def _resolve(
+        self, name: str, extension: str, plc_name: str | None
+    ) -> Path:
         """Return the file path for a named POU, GVL, or DUT.
 
-        Falls back to scanning PLC_PROJECT_PATH if the name is not in the index.
+        Resolution rule (ADR-0005):
+          1. If ``plc_name`` is given, look up only in that PLC project.
+          2. Otherwise, use ``PLC_PROJECT_NAME`` env var as the default.
+          3. Otherwise, if the symbol is unique across all PLC projects,
+             return it.
+          4. Otherwise, raise listing the PLC projects that contain it.
+
+        Falls back to scanning ``PLC_PROJECT_PATH`` if the index is empty
+        (e.g. ``get_structure`` was never called this session).
 
         Raises:
             FileNotFoundError: If the file cannot be located.
+            ValueError: If the symbol is ambiguous across PLC projects.
         """
         self._refresh_index_if_stale()
-        if name in self._file_index:
-            return self._file_index[name]
 
-        env_path = os.getenv("PLC_PROJECT_PATH")
-        if env_path:
-            root = Path(env_path)
-            for candidate in root.rglob(f"*{extension}"):
-                if candidate.stem == name:
-                    self._file_index[name] = candidate
-                    return candidate
+        # Lazy index hydration from PLC_PROJECT_PATH when get_structure
+        # was never called this session.
+        if not self._file_index:
+            env_path = os.getenv("PLC_PROJECT_PATH")
+            if env_path:
+                self.get_structure(env_path)
 
-        searched = os.getenv("PLC_PROJECT_PATH", "(no PLC_PROJECT_PATH set)")
+        if not self._file_index:
+            searched = os.getenv("PLC_PROJECT_PATH", "(no PLC_PROJECT_PATH set)")
+            raise FileNotFoundError(
+                f"No {extension} file found for {name!r}. "
+                f"Call get_structure() first, or set PLC_PROJECT_PATH. "
+                f"Searched: {searched}"
+            )
+
+        # Caller asked for a specific PLC project.
+        if plc_name is not None:
+            if plc_name not in self._file_index:
+                available = ", ".join(sorted(self._file_index)) or "(none)"
+                raise ValueError(
+                    f"plc_name {plc_name!r} does not match any PLC project. "
+                    f"Available: {available}."
+                )
+            section = self._file_index[plc_name]
+            if name in section:
+                return section[name]
+            raise FileNotFoundError(
+                f"No {extension} file found for {name!r} in PLC project "
+                f"{plc_name!r}."
+            )
+
+        # No explicit plc_name. Try env default.
+        env_default = os.getenv("PLC_PROJECT_NAME", "").strip()
+        if env_default and env_default in self._file_index:
+            section = self._file_index[env_default]
+            if name in section:
+                return section[name]
+            raise FileNotFoundError(
+                f"No {extension} file found for {name!r} in PLC project "
+                f"{env_default!r} (PLC_PROJECT_NAME env default)."
+            )
+
+        # Unique-symbol fallback / ambiguous error.
+        owning = [
+            plc for plc, section in self._file_index.items() if name in section
+        ]
+        if len(owning) == 1:
+            return self._file_index[owning[0]][name]
+        if len(owning) > 1:
+            raise ValueError(
+                f"Symbol {name!r} exists in multiple PLC projects "
+                f"({', '.join(sorted(owning))}). Pass plc_name to disambiguate."
+            )
+
+        # Symbol not present anywhere known to the index.
         raise FileNotFoundError(
-            f"No {extension} file found for {name!r}. "
-            f"Call get_structure() first, or set PLC_PROJECT_PATH. "
-            f"Searched: {searched}"
+            f"No {extension} file found for {name!r} in any indexed PLC "
+            f"project. Indexed: {', '.join(sorted(self._file_index)) or '(none)'}."
         )
 
 
 # ----------------------------------------------------------------------------
-# Module-level helpers for project-shaping data
+# Module-level helpers
 # ----------------------------------------------------------------------------
+
+
+def _build_section(
+    plc_name: str,
+    plcproj: Path,
+    file_index: dict[str, dict[str, Path]],
+) -> PLCSection:
+    """Walk a single .plcproj's sibling tree and emit a PLCSection.
+
+    Also writes into ``file_index[plc_name]`` so the reader's resolver can
+    find symbols by name without re-walking.
+    """
+    return _build_section_from_root(
+        plc_name,
+        plcproj.parent,
+        file_index,
+        plcproj_path=str(plcproj),
+        libraries_from=[plcproj],
+    )
+
+
+def _build_section_from_root(
+    plc_name: str,
+    folder_root: Path,
+    file_index: dict[str, dict[str, Path]],
+    *,
+    plcproj_path: str = "",
+    libraries_from: list[Path] | None = None,
+) -> PLCSection:
+    """Walk a directory tree and emit a PLCSection rooted at ``folder_root``.
+
+    The ``.plcproj``-driven path is the common case; the anonymous overload
+    (``libraries_from=None``) supports bare project trees without a
+    ``.plcproj``.
+    """
+    section_index: dict[str, Path] = {}
+    file_index[plc_name] = section_index
+
+    pous: list[POURef] = []
+    for tc_pou in sorted(folder_root.rglob("*.TcPOU")):
+        try:
+            info = parse_tcpou(tc_pou)
+        except (ValueError, FileNotFoundError):
+            continue
+        name = info["name"]
+        section_index[name] = tc_pou
+        pous.append(
+            POURef(
+                name=name,
+                pou_type=POUType(info["pou_type"]),
+                path=str(tc_pou),
+                plc_name=plc_name,
+                folder=_folder_for(tc_pou, folder_root),
+            )
+        )
+
+    gvls: list[str] = []
+    for tc_gvl in sorted(folder_root.rglob("*.TcGVL")):
+        try:
+            info = parse_tcgvl(tc_gvl)
+        except (ValueError, FileNotFoundError):
+            continue
+        name = info["name"]
+        section_index[name] = tc_gvl
+        gvls.append(name)
+
+    duts: list[str] = []
+    for tc_dut in sorted(folder_root.rglob("*.TcDUT")):
+        try:
+            info = parse_tcdut(tc_dut)
+        except (ValueError, FileNotFoundError):
+            continue
+        name = info["name"]
+        section_index[name] = tc_dut
+        duts.append(name)
+
+    libraries = _collect_libraries(libraries_from) if libraries_from else []
+
+    return PLCSection(
+        name=plc_name,
+        plcproj_path=plcproj_path,
+        pous=pous,
+        gvls=gvls,
+        duts=duts,
+        libraries=libraries,
+    )
 
 
 def _folder_for(pou_path: Path, folder_root: Path) -> str:

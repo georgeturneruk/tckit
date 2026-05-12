@@ -6,8 +6,10 @@ installed. The Docker container reads ``BRIDGE_URL`` from the environment.
 
 Each method posts to the corresponding bridge route. The active project +
 PLC sub-project name are forwarded from ``PLC_PROJECT_PATH`` and
-``PLC_PROJECT_NAME`` env vars when not provided explicitly. ``PLC_PROJECT_NAME``
-is optional — the harness auto-resolves it when there's only one PLC project.
+``PLC_PROJECT_NAME`` env vars when not provided explicitly. A per-call
+``plc_name`` keyword always wins over the env var; see ADR-0005.
+``PLC_PROJECT_NAME`` is optional — the harness auto-resolves it when
+there's only one PLC project in the sln.
 """
 
 from __future__ import annotations
@@ -36,7 +38,14 @@ class AutomationWriter(ProjectWriter):
     def create_project(self, name: str, path: str) -> Result:
         return self._call("/create", {"Name": name, "Path": path})
 
-    def add_pou(self, name: str, pou_type: POUType, code: str) -> Result:
+    def add_pou(
+        self,
+        name: str,
+        pou_type: POUType,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         return self._call(
             "/pou",
             self._with_project(
@@ -44,11 +53,19 @@ class AutomationWriter(ProjectWriter):
                     "Name": name,
                     "PouType": pou_type.value,
                     "Code": code,
-                }
+                },
+                plc_name=plc_name,
             ),
         )
 
-    def add_method(self, pou_name: str, method_name: str, code: str) -> Result:
+    def add_method(
+        self,
+        pou_name: str,
+        method_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         return self._call(
             "/method",
             self._with_project(
@@ -56,11 +73,19 @@ class AutomationWriter(ProjectWriter):
                     "PouName": pou_name,
                     "MethodName": method_name,
                     "Code": code,
-                }
+                },
+                plc_name=plc_name,
             ),
         )
 
-    def update_pou_item(self, pou_name: str, item_name: str, code: str) -> Result:
+    def update_pou_item(
+        self,
+        pou_name: str,
+        item_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         return self._call(
             "/item",
             self._with_project(
@@ -68,7 +93,8 @@ class AutomationWriter(ProjectWriter):
                     "PouName": pou_name,
                     "ItemName": item_name,
                     "Code": code,
-                }
+                },
+                plc_name=plc_name,
             ),
         )
 
@@ -78,6 +104,8 @@ class AutomationWriter(ProjectWriter):
         item_name: str,
         old_string: str,
         new_string: str,
+        *,
+        plc_name: str | None = None,
     ) -> Result:
         return self._call(
             "/item-patch",
@@ -87,7 +115,8 @@ class AutomationWriter(ProjectWriter):
                     "ItemName": item_name,
                     "OldString": old_string,
                     "NewString": new_string,
-                }
+                },
+                plc_name=plc_name,
             ),
         )
 
@@ -97,6 +126,8 @@ class AutomationWriter(ProjectWriter):
         scope: str,
         declaration: str,
         item_name: str | None = None,
+        *,
+        plc_name: str | None = None,
     ) -> Result:
         payload: dict[str, Any] = {
             "PouName": pou_name,
@@ -105,18 +136,33 @@ class AutomationWriter(ProjectWriter):
         }
         if item_name is not None:
             payload["ItemName"] = item_name
-        return self._call("/add-variable", self._with_project(payload))
+        return self._call(
+            "/add-variable", self._with_project(payload, plc_name=plc_name)
+        )
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def _with_project(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Attach the active solution path + PLC name from env to the payload."""
-        merged = {"ProjectPath": os.getenv("PLC_PROJECT_PATH", "")}
-        plc_name = os.getenv("PLC_PROJECT_NAME")
-        if plc_name:
-            merged["PlcName"] = plc_name
+    def _with_project(
+        self,
+        payload: dict[str, Any],
+        *,
+        plc_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Attach the active solution path + PLC-project name to the payload.
+
+        Per-call ``plc_name`` wins over ``PLC_PROJECT_NAME`` env var; both
+        are optional. When neither is set, the bridge auto-resolves on a
+        single-project sln and throws on a multi-project sln (see
+        ``Resolve-TcPlcName`` in bridge/harness/_TcDte.psm1).
+        """
+        merged: dict[str, Any] = {
+            "ProjectPath": os.getenv("PLC_PROJECT_PATH", "")
+        }
+        resolved_plc = plc_name or os.getenv("PLC_PROJECT_NAME")
+        if resolved_plc:
+            merged["PlcName"] = resolved_plc
         merged.update(payload)
         return merged
 

@@ -7,9 +7,19 @@
 |--------|---------|
 | `open_project(solution_path)` | `Result` |
 | `create_project(name, path)` | `Result` |
-| `add_pou(name, pou_type, code)` | `Result` |
-| `add_method(pou_name, method_name, code)` | `Result` |
-| `update_pou_item(pou_name, item_name, code)` | `Result` |
+| `add_pou(name, pou_type, code, *, plc_name=None)` | `Result` |
+| `add_method(pou_name, method_name, code, *, plc_name=None)` | `Result` |
+| `update_pou_item(pou_name, item_name, code, *, plc_name=None)` | `Result` |
+| `update_pou_item_patch(pou_name, item_name, old, new, *, plc_name=None)` | `Result` |
+| `add_variable(pou_name, scope, declaration, item_name=None, *, plc_name=None)` | `Result` |
+
+## Multi-project solutions
+
+PLC-scoped writes take an optional `plc_name`. The bridge already enforces
+the same fallback policy on the PowerShell side (`Resolve-TcPlcName`):
+per-call name → `PLC_PROJECT_NAME` env var → auto-resolve on a
+single-project sln → throw with the candidate list. `open_project` and
+`create_project` stay solution-scoped. See ADR-0005.
 
 ## Why this shape
 

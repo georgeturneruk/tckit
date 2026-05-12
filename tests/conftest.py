@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "sample_project"
+MULTI_PROJECT_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "multi_project_sln"
 
 
 @pytest.fixture()
@@ -23,3 +24,9 @@ def fb_example_path(sample_project_path: Path) -> Path:
 def gvl_params_path(sample_project_path: Path) -> Path:
     """Return the path to the sample GVL_Params.TcGVL fixture file."""
     return sample_project_path / "GVL_Params.TcGVL"
+
+
+@pytest.fixture()
+def multi_project_sln_path() -> Path:
+    """Return the path to the multi-project sln fixture (Library + Tests)."""
+    return MULTI_PROJECT_FIXTURES_DIR

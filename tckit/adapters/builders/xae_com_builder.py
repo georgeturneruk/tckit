@@ -2,10 +2,16 @@
 
 Calls bridge REST API → PowerShell harness → TcXaeShell automation interface.
 Returns structured build errors as ``BuildResult`` with file/line/message/severity.
+
+Multi-project sln support (ADR-0005): ``build`` and ``deploy`` accept an
+optional ``plc_name``; the value flows through to the bridge as ``PlcName``
+in the POST body. The bridge harness's ``Resolve-TcPlcName`` enforces the
+same auto-resolve / disambiguate policy on the Windows side.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from tckit.ports.builder import BuildRunner
@@ -24,12 +30,16 @@ class XaeComBuilder(BuildRunner):
     # BuildRunner interface
     # ------------------------------------------------------------------
 
-    def build(self, project_path: str) -> BuildResult:
+    def build(
+        self, project_path: str, *, plc_name: str | None = None
+    ) -> BuildResult:
         self._last_status = BuildStatus.BUILDING
+        payload: dict[str, Any] = {"ProjectPath": project_path}
+        _attach_plc(payload, plc_name)
         try:
             resp = self._client.post(
                 "/build",
-                {"ProjectPath": project_path},
+                payload,
                 timeout=build_timeout(),
             )
         except BridgeError as exc:
@@ -43,9 +53,13 @@ class XaeComBuilder(BuildRunner):
         self._last_status = BuildStatus.SUCCESS if result.success else BuildStatus.ERROR
         return result
 
-    def deploy(self, target_ams_id: str) -> Result:
+    def deploy(
+        self, target_ams_id: str, *, plc_name: str | None = None
+    ) -> Result:
+        payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
+        _attach_plc(payload, plc_name)
         try:
-            resp = self._client.post("/deploy", {"TargetAmsId": target_ams_id})
+            resp = self._client.post("/deploy", payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
@@ -59,6 +73,13 @@ class XaeComBuilder(BuildRunner):
 
     def get_status(self) -> BuildStatus:
         return self._last_status
+
+
+def _attach_plc(payload: dict[str, Any], plc_name: str | None) -> None:
+    """Set ``PlcName`` on the payload from the per-call value or env default."""
+    resolved = plc_name or os.getenv("PLC_PROJECT_NAME")
+    if resolved:
+        payload["PlcName"] = resolved
 
 
 # ---------------------------------------------------------------------------

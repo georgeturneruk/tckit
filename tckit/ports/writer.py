@@ -11,6 +11,12 @@ class ProjectWriter(ABC):
     All writes go through the automation interface (via bridge), which handles
     GUID assignment, .plcproj cross-reference updates, and tree indexing.
     Never manipulate .TcPOU XML or .plcproj files directly for structural changes.
+
+    Multi-project solutions: every PLC-scoped method accepts an optional
+    ``plc_name`` keyword to disambiguate. ``None`` resolves via the
+    ``PLC_PROJECT_NAME`` env var, then auto-resolves if the solution has a
+    single PLC project. ``open_project`` and ``create_project`` are
+    solution-scoped and take no ``plc_name``. See ADR-0005.
     """
 
     @abstractmethod
@@ -31,32 +37,59 @@ class ProjectWriter(ABC):
         ...
 
     @abstractmethod
-    def add_pou(self, name: str, pou_type: POUType, code: str) -> Result:
+    def add_pou(
+        self,
+        name: str,
+        pou_type: POUType,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         """Add a new POU (FB, program, function, or interface) to the project.
 
         :param name: Name of the new POU.
         :param pou_type: POUType enum value.
         :param code: Full ST source text including VAR blocks.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
         """
         ...
 
     @abstractmethod
-    def add_method(self, pou_name: str, method_name: str, code: str) -> Result:
+    def add_method(
+        self,
+        pou_name: str,
+        method_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         """Add a new method to an existing POU.
 
         :param pou_name: Name of the containing POU.
         :param method_name: Name of the new method.
         :param code: Full ST source text including declaration block.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
         """
         ...
 
     @abstractmethod
-    def update_pou_item(self, pou_name: str, item_name: str, code: str) -> Result:
+    def update_pou_item(
+        self,
+        pou_name: str,
+        item_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         """Update the body of an existing method, action, or property.
 
         :param pou_name: Name of the containing POU.
         :param item_name: Name of the method, action, or property.
         :param code: New ST source text.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
         """
         ...
 
@@ -67,6 +100,8 @@ class ProjectWriter(ABC):
         item_name: str,
         old_string: str,
         new_string: str,
+        *,
+        plc_name: str | None = None,
     ) -> Result:
         """Replace one occurrence of ``old_string`` with ``new_string`` in a POU item.
 
@@ -81,6 +116,8 @@ class ProjectWriter(ABC):
             (or ``pou_name`` itself to target the FB-level item).
         :param old_string: Text to match. Must appear exactly once in the item.
         :param new_string: Replacement text.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
         """
         ...
 
@@ -91,6 +128,8 @@ class ProjectWriter(ABC):
         scope: str,
         declaration: str,
         item_name: str | None = None,
+        *,
+        plc_name: str | None = None,
     ) -> Result:
         """Add one variable declaration to a named scope block.
 
@@ -104,5 +143,7 @@ class ProjectWriter(ABC):
         :param declaration: Single variable declaration, e.g. ``bNewParam : BOOL;``.
         :param item_name: Method name to target instead of the FB-level item.
             ``None`` (default) targets the FB declaration.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
         """
         ...

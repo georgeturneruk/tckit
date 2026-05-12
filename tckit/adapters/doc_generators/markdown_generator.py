@@ -3,6 +3,9 @@
 Same ProjectDoc model as HtmlGenerator, different renderer.
 Outputs GitHub Flavoured Markdown files — useful for GitHub wikis,
 Confluence, Notion, Obsidian, and any Markdown-based documentation system.
+
+Multi-project sln support (ADR-0005): top-level ``index.md`` lists each
+PLC project; per-PLC pages live under ``<plc_name>/`` sub-directories.
 """
 
 from __future__ import annotations
@@ -19,23 +22,28 @@ from tckit.ports.types import DocStatus, Result
 class MarkdownGenerator(DocGenerator):
     """Generates Markdown documentation from RST/XML-commented TwinCAT source.
 
-    Produces one .md file per object plus an index.md with a full TOC.
-    Uses GitHub Flavoured Markdown (pipe tables, fenced code blocks).
+    Output layout for a multi-project sln:
+      ``index.md``                       — solution-level TOC of PLC projects
+      ``<plc_name>/index.md``            — per-PLC TOC of objects
+      ``<plc_name>/<object>.md``         — one page per object
+
+    Single-project solutions produce the same layout with a single PLC
+    sub-directory.
     """
 
     def __init__(self) -> None:
         self._status = DocStatus.IDLE
 
     def generate(self, project_path: str, output_path: str) -> Result:
-        """Generate Markdown documentation for a TwinCAT PLC project.
+        """Generate Markdown documentation for a TwinCAT solution.
 
         Args:
-            project_path: Path to the TwinCAT PLC project directory.
+            project_path: Path to the TwinCAT solution directory.
             output_path: Directory where .md files will be written.
 
         Returns:
-            Result with success=True and details["index"] pointing to index.md,
-            or success=False with an error message.
+            Result with success=True and details["index"] pointing to the
+            top-level index.md, or success=False with an error message.
         """
         self._status = DocStatus.GENERATING
 
@@ -60,23 +68,37 @@ class MarkdownGenerator(DocGenerator):
                 lstrip_blocks=True,
             )
 
-            ctx = {"project": project_doc}
-
-            # index.md
-            index_tpl = env.get_template("md_index.md")
+            # Top-level solution index
+            solution_tpl = env.get_template("md_solution_index.md")
             (output / "index.md").write_text(
-                index_tpl.render(**ctx),
+                solution_tpl.render(project=project_doc),
                 encoding="utf-8",
             )
 
-            # one page per object
+            # Per-PLC index + object pages
+            plc_index_tpl = env.get_template("md_index.md")
             obj_tpl = env.get_template("md_object.md")
-            for obj in project_doc.objects:
-                page = output / f"{obj.name}.md"
-                page.write_text(
-                    obj_tpl.render(obj=obj, **ctx),
+            total_objects = 0
+            for plc in project_doc.plcs.values():
+                plc_dir = output / plc.name
+                plc_dir.mkdir(parents=True, exist_ok=True)
+
+                # The per-PLC index template was written for the old
+                # single-project ProjectDoc shape. ``PLCDoc`` mirrors that
+                # shape (``name`` + ``objects``) so we feed it straight
+                # in as ``project`` for backward compatibility.
+                (plc_dir / "index.md").write_text(
+                    plc_index_tpl.render(project=plc),
                     encoding="utf-8",
                 )
+
+                for obj in plc.objects:
+                    page = plc_dir / f"{obj.name}.md"
+                    page.write_text(
+                        obj_tpl.render(obj=obj, project=plc),
+                        encoding="utf-8",
+                    )
+                total_objects += len(plc.objects)
 
         except Exception as exc:
             self._status = DocStatus.ERROR
@@ -88,7 +110,8 @@ class MarkdownGenerator(DocGenerator):
             details={
                 "index": str(output / "index.md"),
                 "output_path": str(output),
-                "objects": len(project_doc.objects),
+                "plcs": len(project_doc.plcs),
+                "objects": total_objects,
             },
         )
 

@@ -43,6 +43,7 @@ class POURef:
     name: str
     pou_type: POUType
     path: str
+    plc_name: str  # PLC project (TIPC child) this POU belongs to.
     folder: str = ""  # Path relative to the PLC project root, e.g. "POUs/Functions".
 
 
@@ -66,13 +67,34 @@ class LibraryRef:
 
 
 @dataclass
-class ProjectStructure:
-    project_path: str
+class PLCSection:
+    """One PLC project (.plcproj) within a solution.
+
+    Carries every code symbol declared under that PLC project plus its
+    library references. Tasks live at the solution level (.tsproj /
+    .TcTTO), not per .plcproj, so they are intentionally absent here.
+    """
+
+    name: str
+    plcproj_path: str
     pous: list[POURef] = field(default_factory=list)
     gvls: list[str] = field(default_factory=list)
     duts: list[str] = field(default_factory=list)
-    tasks: list[TaskInfo] = field(default_factory=list)
     libraries: list[LibraryRef] = field(default_factory=list)
+
+
+@dataclass
+class ProjectStructure:
+    """A solution's project map, keyed by PLC-project name.
+
+    Multi-project sln returns one entry per .plcproj; a single-project sln
+    returns a one-entry dict. Iterate ``plcs.values()`` to walk every PLC
+    project. See ADR-0005.
+    """
+
+    project_path: str
+    plcs: dict[str, PLCSection] = field(default_factory=dict)
+    tasks: list[TaskInfo] = field(default_factory=list)
 
 
 @dataclass

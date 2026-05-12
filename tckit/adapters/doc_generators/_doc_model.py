@@ -60,6 +60,7 @@ class ObjectDoc:
     obj_type: str   # function_block | function | program | interface | gvl | struct | enum
     declaration: str
     comment: CommentDoc
+    plc_name: str = ""            # PLC project (.plcproj stem) that owns this object
     visibility: str = ""          # PUBLIC | PRIVATE | PROTECTED | INTERNAL
     is_abstract: bool = False
     is_final: bool = False
@@ -76,9 +77,29 @@ class ObjectDoc:
 
 
 @dataclass
-class ProjectDoc:
+class PLCDoc:
+    """One PLC project's worth of documentation.
+
+    Attribute names mirror the previous ProjectDoc shape (``name``,
+    ``objects``) so per-PLC templates can take a PLCDoc as ``project``
+    in the render context without modification.
+    """
+
     name: str
+    plcproj_path: str
     objects: list[ObjectDoc] = field(default_factory=list)
+
+
+@dataclass
+class ProjectDoc:
+    """A whole solution's documentation, keyed by PLC-project name.
+
+    Multi-project sln support per ADR-0005. Single-project solutions
+    produce a one-entry ``plcs`` dict.
+    """
+
+    name: str
+    plcs: dict[str, PLCDoc] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -188,24 +209,59 @@ def _compute_used_by(objects: list[ObjectDoc]) -> None:
 
 
 def build_project_doc(project_path: str) -> ProjectDoc:
-    """Build a full ProjectDoc from a TwinCAT PLC project directory.
+    """Build a full ProjectDoc from a TwinCAT solution directory.
 
-    Scans for .TcPOU, .TcGVL, and .TcDUT files, parses each, extracts
-    comments, and returns a tree ready for template rendering.
+    Discovers every ``.plcproj`` under ``project_path`` and builds one
+    ``PLCDoc`` per PLC project. Used-by cross-references are scoped within
+    a single PLC project so a type in one PLC project never claims to be
+    "used by" a type in another (see ADR-0005).
 
     Args:
-        project_path: Absolute path to the TwinCAT PLC project directory.
+        project_path: Absolute path to the solution directory.
 
     Raises:
-        ValueError: If no TwinCAT source files are found.
+        ValueError: If no TwinCAT source files are found anywhere under
+            ``project_path``.
     """
     project = Path(project_path).resolve()
-    tcpou_files = sorted(project.glob("**/*.TcPOU"))
-    tcgvl_files = sorted(project.glob("**/*.TcGVL"))
-    tcdut_files = sorted(project.glob("**/*.TcDUT"))
+    plcproj_paths = sorted(project.rglob("*.plcproj"))
 
-    if not tcpou_files and not tcgvl_files and not tcdut_files:
+    plcs: dict[str, PLCDoc] = {}
+    total_objects = 0
+    if plcproj_paths:
+        for plcproj in plcproj_paths:
+            plc_doc = _build_plc_doc(plcproj)
+            plcs[plc_doc.name] = plc_doc
+            total_objects += len(plc_doc.objects)
+    else:
+        # No .plcproj anywhere — fall back to a single anonymous PLC built
+        # straight from the project directory. Preserves the legacy
+        # "loose project directory" use case (and some tests rely on it).
+        plc_doc = _build_plc_doc_from_root(project, plc_name=project.name)
+        if plc_doc.objects:
+            plcs[plc_doc.name] = plc_doc
+            total_objects += len(plc_doc.objects)
+
+    if total_objects == 0:
         raise ValueError(f"No TwinCAT source files found in {project_path}")
+
+    return ProjectDoc(name=project.name, plcs=plcs)
+
+
+def _build_plc_doc(plcproj: Path) -> PLCDoc:
+    """Build a PLCDoc by walking a single .plcproj's sibling tree."""
+    plc_root = plcproj.parent
+    plc_name = plcproj.stem
+    return _build_plc_doc_from_root(plc_root, plc_name=plc_name, plcproj_path=str(plcproj))
+
+
+def _build_plc_doc_from_root(
+    root: Path, *, plc_name: str, plcproj_path: str = ""
+) -> PLCDoc:
+    """Walk ``root`` for TwinCAT source files and assemble a PLCDoc."""
+    tcpou_files = sorted(root.glob("**/*.TcPOU"))
+    tcgvl_files = sorted(root.glob("**/*.TcGVL"))
+    tcdut_files = sorted(root.glob("**/*.TcDUT"))
 
     objects: list[ObjectDoc] = []
 
@@ -260,6 +316,7 @@ def build_project_doc(project_path: str) -> ProjectDoc:
             obj_type=pou["pou_type"],
             declaration=pou["declaration"],
             comment=comment,
+            plc_name=plc_name,
             visibility=meta["visibility"],
             is_abstract=meta["is_abstract"],
             is_final=meta["is_final"],
@@ -286,6 +343,7 @@ def build_project_doc(project_path: str) -> ProjectDoc:
             obj_type="gvl",
             declaration=gvl["declaration"],
             comment=comment,
+            plc_name=plc_name,
             variables=vars_["variable"],
         ))
 
@@ -305,13 +363,16 @@ def build_project_doc(project_path: str) -> ProjectDoc:
             obj_type=obj_type,
             declaration=dut["declaration"],
             comment=comment,
+            plc_name=plc_name,
             variables=vars_["variable"],
         ))
 
-    # Compute back-references after all objects are assembled
+    # Used-by cross-references are scoped within this PLC project. See
+    # ADR-0005: a type in one PLC project shouldn't claim to be "used by"
+    # a type in another, even when their names happen to coincide.
     _compute_used_by(objects)
 
-    return ProjectDoc(name=project.name, objects=objects)
+    return PLCDoc(name=plc_name, plcproj_path=plcproj_path, objects=objects)
 
 
 # ---------------------------------------------------------------------------

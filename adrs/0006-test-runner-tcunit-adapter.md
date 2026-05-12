@@ -107,26 +107,46 @@ class TcUnitRunner(TestRunner):
     def __init__(self, bridge_url: str = ...):
         self._client = BridgeClient(bridge_url)
 
-    def run_tests(self, plc_name: str | None = None) -> Result:
-        return self._client.post("/tcunit-run", self._with_plc({...}, plc_name))
+    def run_tests(
+        self, target_ams_id: str, *, plc_name: str | None = None
+    ) -> Result:
+        return self._client.post(
+            "/tcunit-run",
+            self._with_target_and_plc({...}, target_ams_id, plc_name),
+        )
 
-    def get_results(self, plc_name: str | None = None) -> TestResults:
-        raw = self._client.post("/results", self._with_plc({}, plc_name))
+    def get_results(
+        self, target_ams_id: str, *, plc_name: str | None = None
+    ) -> TestResults:
+        raw = self._client.post(
+            "/results",
+            self._with_target_and_plc({}, target_ams_id, plc_name),
+        )
         return _parse_test_results(raw)
 
     def get_status(self) -> TestStatus:
         # Polls /tcunit-run/status (lightweight; checks bTestSuitesFinished)
         ...
 
-    def wait_complete(self, timeout_seconds: int = 60) -> Result:
+    def wait_complete(
+        self,
+        target_ams_id: str,
+        timeout_seconds: int = 60,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
         # Server-side polling already inside Invoke-TcUnitRun.ps1;
         # this method becomes a passthrough that surfaces the
         # bridge's wait result.
         ...
 ```
 
-`plc_name` per ADR-0005. `Result` and `TestResults` shapes come
-from the existing port; no new dataclasses needed.
+`plc_name` per ADR-0005. ``target_ams_id`` is a required first
+positional argument on every test-execution method, matching the IDE
+workflow where the operator selects both the test PLC project and the
+target runtime before running. Implicit "last deployed target" state
+would be brittle across MCP calls. ``Result`` and ``TestResults`` shapes
+come from the existing port; no new dataclasses needed.
 
 ### TestResults shape
 
@@ -198,3 +218,11 @@ invoking the run, then waits for it to reappear.
 - 2026-05-12: Drafted as `Proposed`. Implementation depends on
   ADR-0005 (multi-project) landing first so `plc_name` is
   available on the new tools.
+- 2026-05-12: Interface tightened during ADR-0005 implementation.
+  ``run_tests``, ``wait_complete``, and ``get_results`` now take a
+  required ``target_ams_id`` as the first positional argument
+  (matching ``BuildRunner.deploy`` shape). The original draft had
+  no target argument and implied a stateful "last deployed target"
+  model; that's brittle in an MCP session and asymmetric with the
+  rest of the BuildRunner port. The stub signatures already carry
+  the parameter; this ADR's implementation just fills in the bodies.

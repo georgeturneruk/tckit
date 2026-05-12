@@ -8,8 +8,16 @@ from tckit.adapters.doc_generators._doc_model import (
     build_project_doc,
 )
 
-
 FIXTURES_PATH = "tests/fixtures/sample_project"
+
+
+def _objects(project):
+    """Return the flat object list across every PLC project in the doc.
+
+    ADR-0005 keys ProjectDoc by PLC project name; the sample fixture is a
+    single-PLC sln so this collapses to a single PLC's objects in practice.
+    """
+    return [obj for plc in project.plcs.values() for obj in plc.objects]
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +157,7 @@ class TestExtractDeclarationMeta:
 class TestBuildProjectDoc:
     def test_finds_all_objects(self):
         project = build_project_doc(FIXTURES_PATH)
-        names = [o.name for o in project.objects]
+        names = [o.name for o in _objects(project)]
         assert "FB_Example" in names
         assert "GVL_Params" in names
         assert "ST_ExampleConfig" in names
@@ -157,67 +165,67 @@ class TestBuildProjectDoc:
 
     def test_fb_has_description(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         assert "TcKit" in fb.comment.description
 
     def test_fb_inputs_extracted(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         input_names = [v.name for v in fb.inputs]
         assert "bEnable" in input_names
         assert "nSetpoint" in input_names
 
     def test_fb_input_descriptions_from_params(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         enable = next(v for v in fb.inputs if v.name == "bEnable")
         assert enable.comment != ""  # enriched from :param bEnable:
 
     def test_fb_methods_extracted(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         method_names = [m.name for m in fb.methods]
         assert "Execute" in method_names
         assert "Reset" in method_names
 
     def test_method_has_return_type(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         execute = next(m for m in fb.methods if m.name == "Execute")
         assert execute.return_type == "BOOL"
 
     def test_method_has_description(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         execute = next(m for m in fb.methods if m.name == "Execute")
         assert execute.comment.description != ""
 
     def test_fb_property_extracted(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         prop_names = [p.name for p in fb.properties]
         assert "ErrorId" in prop_names
 
     def test_property_has_get_set(self):
         project = build_project_doc(FIXTURES_PATH)
-        fb = next(o for o in project.objects if o.name == "FB_Example")
+        fb = next(o for o in _objects(project) if o.name == "FB_Example")
         errorid = next(p for p in fb.properties if p.name == "ErrorId")
         assert errorid.has_get is True
         assert errorid.has_set is True
 
     def test_gvl_type(self):
         project = build_project_doc(FIXTURES_PATH)
-        gvl = next(o for o in project.objects if o.name == "GVL_Params")
+        gvl = next(o for o in _objects(project) if o.name == "GVL_Params")
         assert gvl.obj_type == "gvl"
 
     def test_struct_type(self):
         project = build_project_doc(FIXTURES_PATH)
-        st = next(o for o in project.objects if o.name == "ST_ExampleConfig")
+        st = next(o for o in _objects(project) if o.name == "ST_ExampleConfig")
         assert st.obj_type == "struct"
 
     def test_enum_type(self):
         project = build_project_doc(FIXTURES_PATH)
-        e = next(o for o in project.objects if o.name == "E_ExampleState")
+        e = next(o for o in _objects(project) if o.name == "E_ExampleState")
         assert e.obj_type == "enum"
 
     def test_project_name_from_directory(self):
