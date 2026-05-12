@@ -97,57 +97,70 @@ def _err(message: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def get_structure(project_path: str) -> str:
+def _plc(name: str) -> str | None:
+    """Normalise the optional plc_name MCP arg ("" → None)."""
+    return name or None
+
+
+def get_structure(project_path: str, plc_name: str = "") -> str:
     """Return the project map: POUs by folder, tasks, libraries, plus GVL and DUT names.
 
     The single call that orients you on an unfamiliar TwinCAT project.
-    Subsystems are visible in each POURef.folder (e.g. "POUs/Axes"); task
-    layout includes cycle_time_us, priority, and the POUs each task runs;
-    libraries lists Beckhoff and third-party refs. Call once at the start
-    of a session; do not refresh per turn. Returns names and metadata
-    only, no code bodies; use get_pou_interface / get_pou_item for those.
+    On a multi-project sln, the structure groups POUs/GVLs/DUTs by PLC
+    project under ``plcs`` (one entry per ``.plcproj``); tasks remain
+    sln-wide. Subsystems are visible in each POURef.folder (e.g.
+    "POUs/Axes"); task layout includes cycle_time_us, priority, and the
+    POUs each task runs; libraries lists Beckhoff and third-party refs.
+    Call once at the start of a session; do not refresh per turn.
+    Returns names and metadata only, no code bodies; use
+    get_pou_interface / get_pou_item for those.
 
-    :param project_path: Absolute path to the project root (parent of the
-        .plcproj / .tsproj).
+    :param project_path: Absolute path to the solution root.
+    :param plc_name: Optional PLC project to restrict the walk to. Leave
+        empty to scan every ``.plcproj``.
     """
     try:
-        result = _cfg.reader().get_structure(project_path)
+        result = _cfg.reader().get_structure(project_path, plc_name=_plc(plc_name))
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_pou_interface(pou_name: str) -> str:
+def get_pou_interface(pou_name: str, plc_name: str = "") -> str:
     """Return declarations and method signatures for a POU, without method bodies.
 
     Call this after get_structure() when you need to understand a POU's interface.
     Never call this for every POU — only for the ones you need.
 
     :param pou_name: Name of the POU (e.g. FB_MotorControl).
+    :param plc_name: PLC project to look in. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.reader().get_pou_interface(pou_name)
+        result = _cfg.reader().get_pou_interface(pou_name, plc_name=_plc(plc_name))
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_pou_declaration(pou_name: str) -> str:
+def get_pou_declaration(pou_name: str, plc_name: str = "") -> str:
     """Return only the FB-level declaration block of a POU (VAR sections, no methods).
 
     Narrower than get_pou_interface — use when preparing a variable add or
     reading FB-level VAR sections and method signatures are noise.
 
     :param pou_name: Name of the POU (e.g. FB_MotorControl).
+    :param plc_name: PLC project to look in. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.reader().get_pou_declaration(pou_name)
+        result = _cfg.reader().get_pou_declaration(pou_name, plc_name=_plc(plc_name))
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_pou_item(pou_name: str, item_name: str) -> str:
+def get_pou_item(pou_name: str, item_name: str, plc_name: str = "") -> str:
     """Return the body of a single method, action, or property.
 
     The most surgical read operation. Use this when you know exactly which
@@ -155,33 +168,41 @@ def get_pou_item(pou_name: str, item_name: str) -> str:
 
     :param pou_name: Name of the containing POU.
     :param item_name: Name of the method, action, or property.
+    :param plc_name: PLC project to look in. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.reader().get_pou_item(pou_name, item_name)
+        result = _cfg.reader().get_pou_item(
+            pou_name, item_name, plc_name=_plc(plc_name)
+        )
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_gvl(gvl_name: str) -> str:
+def get_gvl(gvl_name: str, plc_name: str = "") -> str:
     """Return the declaration block of a Global Variable List.
 
     :param gvl_name: Name of the GVL (e.g. GVL_Parameters).
+    :param plc_name: PLC project to look in. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.reader().get_gvl(gvl_name)
+        result = _cfg.reader().get_gvl(gvl_name, plc_name=_plc(plc_name))
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_dut(dut_name: str) -> str:
+def get_dut(dut_name: str, plc_name: str = "") -> str:
     """Return the declaration block of a Data Unit Type (struct, enum, union, alias).
 
     :param dut_name: Name of the DUT (e.g. ST_Config, E_State).
+    :param plc_name: PLC project to look in. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.reader().get_dut(dut_name)
+        result = _cfg.reader().get_dut(dut_name, plc_name=_plc(plc_name))
         return _ok(result)
     except Exception as exc:
         return _err(str(exc))
@@ -222,53 +243,71 @@ def create_project(name: str, path: str) -> str:
         return _err(str(exc))
 
 
-def add_pou(name: str, pou_type: str, code: str) -> str:
+def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
     :param name: Name of the new POU (follow naming conventions: FB_, PRG_, etc.).
     :param pou_type: One of: function_block, function, program, interface.
     :param code: Full ST source text including VAR blocks.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     from tckit.ports.types import POUType
 
     try:
         pt = POUType(pou_type)
-        result = _cfg.writer().add_pou(name, pt, code)
+        result = _cfg.writer().add_pou(name, pt, code, plc_name=_plc(plc_name))
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
-def add_method(pou_name: str, method_name: str, code: str) -> str:
+def add_method(
+    pou_name: str, method_name: str, code: str, plc_name: str = ""
+) -> str:
     """Add a new method to an existing POU.
 
     :param pou_name: Name of the containing POU.
     :param method_name: Name of the new method (PascalCase, no prefix).
     :param code: Full ST source text including declaration block.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.writer().add_method(pou_name, method_name, code)
+        result = _cfg.writer().add_method(
+            pou_name, method_name, code, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
-def update_pou_item(pou_name: str, item_name: str, code: str) -> str:
+def update_pou_item(
+    pou_name: str, item_name: str, code: str, plc_name: str = ""
+) -> str:
     """Update the body of an existing method, action, or property.
 
     :param pou_name: Name of the containing POU.
     :param item_name: Name of the method, action, or property.
     :param code: New ST source text.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.writer().update_pou_item(pou_name, item_name, code)
+        result = _cfg.writer().update_pou_item(
+            pou_name, item_name, code, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
 def update_pou_item_patch(
-    pou_name: str, item_name: str, old_string: str, new_string: str
+    pou_name: str,
+    item_name: str,
+    old_string: str,
+    new_string: str,
+    plc_name: str = "",
 ) -> str:
     """Edit-style anchored replacement on an existing POU item.
 
@@ -282,10 +321,12 @@ def update_pou_item_patch(
     :param item_name: Method/action/property name, or ``pou_name`` for the FB item.
     :param old_string: Text to match. Must be unique in the item.
     :param new_string: Replacement text.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
         result = _cfg.writer().update_pou_item_patch(
-            pou_name, item_name, old_string, new_string
+            pou_name, item_name, old_string, new_string, plc_name=_plc(plc_name)
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -293,7 +334,11 @@ def update_pou_item_patch(
 
 
 def add_variable(
-    pou_name: str, scope: str, declaration: str, item_name: str = ""
+    pou_name: str,
+    scope: str,
+    declaration: str,
+    item_name: str = "",
+    plc_name: str = "",
 ) -> str:
     """Add one variable declaration to a named scope block.
 
@@ -308,10 +353,14 @@ def add_variable(
     :param declaration: Single variable declaration, e.g. ``bNewParam : BOOL;``.
     :param item_name: Method name to target. Empty string (default) targets
         the FB-level declaration.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
         target = item_name if item_name else None
-        result = _cfg.writer().add_variable(pou_name, scope, declaration, target)
+        result = _cfg.writer().add_variable(
+            pou_name, scope, declaration, target, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
@@ -322,7 +371,7 @@ def add_variable(
 # ---------------------------------------------------------------------------
 
 
-def build(project_path: str) -> str:
+def build(project_path: str, plc_name: str = "") -> str:
     """Build the TwinCAT project and return structured errors.
 
     Always fix all errors before proceeding to deploy.
@@ -334,9 +383,11 @@ def build(project_path: str) -> str:
     response (they do not fail the build).
 
     :param project_path: Absolute path to the .sln or .tsproj file.
+    :param plc_name: PLC project to build. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.builder().build(project_path)
+        result = _cfg.builder().build(project_path, plc_name=_plc(plc_name))
         payload = asdict(result)
         if result.success and _cfg.get("doc_trigger", "on_build") == "on_build":
             try:
@@ -351,7 +402,7 @@ def build(project_path: str) -> str:
         return _err(str(exc))
 
 
-def deploy(target_ams_id: str, confirmed: bool = False) -> str:
+def deploy(target_ams_id: str, confirmed: bool = False, plc_name: str = "") -> str:
     """Deploy the built configuration to a target runtime.
 
     ⚠️  This operation writes to a live PLC. By default it requires
@@ -366,12 +417,14 @@ def deploy(target_ams_id: str, confirmed: bool = False) -> str:
 
     :param target_ams_id: AMS Net ID of the target (e.g. 192.168.1.100.1.1).
     :param confirmed: Set to True after verifying the target is correct and not production.
+    :param plc_name: PLC project to deploy. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     gate = _safety_check("deploy", target_ams_id, confirmed)
     if gate is not None:
         return gate
     try:
-        result = _cfg.builder().deploy(target_ams_id)
+        result = _cfg.builder().deploy(target_ams_id, plc_name=_plc(plc_name))
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
@@ -406,23 +459,44 @@ def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 
-def run_tests() -> str:
-    """Trigger TcUnit test execution on the target runtime."""
+def run_tests(target_ams_id: str, plc_name: str = "") -> str:
+    """Trigger TcUnit test execution on the target runtime.
+
+    Mirrors the IDE workflow where you pick both the target route and the
+    PLC project before running tests. Both arguments are explicit because
+    implicit "last deployed target" state would be brittle across MCP calls.
+
+    :param target_ams_id: AMS Net ID of the target runtime (e.g.
+        ``192.168.1.100.1.1``).
+    :param plc_name: PLC project hosting the TcUnit suites. Leave empty
+        for single-project solutions or to use the ``PLC_PROJECT_NAME``
+        env default.
+    """
     try:
-        result = _cfg.test_runner().run_tests()
+        result = _cfg.test_runner().run_tests(
+            target_ams_id, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
-def get_test_results() -> str:
+def get_test_results(target_ams_id: str, plc_name: str = "") -> str:
     """Return parsed TcUnit test results after tests have completed.
 
     Call run_tests() first, then wait for tests to finish, then call this.
     Returns structured JSON: suite → test → pass/fail/message.
+
+    :param target_ams_id: AMS Net ID of the target runtime the tests were
+        executed on.
+    :param plc_name: PLC project hosting the TcUnit suites. Leave empty
+        for single-project solutions or to use the ``PLC_PROJECT_NAME``
+        env default.
     """
     try:
-        result = _cfg.test_runner().get_results()
+        result = _cfg.test_runner().get_results(
+            target_ams_id, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))

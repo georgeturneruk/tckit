@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <DUT Name="E_State" Id="{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3}">
+    <Declaration><![CDATA[
+// :Description: Filter state (library copy).
+TYPE E_State :
+(
+    Idle := 0,
+    Running := 1,
+    Errored := 2
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

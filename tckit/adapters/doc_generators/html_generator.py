@@ -3,9 +3,14 @@
 Self-contained Jinja2-based renderer. No Sphinx, no plcdoc, no subprocess.
 
 Pipeline:
-  1. _doc_model.build_project_doc()  — parse project + extract comments
-  2. Jinja2 templates                — render index.html + one page per object
-  3. Write HTML + search-index.json + hierarchy.html to output_path/
+  1. _doc_model.build_project_doc()  — parse solution + extract comments
+  2. Jinja2 templates                — render top-level + per-PLC pages
+  3. Write HTML + per-PLC search-index.json + hierarchy.html to output_path/
+
+Multi-project sln support (ADR-0005): top-level ``index.html`` lists each
+PLC project; per-PLC pages live under ``<plc_name>/`` sub-directories. The
+existing per-PLC templates take a PLCDoc as ``project`` (it mirrors the
+old ProjectDoc shape).
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from markupsafe import Markup
 
 from tckit.adapters.doc_generators._doc_model import (
     ObjectDoc,
+    PLCDoc,
     _base_type,
     build_project_doc,
 )
@@ -73,7 +79,7 @@ def _build_hierarchy(objects: list[ObjectDoc]) -> dict:
 
 
 def _build_search_index(objects: list[ObjectDoc]) -> list[dict]:
-    """Build a lunr-compatible search index from the project objects."""
+    """Build a lunr-compatible search index from a PLC's objects."""
     index = []
     for obj in objects:
         method_names = " ".join(m.name for m in obj.methods)
@@ -99,24 +105,31 @@ class HtmlGenerator(DocGenerator):
       - ``(* :Description: ... *)`` RST block comments
       - ``(*~ <docu><summary>...</summary></docu> ~*)`` Beckhoff XML comments
 
-    Output is a self-contained set of HTML files — no Sphinx or plcdoc required.
-    Features: cross-references, client-side search, hierarchy page, dark/light
-    toggle, "used by" back-references, and a "Built with TcKit" footer.
+    Output layout (ADR-0005):
+      ``index.html``                       — solution-level TOC of PLC projects
+      ``<plc_name>/index.html``            — per-PLC TOC of objects
+      ``<plc_name>/<object>.html``         — one page per object
+      ``<plc_name>/hierarchy.html``        — per-PLC type hierarchy
+      ``<plc_name>/search-index.json``     — per-PLC lunr search index
+
+    Features within each PLC sub-tree: cross-references, client-side
+    search, hierarchy page, dark/light toggle, "used by" back-references
+    (scoped to the PLC), and a "Built with TcKit" footer.
     """
 
     def __init__(self) -> None:
         self._status = DocStatus.IDLE
 
     def generate(self, project_path: str, output_path: str) -> Result:
-        """Generate HTML documentation for a TwinCAT PLC project.
+        """Generate HTML documentation for a TwinCAT solution.
 
         Args:
-            project_path: Path to the TwinCAT PLC project directory.
+            project_path: Path to the TwinCAT solution directory.
             output_path: Directory where HTML files will be written.
 
         Returns:
-            Result with success=True and details["index"] pointing to index.html,
-            or success=False with an error message.
+            Result with success=True and details["index"] pointing to the
+            top-level index.html, or success=False with an error message.
         """
         self._status = DocStatus.GENERATING
 
@@ -133,50 +146,21 @@ class HtmlGenerator(DocGenerator):
         output.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Pre-compute cross-reference data
-            known_names: set[str] = {obj.name for obj in project_doc.objects}
-            hierarchy = _build_hierarchy(project_doc.objects)
-            search_index = _build_search_index(project_doc.objects)
-
             env = Environment(
                 loader=PackageLoader("tckit.adapters.doc_generators"),
                 autoescape=True,
             )
-            env.filters["link_type"] = _make_link_type(known_names)
 
-            ctx_base = {
-                "project": project_doc,
-                "known_names": known_names,
-            }
-
-            # index.html
-            index_tpl = env.get_template("index.html")
+            # Top-level solution index.
+            solution_tpl = env.get_template("solution_index.html")
             (output / "index.html").write_text(
-                index_tpl.render(**ctx_base),
+                solution_tpl.render(project=project_doc),
                 encoding="utf-8",
             )
 
-            # one page per object
-            obj_tpl = env.get_template("object.html")
-            for obj in project_doc.objects:
-                page = output / f"{obj.name}.html"
-                page.write_text(
-                    obj_tpl.render(obj=obj, **ctx_base),
-                    encoding="utf-8",
-                )
-
-            # hierarchy.html
-            hier_tpl = env.get_template("hierarchy.html")
-            (output / "hierarchy.html").write_text(
-                hier_tpl.render(hierarchy=hierarchy, **ctx_base),
-                encoding="utf-8",
-            )
-
-            # search-index.json
-            (output / "search-index.json").write_text(
-                json.dumps(search_index, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            total_objects = 0
+            for plc in project_doc.plcs.values():
+                total_objects += _render_plc(env, plc, output / plc.name)
 
         except Exception as exc:
             self._status = DocStatus.ERROR
@@ -188,10 +172,57 @@ class HtmlGenerator(DocGenerator):
             details={
                 "index": str(output / "index.html"),
                 "output_path": str(output),
-                "objects": len(project_doc.objects),
+                "plcs": len(project_doc.plcs),
+                "objects": total_objects,
             },
         )
 
     def get_status(self) -> DocStatus:
         """Return the current generation status."""
         return self._status
+
+
+def _render_plc(env: Environment, plc: PLCDoc, plc_dir: Path) -> int:
+    """Render every page for a single PLC project into ``plc_dir``."""
+    plc_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-PLC cross-references are computed and scoped within this PLC.
+    known_names: set[str] = {obj.name for obj in plc.objects}
+    hierarchy = _build_hierarchy(plc.objects)
+    search_index = _build_search_index(plc.objects)
+
+    # Per-PLC templates use ``project`` as the context name. PLCDoc
+    # mirrors the old ProjectDoc shape so the existing templates work
+    # without modification.
+    env.filters["link_type"] = _make_link_type(known_names)
+    ctx_base = {
+        "project": plc,
+        "known_names": known_names,
+    }
+
+    index_tpl = env.get_template("index.html")
+    (plc_dir / "index.html").write_text(
+        index_tpl.render(**ctx_base),
+        encoding="utf-8",
+    )
+
+    obj_tpl = env.get_template("object.html")
+    for obj in plc.objects:
+        page = plc_dir / f"{obj.name}.html"
+        page.write_text(
+            obj_tpl.render(obj=obj, **ctx_base),
+            encoding="utf-8",
+        )
+
+    hier_tpl = env.get_template("hierarchy.html")
+    (plc_dir / "hierarchy.html").write_text(
+        hier_tpl.render(hierarchy=hierarchy, **ctx_base),
+        encoding="utf-8",
+    )
+
+    (plc_dir / "search-index.json").write_text(
+        json.dumps(search_index, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return len(plc.objects)

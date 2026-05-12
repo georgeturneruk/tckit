@@ -1,4 +1,10 @@
-"""Integration tests for XmlReader — runs against fixture files, no network."""
+"""Integration tests for XmlReader — runs against fixture files, no network.
+
+The sample fixture is a single-project sln (one ``.plcproj`` named
+``SampleProject``). ADR-0005 keyed every reader return value by PLC project,
+so these tests reach into ``structure.plcs["SampleProject"]`` for the
+per-PLC data.
+"""
 
 from pathlib import Path
 from textwrap import dedent
@@ -8,12 +14,30 @@ import pytest
 from tckit.adapters.readers.xml_reader import XmlReader
 from tckit.ports.types import POUType
 
+PLC = "SampleProject"
+
 
 @pytest.fixture()
 def reader(sample_project_path: Path) -> XmlReader:
     r = XmlReader()
     r.get_structure(str(sample_project_path))
     return r
+
+
+def _pous(structure, plc: str = PLC):
+    return structure.plcs[plc].pous
+
+
+def _gvls(structure, plc: str = PLC):
+    return structure.plcs[plc].gvls
+
+
+def _duts(structure, plc: str = PLC):
+    return structure.plcs[plc].duts
+
+
+def _libs(structure, plc: str = PLC):
+    return structure.plcs[plc].libraries
 
 
 # ---------------------------------------------------------------------------
@@ -24,47 +48,59 @@ def reader(sample_project_path: Path) -> XmlReader:
 def test_get_structure_finds_fb_example(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    names = [p.name for p in structure.pous]
+    names = [p.name for p in _pous(structure)]
     assert "FB_Example" in names
 
 
 def test_get_structure_fb_example_type(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    fb = next(p for p in structure.pous if p.name == "FB_Example")
+    fb = next(p for p in _pous(structure) if p.name == "FB_Example")
     assert fb.pou_type == POUType.FUNCTION_BLOCK
+
+
+def test_get_structure_fb_example_carries_plc_name(sample_project_path: Path) -> None:
+    reader = XmlReader()
+    structure = reader.get_structure(str(sample_project_path))
+    fb = next(p for p in _pous(structure) if p.name == "FB_Example")
+    assert fb.plc_name == PLC
 
 
 def test_get_structure_finds_interface(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    names = [p.name for p in structure.pous]
+    names = [p.name for p in _pous(structure)]
     assert "I_Example" in names
 
 
 def test_get_structure_interface_type(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    itf = next(p for p in structure.pous if p.name == "I_Example")
+    itf = next(p for p in _pous(structure) if p.name == "I_Example")
     assert itf.pou_type == POUType.INTERFACE
 
 
 def test_get_structure_finds_gvl_params(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    assert "GVL_Params" in structure.gvls
+    assert "GVL_Params" in _gvls(structure)
 
 
 def test_get_structure_finds_struct_dut(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    assert "ST_ExampleConfig" in structure.duts
+    assert "ST_ExampleConfig" in _duts(structure)
 
 
 def test_get_structure_finds_enum_dut(sample_project_path: Path) -> None:
     reader = XmlReader()
     structure = reader.get_structure(str(sample_project_path))
-    assert "E_ExampleState" in structure.duts
+    assert "E_ExampleState" in _duts(structure)
+
+
+def test_get_structure_single_plc_entry(sample_project_path: Path) -> None:
+    structure = XmlReader().get_structure(str(sample_project_path))
+    assert list(structure.plcs.keys()) == [PLC]
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +381,7 @@ def test_get_structure_merges_tsproj_only_tasks(sample_project_path: Path) -> No
 
 def test_get_structure_extracts_placeholder_libraries(sample_project_path: Path) -> None:
     structure = XmlReader().get_structure(str(sample_project_path))
-    by_name = {lib.name: lib for lib in structure.libraries}
+    by_name = {lib.name: lib for lib in _libs(structure)}
     assert by_name["Tc2_Standard"].placeholder == "Tc2_Standard"
     assert by_name["Tc2_Standard"].version == "*"
     assert by_name["Tc2_System"].version == "3.4.20.0"
@@ -355,23 +391,24 @@ def test_get_structure_extracts_direct_library_reference(
     sample_project_path: Path,
 ) -> None:
     structure = XmlReader().get_structure(str(sample_project_path))
-    base = next(lib for lib in structure.libraries if lib.name == "Base Interfaces")
+    base = next(lib for lib in _libs(structure) if lib.name == "Base Interfaces")
     assert base.version == "newest"
     assert base.placeholder is None
 
 
 def test_get_structure_folder_empty_for_root_pou(sample_project_path: Path) -> None:
     structure = XmlReader().get_structure(str(sample_project_path))
-    fb = next(p for p in structure.pous if p.name == "FB_Example")
+    fb = next(p for p in _pous(structure) if p.name == "FB_Example")
     assert fb.folder == ""
 
 
 def test_get_structure_folder_set_for_nested_pou(tmp_path: Path) -> None:
     # Project root with a .plcproj at the top and a POU one level deep.
-    (tmp_path / "Sample.plcproj").write_text(
-        '<?xml version="1.0"?>\n<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" />\n',
-        encoding="utf-8",
+    bare_plcproj = (
+        '<?xml version="1.0"?>\n'
+        '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" />\n'
     )
+    (tmp_path / "Sample.plcproj").write_text(bare_plcproj, encoding="utf-8")
     nested_dir = tmp_path / "POUs" / "Axes"
     nested_dir.mkdir(parents=True)
     (nested_dir / "FB_Motor.TcPOU").write_text(
@@ -392,7 +429,7 @@ def test_get_structure_folder_set_for_nested_pou(tmp_path: Path) -> None:
     )
 
     structure = XmlReader().get_structure(str(tmp_path))
-    motor = next(p for p in structure.pous if p.name == "FB_Motor")
+    motor = next(p for p in structure.plcs["Sample"].pous if p.name == "FB_Motor")
     assert motor.folder == "POUs/Axes"
 
 
@@ -416,8 +453,10 @@ def test_get_structure_no_project_files_returns_empty_lists(tmp_path: Path) -> N
     )
 
     structure = XmlReader().get_structure(str(tmp_path))
+    # Anonymous PLC named after the directory in the no-.plcproj fallback.
+    plc = next(iter(structure.plcs.values()))
     assert structure.tasks == []
-    assert structure.libraries == []
+    assert plc.libraries == []
 
 
 # ---------------------------------------------------------------------------
@@ -441,12 +480,12 @@ def test_index_rebuilds_when_plcproj_mtime_changes(
 
     The reader instance lives for the server's lifetime (#42), so a stale
     file-name index would let a new POU go undiscovered until the next
-    explicit get_structure call. The mtime guard fixes this.
+    explicit get_structure call. The per-PLC mtime guard fixes this.
     """
     proj = _copy_sample_to(tmp_path, sample_project_path)
     reader = XmlReader()
     reader.get_structure(str(proj))
-    assert "FB_Example" in reader._file_index
+    assert "FB_Example" in reader._file_index[PLC]
 
     # Drop a brand-new POU into the project; TwinCAT would rewrite .plcproj
     # in the same operation. Simulate that by bumping the mtime forward.
@@ -475,7 +514,7 @@ def test_index_rebuilds_when_plcproj_mtime_changes(
     # The next read should trigger a transparent rebuild and pick up FB_New.
     interface = reader.get_pou_interface("FB_New")
     assert interface.pou_name == "FB_New"
-    assert "FB_New" in reader._file_index
+    assert "FB_New" in reader._file_index[PLC]
 
 
 def test_index_warm_path_does_not_rebuild_on_body_edits(
@@ -490,7 +529,7 @@ def test_index_warm_path_does_not_rebuild_on_body_edits(
     proj = _copy_sample_to(tmp_path, sample_project_path)
     reader = XmlReader()
     reader.get_structure(str(proj))
-    original_path = reader._file_index["FB_Example"]
+    original_path = reader._file_index[PLC]["FB_Example"]
 
     # Touch the POU body file; .plcproj is untouched.
     pou_file = proj / "FB_Example.TcPOU"
@@ -499,4 +538,4 @@ def test_index_warm_path_does_not_rebuild_on_body_edits(
     os.utime(pou_file, (bumped, bumped))
 
     reader.get_pou_interface("FB_Example")
-    assert reader._file_index["FB_Example"] is original_path
+    assert reader._file_index[PLC]["FB_Example"] is original_path

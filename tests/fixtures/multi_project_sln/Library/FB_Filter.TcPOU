@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <POU Name="FB_Filter" Id="{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1}" SpecialFunc="None">
+    <Declaration><![CDATA[
+// :Description: Rolling-average filter (library code under test).
+FUNCTION_BLOCK FB_Filter
+VAR_INPUT
+    input : LREAL;
+END_VAR
+VAR_OUTPUT
+    output : LREAL;
+END_VAR
+VAR
+    state : E_State := E_State.Idle;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+output := input;
+]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2}">
+      <Declaration><![CDATA[
+// :Description: Advance the filter by one sample.
+METHOD Step : LREAL
+VAR_INPUT
+    sample : LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+Step := sample;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from tckit.adapters.doc_generators.html_generator import HtmlGenerator
 
 FIXTURES = "tests/fixtures/sample_project"
+PLC = "SampleProject"
 
 
 # ---------------------------------------------------------------------------
@@ -35,28 +36,36 @@ def docs(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def index_soup(docs: Path) -> BeautifulSoup:
-    return BeautifulSoup((docs / "index.html").read_text(encoding="utf-8"), "html.parser")
+def plc_docs(docs: Path) -> Path:
+    """Per-PLC sub-tree where object pages live under ADR-0005."""
+    return docs / PLC
 
 
 @pytest.fixture(scope="module")
-def fb_soup(docs: Path) -> BeautifulSoup:
-    return BeautifulSoup((docs / "FB_Example.html").read_text(encoding="utf-8"), "html.parser")
+def index_soup(plc_docs: Path) -> BeautifulSoup:
+    return BeautifulSoup((plc_docs / "index.html").read_text(encoding="utf-8"), "html.parser")
 
 
 @pytest.fixture(scope="module")
-def gvl_soup(docs: Path) -> BeautifulSoup:
-    return BeautifulSoup((docs / "GVL_Params.html").read_text(encoding="utf-8"), "html.parser")
+def fb_soup(plc_docs: Path) -> BeautifulSoup:
+    return BeautifulSoup((plc_docs / "FB_Example.html").read_text(encoding="utf-8"), "html.parser")
 
 
 @pytest.fixture(scope="module")
-def struct_soup(docs: Path) -> BeautifulSoup:
-    return BeautifulSoup((docs / "ST_ExampleConfig.html").read_text(encoding="utf-8"), "html.parser")
+def gvl_soup(plc_docs: Path) -> BeautifulSoup:
+    return BeautifulSoup((plc_docs / "GVL_Params.html").read_text(encoding="utf-8"), "html.parser")
 
 
 @pytest.fixture(scope="module")
-def enum_soup(docs: Path) -> BeautifulSoup:
-    return BeautifulSoup((docs / "E_ExampleState.html").read_text(encoding="utf-8"), "html.parser")
+def struct_soup(plc_docs: Path) -> BeautifulSoup:
+    html = (plc_docs / "ST_ExampleConfig.html").read_text(encoding="utf-8")
+    return BeautifulSoup(html, "html.parser")
+
+
+@pytest.fixture(scope="module")
+def enum_soup(plc_docs: Path) -> BeautifulSoup:
+    html = (plc_docs / "E_ExampleState.html").read_text(encoding="utf-8")
+    return BeautifulSoup(html, "html.parser")
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +91,10 @@ def has_heading(soup: BeautifulSoup, text: str) -> bool:
 
 class TestIndex:
     def test_contains_project_name(self, index_soup: BeautifulSoup) -> None:
+        # Per-PLC index now shows the PLC project name, not the solution dir.
         h1 = index_soup.find("h1")
         assert h1 is not None
-        assert "sample_project" in h1.get_text()
+        assert PLC in h1.get_text()
 
     def test_function_blocks_section(self, index_soup: BeautifulSoup) -> None:
         assert has_heading(index_soup, "Function Blocks")
@@ -266,8 +276,7 @@ class TestHtmlSafety:
 
         They may appear inside <pre><code> blocks (raw source display is intentional).
         """
-        import copy
-        for html_file in docs.glob("*.html"):
+        for html_file in docs.rglob("*.html"):
             soup = BeautifulSoup(html_file.read_text(encoding="utf-8"), "html.parser")
             # Remove raw source blocks before checking rendered content
             for pre in soup.find_all("pre"):
@@ -303,6 +312,7 @@ class TestHtmlSafety:
         result = HtmlGenerator().generate(str(tcpou_dir), str(out))
         assert result.success
 
-        html = (out / "FB_Xss.html").read_text(encoding="utf-8")
+        # Anonymous PLC name in the no-.plcproj fallback is the dir basename.
+        html = (out / "xss_project" / "FB_Xss.html").read_text(encoding="utf-8")
         assert "<script>alert" not in html
         assert "alert('xss')" not in html

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <DUT Name="E_State" Id="{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3}">
+    <Declaration><![CDATA[
+// :Description: Test-harness state (intentionally collides with Library.E_State to exercise ADR-0005's ambiguous-symbol error path).
+TYPE E_State :
+(
+    Pending := 0,
+    Pass := 1,
+    Fail := 2
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

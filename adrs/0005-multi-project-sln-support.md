@@ -1,7 +1,7 @@
 ---
 adr: 0005
 title: Multi-project sln support
-status: Proposed
+status: Implemented
 created: 2026-05-12
 issue:
 pr:
@@ -174,3 +174,41 @@ fallback rule (1-2-3 above) is deliberately deterministic; no magic.
 - 2026-05-12: Drafted as `Proposed`. Implementation lands as a
   dedicated PR before ADR-0006 (TestRunner) so the testrunner can
   rely on `plc_name` from day one.
+- 2026-05-12: Implemented. Notable deviations from the original
+  draft:
+  - **ProjectStructure shape (breaking change).** The draft kept the
+    flat `pous`/`gvls`/`duts` lists on single-project sln results and
+    introduced `plcs` only for multi-project ones. Implementation
+    replaces the flat lists with a single
+    `plcs: dict[str, PLCSection]` mapping in every case; the
+    single-project sln returns a one-entry dict. `libraries` moved
+    onto `PLCSection` because library references live per `.plcproj`.
+    `tasks` stays at the solution level because TwinCAT tasks are
+    sln-wide. `POURef` gained a required `plc_name` field.
+  - **Per-plcproj mtime guard.** ADR-0004 watched the parent sln's
+    mtime as a single staleness signal. With multi-project support,
+    the reader tracks one mtime per `.plcproj` (a
+    `dict[plc_name, float]`) and rebuilds the whole index if any
+    single `.plcproj` moves. Watching the sln file alone would miss
+    edits to a single PLC project that don't bump the sln.
+  - **Doc generator bundled in this PR.** The doc adapter walks the
+    filesystem directly (independent of `XmlReader`) and would
+    otherwise silently merge POUs from every `.plcproj` into one
+    flat undifferentiated docs site, with cross-references that
+    wrongly span PLC projects. `_doc_model.ProjectDoc` now carries
+    `plcs: dict[str, PLCDoc]`; HTML and Markdown output is sectioned
+    under `<output>/<plc_name>/<object>.{html,md}` with a top-level
+    solution index. `_compute_used_by` is scoped within a PLC project.
+  - **Shared resolver.** `tckit/utils/plc_resolver.py` (`resolve_plc_name`)
+    centralises the 1-2-3-4 fallback for writer/builder/test-runner
+    callers; the reader uses a symbol-aware variant inline that
+    prefers the unique-symbol fallback over an "any PLC project"
+    auto-resolve (matches ADR Decision §Resolution rule).
+  - **TestRunner gained `target_ams_id`.** The original ADR text
+    listed only `plc_name` on the TestRunner methods. The IDE
+    workflow requires picking both a PLC project and a target route
+    when running tests, and implicit "last deployed target" state
+    would be brittle across MCP calls. ``run_tests`` /
+    ``wait_complete`` / ``get_results`` now take ``target_ams_id``
+    as the first positional argument (matches ``BuildRunner.deploy``
+    shape). Captured in ADR-0006 Status notes too.

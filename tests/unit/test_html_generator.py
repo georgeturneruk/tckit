@@ -47,14 +47,19 @@ def test_generate_produces_index_html(tmp_path: Path) -> None:
 
 
 def test_generate_produces_object_pages(tmp_path: Path) -> None:
-    """generate() produces one HTML page per discovered object."""
+    """generate() produces one HTML page per discovered object.
+
+    ADR-0005 sub-trees output under ``<plc_name>/`` so the sample's
+    ``SampleProject`` PLC has its pages at ``SampleProject/<name>.html``.
+    """
     project = Path("tests/fixtures/sample_project")
     output = tmp_path / "docs"
     gen = HtmlGenerator()
     gen.generate(str(project), str(output))
-    assert (output / "FB_Example.html").exists()
-    assert (output / "GVL_Params.html").exists()
-    assert (output / "ST_ExampleConfig.html").exists()
+    plc = output / "SampleProject"
+    assert (plc / "FB_Example.html").exists()
+    assert (plc / "GVL_Params.html").exists()
+    assert (plc / "ST_ExampleConfig.html").exists()
 
 
 def test_generate_status_complete_on_success(tmp_path: Path) -> None:

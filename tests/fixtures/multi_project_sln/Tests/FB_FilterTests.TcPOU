@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <POU Name="FB_FilterTests" Id="{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1}" SpecialFunc="None">
+    <Declaration><![CDATA[
+// :Description: TcUnit suite for FB_Filter.
+FUNCTION_BLOCK FB_FilterTests EXTENDS TcUnit.FB_TestSuite
+VAR
+    filter : FB_Filter;
+    state  : E_State;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+RollingAverage_passes_known_vector();
+]]></ST>
+    </Implementation>
+    <Method Name="RollingAverage_passes_known_vector" Id="{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2}">
+      <Declaration><![CDATA[
+METHOD PRIVATE RollingAverage_passes_known_vector
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+TEST('RollingAverage_passes_known_vector');
+AssertEquals_LREAL(Expected := 1.0, Actual := filter.Step(1.0), Delta := 0.001, Message := 'first sample');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

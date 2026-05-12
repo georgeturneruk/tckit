@@ -5,12 +5,18 @@
 
 | Method | Returns |
 |--------|---------|
-| `build(project_path)` | `BuildResult` |
-| `deploy(target_ams_id)` | `Result` |
+| `build(project_path, *, plc_name=None)` | `BuildResult` |
+| `deploy(target_ams_id, *, plc_name=None)` | `Result` |
 | `start_runtime(target_ams_id)` | `Result` |
 | `get_status()` | `BuildStatus` |
 
 `BuildResult` carries each diagnostic as `{file, line, message, severity}` — never a raw log blob. Never deploy without a successful build first.
+
+`build` and `deploy` accept an optional `plc_name` to scope the operation
+to a single PLC project on multi-project solutions; `start_runtime` is
+target-wide. The bridge follows the standard fallback chain (per-call
+name → `PLC_PROJECT_NAME` env → auto-resolve → ambiguous error). See
+ADR-0005.
 
 ## Why this shape
 
