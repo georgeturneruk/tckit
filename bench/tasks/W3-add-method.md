@@ -18,5 +18,5 @@ Body: a single line that returns TRUE.
 
 Do not modify any existing method, declaration, or file other
 than what is necessary to add this method. Persist the change
-to the project files on disk so the project still builds.
-Briefly state which tool you used to make the change.
+to the project files on disk. Briefly state which tool you
+used to make the change.
