@@ -195,7 +195,10 @@ def get_dut(dut_name: str) -> str:
 def open_project(solution_path: str) -> str:
     """Open a TwinCAT solution in XAE.
 
-    Idempotent — safe to call when the solution is already open.
+    Most workflows pre-open the project before any tool call, so this
+    is rarely needed mid-session. Only call it if you have a specific
+    reason to switch solutions or recover from an unloaded state.
+    Idempotent, safe to call when the solution is already open.
 
     :param solution_path: Absolute path to the .sln file.
     """
