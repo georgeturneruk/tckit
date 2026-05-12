@@ -59,3 +59,50 @@ class ProjectWriter(ABC):
         :param code: New ST source text.
         """
         ...
+
+    @abstractmethod
+    def update_pou_item_patch(
+        self,
+        pou_name: str,
+        item_name: str,
+        old_string: str,
+        new_string: str,
+    ) -> Result:
+        """Replace one occurrence of ``old_string`` with ``new_string`` in a POU item.
+
+        Edit-style anchored replacement on an existing method, action, or
+        property item, or (when ``item_name`` equals ``pou_name``) the FB-level
+        declaration + cyclic body. Fails when ``old_string`` is not found, or
+        appears more than once: mirror of Claude Code's own Edit semantics.
+        See ADR-0003.
+
+        :param pou_name: Name of the containing POU.
+        :param item_name: Name of the method, action, or property
+            (or ``pou_name`` itself to target the FB-level item).
+        :param old_string: Text to match. Must appear exactly once in the item.
+        :param new_string: Replacement text.
+        """
+        ...
+
+    @abstractmethod
+    def add_variable(
+        self,
+        pou_name: str,
+        scope: str,
+        declaration: str,
+        item_name: str | None = None,
+    ) -> Result:
+        """Add one variable declaration to a named scope block.
+
+        Operates on the FB-level declaration by default; pass ``item_name`` to
+        target a method's local-VAR block instead. Creates the scope block if
+        it does not already exist on the item.
+
+        :param pou_name: Name of the containing POU.
+        :param scope: One of ``VAR_INPUT``, ``VAR_OUTPUT``, ``VAR_IN_OUT``,
+            ``VAR``, ``VAR_PERSISTENT``, ``VAR_TEMP``, ``VAR CONSTANT``.
+        :param declaration: Single variable declaration, e.g. ``bNewParam : BOOL;``.
+        :param item_name: Method name to target instead of the FB-level item.
+            ``None`` (default) targets the FB declaration.
+        """
+        ...

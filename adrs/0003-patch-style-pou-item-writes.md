@@ -1,7 +1,7 @@
 ---
 adr: 0003
 title: Patch-style writes for fine edits to POU items
-status: Exploring
+status: Implemented
 created: 2026-05-10
 issue:
 pr:
@@ -170,6 +170,32 @@ generated bodies).
        formatting (whitespace, comments, CDATA boundaries).
     2. Measure end-to-end context cost on a "modify three
        methods" session with patch vs whole-item replacement;
-       confirm the projected ~10× saving.
+       confirm the projected ~10x saving.
     3. Decide whether `add_variable` and `get_pou_declaration`
        ship in the same change or follow as separate small PRs.
+- 2026-05-12: Promoted to `Implemented`. All three primitives
+  (`update_pou_item_patch`, `add_variable`, `get_pou_declaration`)
+  shipped together as a single writer-prep PR. Key choices:
+    - **Bridge-side read-modify-write.** Both writer primitives do
+      their read-modify-write inside the PowerShell harness, using
+      a new `Get-TcItemSource` helper that mirrors the existing
+      `Set-TcItemSource`. The Python adapter stays a thin route
+      caller. Rationale: keeps the One Rule clean (writer adapter
+      does not import the reader adapter), and the bridge already
+      owns the COM handle.
+    - **Patch failure mode.** `update_pou_item_patch` fails when
+      `OldString` is missing or appears more than once, mirroring
+      Claude Code's own `Edit` semantics. The harness reports the
+      occurrence count in the error message so Claude can extend
+      the anchor with more context and retry.
+    - **`add_variable` scope handling.** Inserts the declaration
+      line before the matching scope's `END_VAR`. If the scope
+      block does not exist on the target item, appends a fresh
+      `<SCOPE> ... END_VAR` block. Supports the standard scope
+      keywords plus `VAR CONSTANT`.
+    - **`get_pou_declaration`.** Pure reader; lives on the
+      `ProjectReader` port. Returns only the FB-level declaration
+      text (no methods, no signatures).
+    - Validation step 2 (the end-to-end context-cost bench) is
+      now the next experiment, gated on this PR landing. Tracked
+      separately in `bench/`.

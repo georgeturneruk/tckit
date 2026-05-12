@@ -118,6 +118,69 @@ def test_update_pou_item_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["Code"] == "BODY"
 
 
+def test_update_pou_item_patch_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_pou_item_patch("FB_X", "Execute", "OLD", "NEW")
+
+    path, payload = client.calls[0]
+    assert path == "/item-patch"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "ItemName": "Execute",
+        "OldString": "OLD",
+        "NewString": "NEW",
+    }
+
+
+def test_update_pou_item_patch_failure_translated_to_result() -> None:
+    client = FakeBridgeClient(
+        {"success": False, "error": "OldString appears 2 times; anchor must be unique."}
+    )
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    result = writer.update_pou_item_patch("FB_X", "Execute", "x", "y")
+    assert result.success is False
+    assert "unique" in (result.error or "")
+
+
+def test_add_variable_payload_shape_fb_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_variable("FB_X", "VAR_INPUT", "bNewParam : BOOL;")
+
+    path, payload = client.calls[0]
+    assert path == "/add-variable"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "Scope": "VAR_INPUT",
+        "Declaration": "bNewParam : BOOL;",
+    }
+    # Default (FB-level) call omits ItemName so the harness targets the POU itself.
+    assert "ItemName" not in payload
+
+
+def test_add_variable_payload_shape_method_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_variable("FB_X", "VAR", "nLocal : INT;", item_name="Execute")
+
+    _, payload = client.calls[0]
+    assert payload["ItemName"] == "Execute"
+    assert payload["Scope"] == "VAR"
+
+
 def test_failure_response_translated_to_result() -> None:
     client = FakeBridgeClient({"success": False, "error": "POU not found"})
     writer = AutomationWriter(client=client)  # type: ignore[arg-type]

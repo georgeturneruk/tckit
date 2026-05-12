@@ -132,6 +132,21 @@ def get_pou_interface(pou_name: str) -> str:
         return _err(str(exc))
 
 
+def get_pou_declaration(pou_name: str) -> str:
+    """Return only the FB-level declaration block of a POU (VAR sections, no methods).
+
+    Narrower than get_pou_interface — use when preparing a variable add or
+    reading FB-level VAR sections and method signatures are noise.
+
+    :param pou_name: Name of the POU (e.g. FB_MotorControl).
+    """
+    try:
+        result = _cfg.reader().get_pou_declaration(pou_name)
+        return _ok(result)
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def get_pou_item(pou_name: str, item_name: str) -> str:
     """Return the body of a single method, action, or property.
 
@@ -244,6 +259,56 @@ def update_pou_item(pou_name: str, item_name: str, code: str) -> str:
     """
     try:
         result = _cfg.writer().update_pou_item(pou_name, item_name, code)
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def update_pou_item_patch(
+    pou_name: str, item_name: str, old_string: str, new_string: str
+) -> str:
+    """Edit-style anchored replacement on an existing POU item.
+
+    Replace one unique occurrence of ``old_string`` with ``new_string`` in
+    the item's combined declaration + implementation. Fails when the anchor
+    is missing or non-unique; mirror of Claude Code's own Edit semantics.
+    Use this instead of Edit/Write on .TcPOU files. Pass ``item_name`` equal
+    to ``pou_name`` to target the FB-level declaration + cyclic body.
+
+    :param pou_name: Name of the containing POU.
+    :param item_name: Method/action/property name, or ``pou_name`` for the FB item.
+    :param old_string: Text to match. Must be unique in the item.
+    :param new_string: Replacement text.
+    """
+    try:
+        result = _cfg.writer().update_pou_item_patch(
+            pou_name, item_name, old_string, new_string
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def add_variable(
+    pou_name: str, scope: str, declaration: str, item_name: str = ""
+) -> str:
+    """Add one variable declaration to a named scope block.
+
+    Targets the FB-level declaration by default; pass ``item_name`` to add a
+    method's local variable instead. Creates the scope block if it does not
+    already exist on the target item. Use this instead of rewriting the full
+    declaration via update_pou_item.
+
+    :param pou_name: Name of the containing POU.
+    :param scope: One of VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR,
+        VAR_PERSISTENT, VAR_TEMP, VAR CONSTANT.
+    :param declaration: Single variable declaration, e.g. ``bNewParam : BOOL;``.
+    :param item_name: Method name to target. Empty string (default) targets
+        the FB-level declaration.
+    """
+    try:
+        target = item_name if item_name else None
+        result = _cfg.writer().add_variable(pou_name, scope, declaration, target)
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
@@ -452,6 +517,7 @@ def get_doc_status() -> str:
 _TOOLS = (
     get_structure,
     get_pou_interface,
+    get_pou_declaration,
     get_pou_item,
     get_gvl,
     get_dut,
@@ -460,6 +526,8 @@ _TOOLS = (
     add_pou,
     add_method,
     update_pou_item,
+    update_pou_item_patch,
+    add_variable,
     build,
     deploy,
     start_runtime,

@@ -273,6 +273,30 @@ function Set-TcItemSource {
     if ($null -ne $Implementation) { $Item.ImplementationText = $Implementation }
 }
 
+function Get-TcItemSource {
+    <#
+    .SYNOPSIS
+        Read declaration and implementation text from a tree item.
+
+    .DESCRIPTION
+        Mirror of Set-TcItemSource. Returns a hashtable with the two
+        text blocks plus a combined Code field joined by a newline.
+        Methods/actions and the FB-level item both expose
+        DeclarationText / ImplementationText through COM dispatch.
+
+    .OUTPUTS
+        @{ declaration = string; implementation = string; code = string }
+    #>
+    param([Parameter(Mandatory)]$Item)
+
+    $decl = ''
+    $impl = ''
+    try { $decl = [string]$Item.DeclarationText } catch { $decl = '' }
+    try { $impl = [string]$Item.ImplementationText } catch { $impl = '' }
+    $code = if ($impl) { "$decl`n$impl" } else { $decl }
+    return @{ declaration = $decl; implementation = $impl; code = $code }
+}
+
 # ------------------------------------------------------------------
 # Build via devenv.exe (Express edition has no ToolWindows.ErrorList)
 # ------------------------------------------------------------------
@@ -363,4 +387,5 @@ function Read-TcBuildLog {
 Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, `
     Resolve-TcPlcName, Get-TcPlcProjectNode, Get-TcPousFolder, Find-TcChild, `
-    Set-TcItemSource, Split-TcCode, Find-Devenv, Invoke-TcDevenvBuild, Read-TcBuildLog
+    Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
+    Invoke-TcDevenvBuild, Read-TcBuildLog

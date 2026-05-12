@@ -2,7 +2,14 @@
 
 from abc import ABC, abstractmethod
 
-from tckit.ports.types import DUT, GVL, POUInterface, POUItem, ProjectStructure
+from tckit.ports.types import (
+    DUT,
+    GVL,
+    POUDeclaration,
+    POUInterface,
+    POUItem,
+    ProjectStructure,
+)
 
 
 class ProjectReader(ABC):
@@ -12,6 +19,9 @@ class ProjectReader(ABC):
       1. get_structure()        → names and types only
       2. get_pou_interface()    → declarations + method signatures
       3. get_pou_item()         → single method/action/property body
+
+    ``get_pou_declaration()`` is a narrower companion to ``get_pou_interface``
+    that returns only the FB-level VAR sections, no method signatures.
     """
 
     @abstractmethod
@@ -29,6 +39,18 @@ class ProjectReader(ABC):
 
         :param pou_name: Name of the POU (e.g. ``FB_MotorControl``).
         :returns: POUInterface with VAR blocks and method signatures.
+        """
+        ...
+
+    @abstractmethod
+    def get_pou_declaration(self, pou_name: str) -> POUDeclaration:
+        """Return only the FB-level declaration block of a POU.
+
+        Cheaper than ``get_pou_interface`` when preparing a variable add or
+        reading FB-level VAR sections; no methods, no signatures, no body.
+
+        :param pou_name: Name of the POU (e.g. ``FB_MotorControl``).
+        :returns: POUDeclaration with the FB-level declaration text only.
         """
         ...
 

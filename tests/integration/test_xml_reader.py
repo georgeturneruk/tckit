@@ -170,6 +170,38 @@ def test_get_pou_interface_preserves_method_api(reader: XmlReader) -> None:
 
 
 # ---------------------------------------------------------------------------
+# get_pou_declaration — FB-level VAR sections only
+# ---------------------------------------------------------------------------
+
+
+def test_get_pou_declaration_returns_fb_vars(reader: XmlReader) -> None:
+    decl = reader.get_pou_declaration("FB_Example")
+    assert "VAR_INPUT" in decl.declaration
+    assert "VAR_OUTPUT" in decl.declaration
+    assert "FUNCTION_BLOCK FB_Example" in decl.declaration
+
+
+def test_get_pou_declaration_omits_method_signatures(reader: XmlReader) -> None:
+    decl = reader.get_pou_declaration("FB_Example")
+    # FB-level declaration must not contain any method bodies or per-method
+    # declaration text. "METHOD Execute" is the give-away that get_pou_interface
+    # would have returned.
+    assert "METHOD Execute" not in decl.declaration
+    assert "METHOD Reset" not in decl.declaration
+
+
+def test_get_pou_declaration_carries_pou_type(reader: XmlReader) -> None:
+    decl = reader.get_pou_declaration("FB_Example")
+    assert decl.pou_type == POUType.FUNCTION_BLOCK
+    assert decl.pou_name == "FB_Example"
+
+
+def test_get_pou_declaration_unknown_raises(reader: XmlReader) -> None:
+    with pytest.raises(FileNotFoundError):
+        reader.get_pou_declaration("NonExistentPOU")
+
+
+# ---------------------------------------------------------------------------
 # get_pou_item — methods and properties
 # ---------------------------------------------------------------------------
 
