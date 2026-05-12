@@ -58,13 +58,49 @@ function Send-JsonResponse {
     $Response.OutputStream.Close()
 }
 
+function ConvertTo-HashtableDeep {
+    <#
+    .SYNOPSIS
+        Recursively convert a PSCustomObject (or array of them) into a
+        hashtable so the result can be splatted at a harness script.
+    .DESCRIPTION
+        ConvertFrom-Json returns a PSCustomObject on Windows PowerShell 5.1.
+        Splatting requires a hashtable, so we walk the object graph and
+        build one. The -AsHashtable switch on ConvertFrom-Json exists from
+        PowerShell 7 onwards; keeping this manual conversion preserves
+        5.1 compatibility.
+    #>
+    param($Object)
+    if ($null -eq $Object) { return $null }
+    if ($Object -is [System.Collections.IDictionary]) { return $Object }
+    if ($Object -is [System.Management.Automation.PSCustomObject]) {
+        $ht = @{}
+        foreach ($prop in $Object.PSObject.Properties) {
+            $ht[$prop.Name] = ConvertTo-HashtableDeep -Object $prop.Value
+        }
+        return $ht
+    }
+    if ($Object -is [System.Collections.IEnumerable] -and $Object -isnot [string]) {
+        return @($Object | ForEach-Object { ConvertTo-HashtableDeep -Object $_ })
+    }
+    return $Object
+}
+
 function Read-RequestBody {
     param([System.Net.HttpListenerRequest]$Request)
     if ($Request.ContentLength64 -le 0) { return @{} }
     $reader = New-Object System.IO.StreamReader($Request.InputStream)
     $raw = $reader.ReadToEnd()
     $reader.Close()
-    try { return $raw | ConvertFrom-Json -AsHashtable } catch { return @{} }
+    try {
+        $parsed = $raw | ConvertFrom-Json
+    }
+    catch {
+        return @{}
+    }
+    $ht = ConvertTo-HashtableDeep -Object $parsed
+    if ($ht -is [System.Collections.IDictionary]) { return $ht }
+    return @{}
 }
 
 function Invoke-Harness {

@@ -59,12 +59,21 @@ def run_one(prompt: str, config: pathlib.Path, tcunit_path: str) -> dict[str, An
     Permissions are bypassed so the headless run does not stall on
     Read/Grep prompts. The TcUnit directory is added via ``--add-dir``
     to grant explicit access independent of the working directory.
+
+    The child process is launched with cwd set to ``tcunit_path`` so the
+    model cannot browse the TcKit repo itself and discover the bridge
+    URL / harness contracts from the source. Without this isolation the
+    vanilla config can `curl` the bridge directly and the bench measures
+    the wrong thing.
     """
+    # Resolve the config path before launch: cwd is pinned to the target
+    # project below, so a relative --mcp-config would otherwise miss.
+    config_abs = str(config.resolve())
     cmd = [
         "claude",
         "-p", prompt,
         "--strict-mcp-config",
-        "--mcp-config", str(config),
+        "--mcp-config", config_abs,
         "--output-format", "stream-json",
         "--input-format", "text",
         "--verbose",
@@ -76,9 +85,12 @@ def run_one(prompt: str, config: pathlib.Path, tcunit_path: str) -> dict[str, An
     # Force UTF-8 decoding of the claude CLI's stdout. On Windows the
     # default text= decoding is the system locale (cp1252), which mojibakes
     # any non-ASCII characters Claude writes (em-dashes, smart quotes, etc).
+    # cwd is pinned to the target project so the spawned session sees
+    # only the codebase under test, not the TcKit source repo.
     proc = subprocess.run(
         cmd, capture_output=True, text=True, check=False,
         encoding="utf-8", errors="replace",
+        cwd=tcunit_path,
     )
     duration = time.monotonic() - t0
 
@@ -229,10 +241,16 @@ def capture_git_diff(project_path: str) -> str | None:
 
 
 def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
-    """POST /open once before the bench run loop. Idempotent on XAE side."""
-    from tckit.utils.bridge_client import BridgeClient
+    """POST /open once before the bench run loop. Idempotent on XAE side.
 
-    client = BridgeClient(base_url=bridge_url)
+    Cold XAE spawn (XAE_MODE=headless) can take well over the default 60s
+    bridge timeout — between spinning up TcXaeShell, registering COM, and
+    opening the solution. Reuse the build timeout (default 600s, override
+    via TCKIT_BUILD_TIMEOUT) since opening is in the same latency class.
+    """
+    from tckit.utils.bridge_client import BridgeClient, build_timeout
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
     try:
         if not client.health():
             raise SystemExit(

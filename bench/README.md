@@ -104,6 +104,22 @@ Then start the Windows bridge service natively (separate terminal):
 XAE Shell should be open with a project loaded, or set
 `XAE_MODE=headless` so the bridge spawns its own XAE instance.
 
+The TcKit MCP server has to be running too, otherwise the `tckit`
+config in this bench has no server to connect to. In a second
+terminal:
+
+```powershell
+.\.venv-bench\Scripts\Activate.ps1
+$env:PLC_PROJECT_PATH = "C:/TcKit-bench/TcUnit-writer/TcUnit.sln"
+python -m tckit.server --transport sse
+```
+
+The MCP server listens on `http://localhost:8000/sse` (matching
+`bench/configs/tckit.json`) and talks to the bridge internally for
+write operations. Reader bench tasks didn't need it because they
+go through stdio; SSE is required here because that's what the
+bench config specifies.
+
 ### Running a writer task
 
 Pass `--sln-path` (used for both pre-bench `/open` and the build
@@ -142,6 +158,18 @@ The harness:
   success rates.
 
 `--bridge-url` overrides the default `http://localhost:8765`.
+
+### Why the spawned session runs from the project directory
+
+`bench/run.py` launches `claude -p` with `cwd` set to
+`--tcunit-path`. Without this, the spawned session inherits the
+bench operator's working directory (the TcKit repo itself), which
+gives the vanilla config access to the bridge URL, harness
+contracts, and skill prompts via `Read` and `Grep`. The model
+then bypasses the comparison by calling the bridge directly. With
+`cwd` pinned, the spawned session sees only the project under
+test, which is the apples-to-apples surface the bench is meant
+to measure.
 
 ## Aggregate
 
