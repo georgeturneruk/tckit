@@ -72,6 +72,7 @@ def test_tool_tuple_contains_all_known_tools() -> None:
     expected = {
         "get_structure",
         "get_pou_interface",
+        "get_pou_declaration",
         "get_pou_item",
         "get_gvl",
         "get_dut",
@@ -80,6 +81,8 @@ def test_tool_tuple_contains_all_known_tools() -> None:
         "add_pou",
         "add_method",
         "update_pou_item",
+        "update_pou_item_patch",
+        "add_variable",
         "build",
         "deploy",
         "start_runtime",

@@ -21,6 +21,7 @@ from tckit.ports.types import (
     GVL,
     LibraryRef,
     MethodSignature,
+    POUDeclaration,
     POUInterface,
     POUItem,
     POURef,
@@ -188,6 +189,24 @@ class XmlReader(ProjectReader):
             methods=methods,
             properties=properties,
             actions=[a["name"] for a in info["actions"]],
+        )
+
+    def get_pou_declaration(self, pou_name: str) -> POUDeclaration:
+        """Return only the FB-level declaration of a POU.
+
+        Subset of ``get_pou_interface``: no methods, no signatures, no body.
+        Cheaper to read when preparing a variable add. See ADR-0003.
+
+        Raises:
+            FileNotFoundError: If pou_name is not in the file index.
+            ValueError: If the file cannot be parsed.
+        """
+        path = self._resolve(pou_name, ".TcPOU")
+        info = parse_tcpou(path)
+        return POUDeclaration(
+            pou_name=pou_name,
+            pou_type=POUType(info["pou_type"]),
+            declaration=info["declaration"],
         )
 
     def get_pou_item(self, pou_name: str, item_name: str) -> POUItem:

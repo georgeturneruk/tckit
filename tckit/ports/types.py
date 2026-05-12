@@ -102,6 +102,19 @@ class POUInterface:
 
 
 @dataclass
+class POUDeclaration:
+    """FB-level declaration block only (VAR sections, no methods or bodies).
+
+    Cheaper than ``POUInterface`` when preparing a variable add and you do
+    not need method signatures. See ADR-0003.
+    """
+
+    pou_name: str
+    pou_type: POUType
+    declaration: str
+
+
+@dataclass
 class POUItem:
     pou_name: str
     item_name: str

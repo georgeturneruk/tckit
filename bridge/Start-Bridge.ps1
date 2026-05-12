@@ -16,6 +16,8 @@
       POST /pou      -> harness\Add-TcPou.ps1
       POST /method   -> harness\Add-TcMethod.ps1
       POST /item     -> harness\Update-TcPouItem.ps1
+      POST /item-patch    -> harness\Update-TcPouItemPatch.ps1
+      POST /add-variable  -> harness\Add-TcVariable.ps1
       GET  /results  -> harness\Get-TcUnitResults.ps1
       GET  /health   -> {"status": "ok"}
 
@@ -146,6 +148,16 @@ try {
                 'POST /item' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Update-TcPouItem.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /item-patch' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcPouItemPatch.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /add-variable' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcVariable.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'GET /results' {

@@ -72,6 +72,41 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
+    def update_pou_item_patch(
+        self,
+        pou_name: str,
+        item_name: str,
+        old_string: str,
+        new_string: str,
+    ) -> Result:
+        return self._call(
+            "/item-patch",
+            self._with_project(
+                {
+                    "PouName": pou_name,
+                    "ItemName": item_name,
+                    "OldString": old_string,
+                    "NewString": new_string,
+                }
+            ),
+        )
+
+    def add_variable(
+        self,
+        pou_name: str,
+        scope: str,
+        declaration: str,
+        item_name: str | None = None,
+    ) -> Result:
+        payload: dict[str, Any] = {
+            "PouName": pou_name,
+            "Scope": scope,
+            "Declaration": declaration,
+        }
+        if item_name is not None:
+            payload["ItemName"] = item_name
+        return self._call("/add-variable", self._with_project(payload))
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
