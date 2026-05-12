@@ -7,8 +7,9 @@
     declaration, finds the requested scope block (VAR_INPUT, VAR_OUTPUT,
     VAR_IN_OUT, VAR, VAR_PERSISTENT, VAR_TEMP, VAR CONSTANT), and inserts
     the new declaration line before its END_VAR. If the scope block does
-    not exist, appends a fresh one to the end of the declaration. See
-    ADR-0003.
+    not exist, a fresh block is created at the conventional position in
+    the declaration (order: VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR,
+    VAR CONSTANT, VAR_PERSISTENT, VAR_TEMP). See ADR-0003.
 
     Passing $ItemName targets a method's local VAR block; omitting it
     targets the FB-level declaration.
@@ -64,6 +65,20 @@ function Get-ScopePattern {
     }
 }
 
+function Get-ScopeRank {
+    param([string]$ScopeName)
+    switch ($ScopeName.Trim().ToUpperInvariant()) {
+        'VAR_INPUT'      { return 1 }
+        'VAR_OUTPUT'     { return 2 }
+        'VAR_IN_OUT'     { return 3 }
+        'VAR'            { return 4 }
+        'VAR CONSTANT'   { return 5 }
+        'VAR_PERSISTENT' { return 6 }
+        'VAR_TEMP'       { return 7 }
+        default          { return 99 }
+    }
+}
+
 function Add-VariableToDeclaration {
     param(
         [Parameter(Mandatory)][string]$DeclarationText,
@@ -100,15 +115,46 @@ function Add-VariableToDeclaration {
         $lines.Insert($endIdx, $insert)
     }
     else {
-        # No matching block; append a fresh one to the end of the declaration.
-        # Trim any trailing blank lines so the new block sits cleanly.
-        while ($lines.Count -gt 0 -and ($lines[$lines.Count - 1].Trim() -eq '')) {
-            $lines.RemoveAt($lines.Count - 1)
-        }
+        # No matching block: create one at the conventional position.
+        # Scan existing scope blocks inline (a separate function broke
+        # parameter binding when passed a generic list in 5.1).
         $headerText = $ScopeName.Trim().ToUpperInvariant()
-        $lines.Add($headerText)
-        $lines.Add($insert)
-        $lines.Add('END_VAR')
+        $newRank = Get-ScopeRank -ScopeName $ScopeName
+        $headerRegex = '^(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR_PERSISTENT|VAR\s+CONSTANT|VAR)(\s|$)'
+
+        $insertAt = -1
+        $k = 0
+        while ($k -lt $lines.Count) {
+            $kTrimmed = $lines[$k].Trim()
+            if ($kTrimmed -match $headerRegex) {
+                $typeRaw = $matches[1] -replace '\s+', ' '
+                $existingType = $typeRaw.ToUpperInvariant()
+                $existingRank = Get-ScopeRank -ScopeName $existingType
+                if ($existingRank -gt $newRank) {
+                    $insertAt = $k
+                    break
+                }
+                # Skip past this block's END_VAR so we don't re-match its body.
+                $kEnd = -1
+                for ($m = $k + 1; $m -lt $lines.Count; $m++) {
+                    if ($lines[$m].Trim() -eq 'END_VAR') { $kEnd = $m; break }
+                }
+                if ($kEnd -ge 0) { $k = $kEnd + 1; continue }
+            }
+            $k++
+        }
+
+        if ($insertAt -lt 0) {
+            # New block ranks at or after every existing block. Append at the
+            # end of the declaration, trimming trailing blank lines so the new
+            # block sits cleanly.
+            while ($lines.Count -gt 0 -and ($lines[$lines.Count - 1].Trim() -eq '')) {
+                $lines.RemoveAt($lines.Count - 1)
+            }
+            $insertAt = $lines.Count
+        }
+
+        $lines.InsertRange($insertAt, [string[]]@($headerText, $insert, 'END_VAR'))
     }
 
     return ($lines -join "`n")

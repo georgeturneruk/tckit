@@ -26,7 +26,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 
 **Patch primitive semantics.** `update_pou_item_patch` mirrors Claude Code's own `Edit` tool: it replaces exactly one occurrence of `old_string` with `new_string`. It fails if the anchor is missing or appears more than once. If the call fails on non-uniqueness, extend the anchor with more surrounding context and retry. This is the right tool for a one-line tweak; do NOT rewrite the whole method body for a small change.
 
-**`add_variable` semantics.** Inserts the declaration line before the matching scope's `END_VAR`. If the scope block does not exist on the target item, a new one is created. Use this instead of reading the full declaration, hand-editing the VAR block, and writing it back.
+**`add_variable` semantics.** Inserts the declaration line before the matching scope's `END_VAR`. If the scope block does not exist on the target item, a new one is created at the conventional position (order: `VAR_INPUT`, `VAR_OUTPUT`, `VAR_IN_OUT`, `VAR`, `VAR CONSTANT`, `VAR_PERSISTENT`, `VAR_TEMP`). Use this instead of reading the full declaration, hand-editing the VAR block, and writing it back.
 
 **Bridge requirement.** Writer tools call out to the Windows bridge service, which talks to XAE over COM. They will not work if the bridge is down. Reader tools (used for planning the edit) read XML from disk and have no such requirement. There is no fallback for the writer side; do not work around bridge unavailability by editing `.TcPOU` / `.plcproj` directly.
 
@@ -53,11 +53,11 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 
 ## Write procedure
 
-1. Confirm the target POU exists via `get_pou_interface` if you haven't already (skip for greenfield).
+1. If the user has named a specific FB and the change is a clear add (one variable, one method, or one patch with the anchor already stated), call the writer directly. The writer fails cleanly if the target FB is missing, so a defensive `get_pou_interface` "to confirm it exists" is wasted. Only read first when you actually need the existing shape, e.g. to choose a patch anchor or check a signature.
 2. **Pick the smallest write that does the job** using the Tool selection table above. Small edit -> `update_pou_item_patch`. Single new variable -> `add_variable`. Full body rewrite -> `update_pou_item`. New unit -> `add_pou` / `add_method` / `create_project`.
 3. For patch-based edits, fetch the current item with `get_pou_item` (or `get_pou_declaration` if only the FB-level VAR block matters) so the anchor you choose is grounded in the real text, not your memory of it.
 4. NEVER edit `.TcPOU` or `.plcproj` XML directly. GUIDs and cross-references go through the automation interface.
-5. After the writer returns success, summarise what changed (POU, item, lines). Do not assume it builds.
+5. After the writer returns success, summarise what changed (POU, item, lines). The writer's success response is the confirmation; do not read the change back to "verify" it landed and do not call `build` to "check it builds". The operator and harness verify the artefact. Re-read or rebuild only if the user explicitly asks you to check something specific.
 
 ## Anti-patterns
 
@@ -67,6 +67,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 - Calling `update_pou_item` (full-body rewrite) for a one-line change. Use `update_pou_item_patch` instead.
 - Reading the full FB declaration, hand-editing the VAR block, and writing it back. Use `add_variable` instead.
 - Concluding "TcKit isn't working" because a reader tool succeeded but a writer tool failed. Writer tools require the bridge; reader tools do not. Surface the bridge error to the user rather than reaching for stock-tool edits.
+- Re-reading the changed item with `get_pou_item` / `get_pou_declaration` / `Read` immediately after a successful writer call to confirm it landed. The writer already told you it succeeded. Self-verification reads (and verification builds) are bench-noise; the operator and harness verify the artefact.
 
 ## Next
 
