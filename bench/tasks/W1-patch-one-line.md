@@ -14,5 +14,5 @@ Change that single line to read exactly:
 Do not modify anything else. Do not rewrite the method body. Do not
 touch any other method, POU, or file. Make the smallest possible
 change that performs this one-line edit and persists it through to
-the project files on disk. After the change, briefly state which
-tool you used and confirm the new comment is in place.
+the project files on disk. Briefly state which tool you used to
+make the change.
