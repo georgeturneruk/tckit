@@ -28,6 +28,7 @@ class VariableDoc:
     name: str
     var_type: str
     comment: str = ""
+    default_value: str = ""
 
 
 @dataclass
@@ -107,12 +108,32 @@ class ProjectDoc:
 # ---------------------------------------------------------------------------
 
 _VAR_BLOCK_RE = re.compile(
-    r"VAR(?P<kind>_INPUT|_OUTPUT|_IN_OUT|_STAT|_TEMP)?\b.*?END_VAR",
+    r"VAR(?P<kind>_INPUT|_OUTPUT|_IN_OUT|_STAT|_TEMP|_GLOBAL)?\b.*?END_VAR",
     re.DOTALL | re.IGNORECASE,
 )
 _VAR_LINE_RE = re.compile(
-    r"^\s*(?P<name>[A-Za-z_]\w*)\s*:\s*(?P<type>[^:;=]+?)\s*(?::=.*?)?\s*;"
-    r"(?:\s*//\s*(?P<comment>.*))?",
+    r"^\s*(?P<name>[A-Za-z_]\w*)\s*:\s*(?P<type>[^:;=]+?)"
+    r"\s*(?::=\s*(?P<default>[^;]+?))?\s*;"
+    r"(?:\s*(?://\s*(?P<comment>.*)|\(\*\s*(?P<block_comment>.*?)\s*\*\)))?",
+    re.MULTILINE,
+)
+_STRUCT_BLOCK_RE = re.compile(
+    r"\bSTRUCT\b(?P<body>.*?)\bEND_STRUCT\b",
+    re.DOTALL | re.IGNORECASE,
+)
+_UNION_BLOCK_RE = re.compile(
+    r"\bUNION\b(?P<body>.*?)\bEND_UNION\b",
+    re.DOTALL | re.IGNORECASE,
+)
+_ENUM_BLOCK_RE = re.compile(
+    r"TYPE\s+\w+\s*:\s*\((?P<body>.*?)\)\s*;?\s*END_TYPE",
+    re.DOTALL | re.IGNORECASE,
+)
+_ENUM_MEMBER_RE = re.compile(
+    r"^\s*(?P<name>[A-Za-z_]\w*)\s*"
+    r"(?::=\s*(?P<value>[^,/\n]+?))?\s*"
+    r"(?:,)?\s*"
+    r"(?://\s*(?P<comment>.*))?\s*$",
     re.MULTILINE,
 )
 
@@ -141,14 +162,71 @@ def _parse_variables(declaration: str) -> dict[str, list[VariableDoc]]:
         for var_match in _VAR_LINE_RE.finditer(block_text):
             name = var_match.group("name")
             # Skip keywords that can appear inside var blocks
-            if name.upper() in ("VAR", "END_VAR", "CONSTANT", "PERSISTENT"):
+            if name.upper() in ("VAR", "END_VAR", "VAR_GLOBAL", "CONSTANT", "PERSISTENT"):
                 continue
+            line_comment = var_match.group("comment") or var_match.group("block_comment") or ""
             result[category].append(VariableDoc(
                 name=name,
                 var_type=var_match.group("type").strip(),
-                comment=(var_match.group("comment") or "").strip(),
+                comment=line_comment.strip(),
+                default_value=(var_match.group("default") or "").strip(),
             ))
     return result
+
+
+def _parse_struct_fields(declaration: str) -> list[VariableDoc]:
+    """Extract field list from a STRUCT or UNION body.
+
+    TwinCAT structs use ``STRUCT ... END_STRUCT`` rather than ``VAR ... END_VAR``,
+    so the main variable-block parser misses them. This helper scans both
+    STRUCT and UNION bodies and returns a flat list of fields.
+    """
+    fields: list[VariableDoc] = []
+    for block_re in (_STRUCT_BLOCK_RE, _UNION_BLOCK_RE):
+        for block_match in block_re.finditer(declaration):
+            body = block_match.group("body")
+            for var_match in _VAR_LINE_RE.finditer(body):
+                name = var_match.group("name")
+                if name.upper() in ("VAR", "END_VAR", "STRUCT", "END_STRUCT",
+                                    "UNION", "END_UNION", "CONSTANT", "PERSISTENT"):
+                    continue
+                line_comment = (
+                    var_match.group("comment")
+                    or var_match.group("block_comment")
+                    or ""
+                )
+                fields.append(VariableDoc(
+                    name=name,
+                    var_type=var_match.group("type").strip(),
+                    comment=line_comment.strip(),
+                    default_value=(var_match.group("default") or "").strip(),
+                ))
+    return fields
+
+
+def _parse_enum_members(declaration: str) -> list[VariableDoc]:
+    """Extract members from a TwinCAT enum declaration.
+
+    Enums use ``TYPE E_X : ( Name := value, ... ); END_TYPE`` syntax. Each
+    member is reported as a VariableDoc with the literal value stored in
+    ``var_type`` so the existing var_table renderer can be reused with a
+    relabelled column.
+    """
+    members: list[VariableDoc] = []
+    block_match = _ENUM_BLOCK_RE.search(declaration)
+    if not block_match:
+        return members
+    body = block_match.group("body")
+    for member_match in _ENUM_MEMBER_RE.finditer(body):
+        name = member_match.group("name")
+        if not name:
+            continue
+        members.append(VariableDoc(
+            name=name,
+            var_type=(member_match.group("value") or "").strip(),
+            comment=(member_match.group("comment") or "").strip(),
+        ))
+    return members
 
 
 # ---------------------------------------------------------------------------
@@ -356,15 +434,19 @@ def _build_plc_doc_from_root(
         decl_upper = dut["declaration"].upper()
         # TwinCAT enums use ( ... ) syntax, not an ENUM keyword.
         # Structs and unions use STRUCT/UNION keywords.
-        obj_type = "struct" if ("STRUCT" in decl_upper or "UNION" in decl_upper) else "enum"
-        vars_ = _parse_variables(dut["declaration"])
+        is_struct = "STRUCT" in decl_upper or "UNION" in decl_upper
+        obj_type = "struct" if is_struct else "enum"
+        if is_struct:
+            variables = _parse_struct_fields(dut["declaration"])
+        else:
+            variables = _parse_enum_members(dut["declaration"])
         objects.append(ObjectDoc(
             name=dut["name"],
             obj_type=obj_type,
             declaration=dut["declaration"],
             comment=comment,
             plc_name=plc_name,
-            variables=vars_["variable"],
+            variables=variables,
         ))
 
     # Used-by cross-references are scoped within this PLC project. See

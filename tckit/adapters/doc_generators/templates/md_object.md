@@ -26,7 +26,7 @@
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in obj.inputs %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
 
 {% endif %}
@@ -36,7 +36,7 @@
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in obj.inout %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
 
 {% endif %}
@@ -46,18 +46,29 @@
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in obj.outputs %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
 
 {% endif %}
 {% if obj.variables %}
-## Variables
+{% if obj.obj_type == 'enum' %}
+## Members
+
+| Name | Value | Description |
+|------|-------|-------------|
+{% for v in obj.variables %}
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
+{% endfor %}
+{% else %}
+## {% if obj.obj_type == 'struct' %}Fields{% elif obj.obj_type == 'gvl' %}Globals{% else %}Variables{% endif %}
+
 
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in obj.variables %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
+{% endif %}
 
 {% endif %}
 {% if obj.methods %}
@@ -80,7 +91,7 @@
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in method.inputs %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
 
 {% endif %}
@@ -90,7 +101,7 @@
 | Name | Type | Description |
 |------|------|-------------|
 {% for v in method.inout %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
+| `{{ v.name }}` | `{{ v.var_type }}{% if v.default_value %} := {{ v.default_value }}{% endif %}` | {{ v.comment }} |
 {% endfor %}
 
 {% endif %}

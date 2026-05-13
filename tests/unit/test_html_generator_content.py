@@ -266,6 +266,146 @@ class TestTypeBadges:
 
 
 # ---------------------------------------------------------------------------
+# Group 7 — Struct / GVL / Enum field extraction (renders parsed tables)
+# ---------------------------------------------------------------------------
+
+
+class TestStructGvlEnumRendering:
+    def test_gvl_fields_render(self, gvl_soup: BeautifulSoup) -> None:
+        code_texts = [c.get_text() for c in gvl_soup.find_all("code")]
+        assert "nMaxRetries" in code_texts
+        assert "fTimeout" in code_texts
+        assert "sProjectName" in code_texts
+
+    def test_gvl_inline_block_comment_rendered(self, gvl_soup: BeautifulSoup) -> None:
+        # `(* seconds *)` from the fixture should land in the description column,
+        # not be lost. Strip <pre> first so the raw declaration does not match.
+        import copy
+        clean = copy.copy(gvl_soup)
+        for pre in clean.find_all("pre"):
+            pre.decompose()
+        cell_text = " ".join(td.get_text() for td in clean.find_all("td"))
+        assert "seconds" in cell_text
+
+    def test_gvl_default_values_rendered(self, gvl_soup: BeautifulSoup) -> None:
+        # Default-value spans appear in non-<pre> table cells
+        import copy
+        clean = copy.copy(gvl_soup)
+        for pre in clean.find_all("pre"):
+            pre.decompose()
+        cell_text = " ".join(td.get_text() for td in clean.find_all("td"))
+        assert ":= 3" in cell_text
+
+    def test_struct_fields_render(self, struct_soup: BeautifulSoup) -> None:
+        code_texts = [c.get_text() for c in struct_soup.find_all("code")]
+        assert "nMaxRetries" in code_texts
+        assert "fTimeout" in code_texts
+        assert "sDescription" in code_texts
+        assert "bEnabled" in code_texts
+
+    def test_struct_fields_heading(self, struct_soup: BeautifulSoup) -> None:
+        assert has_heading(struct_soup, "Fields")
+
+    def test_enum_members_render(self, enum_soup: BeautifulSoup) -> None:
+        code_texts = [c.get_text() for c in enum_soup.find_all("code")]
+        assert "Idle" in code_texts
+        assert "Running" in code_texts
+        assert "Error" in code_texts
+
+    def test_enum_members_heading(self, enum_soup: BeautifulSoup) -> None:
+        assert has_heading(enum_soup, "Members")
+
+    def test_enum_values_render(self, enum_soup: BeautifulSoup) -> None:
+        code_texts = [c.get_text() for c in enum_soup.find_all("code")]
+        assert "0" in code_texts
+        assert "1" in code_texts
+        assert "2" in code_texts
+
+
+# ---------------------------------------------------------------------------
+# Group 8 — Collapsible Implementation / Declaration via <details>
+# ---------------------------------------------------------------------------
+
+
+class TestCollapsibleSections:
+    def test_method_implementation_is_collapsible(self, fb_soup: BeautifulSoup) -> None:
+        details_with_impl = [
+            d for d in fb_soup.find_all("details")
+            if d.find("summary") and "Implementation" in d.find("summary").get_text()
+        ]
+        assert details_with_impl, "Expected at least one <details> with Implementation summary"
+        # Each must wrap a <pre> containing the method body
+        assert all(d.find("pre") is not None for d in details_with_impl)
+
+    def test_implementation_collapsed_by_default(self, fb_soup: BeautifulSoup) -> None:
+        details_with_impl = [
+            d for d in fb_soup.find_all("details")
+            if d.find("summary") and "Implementation" in d.find("summary").get_text()
+        ]
+        assert details_with_impl
+        # Default closed — no `open` attribute
+        for d in details_with_impl:
+            assert not d.has_attr("open"), "Implementation details must default to closed"
+
+    def test_declaration_is_collapsible(self, fb_soup: BeautifulSoup) -> None:
+        details_with_decl = [
+            d for d in fb_soup.find_all("details")
+            if d.find("summary") and "Declaration" in d.find("summary").get_text()
+        ]
+        assert details_with_decl, "Expected a <details> wrapping the declaration source"
+        # And it must wrap a <pre> with the raw declaration
+        pre = details_with_decl[0].find("pre")
+        assert pre is not None
+        assert "FUNCTION_BLOCK" in pre.get_text()
+
+    def test_declaration_collapsed_by_default(self, fb_soup: BeautifulSoup) -> None:
+        details_with_decl = [
+            d for d in fb_soup.find_all("details")
+            if d.find("summary") and "Declaration" in d.find("summary").get_text()
+        ]
+        assert details_with_decl
+        assert not details_with_decl[0].has_attr("open")
+
+
+# ---------------------------------------------------------------------------
+# Group 9 — Inline method return type with name
+# ---------------------------------------------------------------------------
+
+
+class TestSignatureLayout:
+    def test_return_type_inside_signature_span(self, fb_soup: BeautifulSoup) -> None:
+        # Find the item-card-header for Execute, then assert that the return
+        # type sits inside the same .item-signature span as the name.
+        signatures = fb_soup.select(".item-card-header .item-signature")
+        execute_sig = next(
+            (s for s in signatures if "Execute" in s.get_text()),
+            None,
+        )
+        assert execute_sig is not None, "Expected an .item-signature span for Execute"
+        text = execute_sig.get_text()
+        assert "Execute" in text
+        assert "BOOL" in text
+
+
+# ---------------------------------------------------------------------------
+# Group 10 — Responsive layout markers
+# ---------------------------------------------------------------------------
+
+
+class TestResponsiveLayout:
+    def test_media_query_present(self, plc_docs: Path) -> None:
+        html = (plc_docs / "FB_Example.html").read_text(encoding="utf-8")
+        assert "@media (max-width: 768px)" in html
+
+    def test_sidebar_is_disclosure(self, fb_soup: BeautifulSoup) -> None:
+        sidebar = fb_soup.find(id="sidebar")
+        assert sidebar is not None
+        assert sidebar.name == "details"
+        # Desktop default is open
+        assert sidebar.has_attr("open")
+
+
+# ---------------------------------------------------------------------------
 # Group 7 — HTML safety (2 tests)
 # ---------------------------------------------------------------------------
 

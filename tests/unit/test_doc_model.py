@@ -4,6 +4,8 @@ import pytest
 
 from tckit.adapters.doc_generators._doc_model import (
     _extract_declaration_meta,
+    _parse_enum_members,
+    _parse_struct_fields,
     _parse_variables,
     build_project_doc,
 )
@@ -78,6 +80,127 @@ class TestParseVariables:
         assert result["input"] == []
         assert result["output"] == []
         assert result["variable"] == []
+
+    def test_var_global_extracted(self):
+        decl = (
+            "VAR_GLOBAL CONSTANT\n"
+            "    nMaxRetries : INT := 3;\n"
+            "    sName : STRING := 'TcKit';\n"
+            "END_VAR"
+        )
+        result = _parse_variables(decl)
+        names = [v.name for v in result["variable"]]
+        assert "nMaxRetries" in names
+        assert "sName" in names
+
+    def test_default_value_captured(self):
+        decl = "VAR\n    nCount : INT := 42;\nEND_VAR"
+        result = _parse_variables(decl)
+        assert result["variable"][0].default_value == "42"
+
+    def test_inline_block_comment_captured(self):
+        decl = "VAR\n    fTimeout : LREAL := 5.0; (* seconds *)\nEND_VAR"
+        result = _parse_variables(decl)
+        v = result["variable"][0]
+        assert v.comment == "seconds"
+        assert v.default_value == "5.0"
+
+
+# ---------------------------------------------------------------------------
+# Struct field parser
+# ---------------------------------------------------------------------------
+
+
+class TestParseStructFields:
+    def test_struct_fields_extracted(self):
+        decl = (
+            "TYPE ST_Config :\n"
+            "STRUCT\n"
+            "    nMaxRetries : INT := 3;\n"
+            "    fTimeout    : LREAL := 5.0; (* seconds *)\n"
+            "    bEnabled    : BOOL := TRUE;\n"
+            "END_STRUCT\n"
+            "END_TYPE"
+        )
+        fields = _parse_struct_fields(decl)
+        names = [f.name for f in fields]
+        assert names == ["nMaxRetries", "fTimeout", "bEnabled"]
+
+    def test_struct_field_defaults_captured(self):
+        decl = (
+            "TYPE ST_Config :\nSTRUCT\n"
+            "    nMaxRetries : INT := 3;\n"
+            "END_STRUCT\nEND_TYPE"
+        )
+        fields = _parse_struct_fields(decl)
+        assert fields[0].default_value == "3"
+
+    def test_struct_field_inline_block_comment(self):
+        decl = (
+            "TYPE ST_Config :\nSTRUCT\n"
+            "    fTimeout : LREAL := 5.0; (* seconds *)\n"
+            "END_STRUCT\nEND_TYPE"
+        )
+        fields = _parse_struct_fields(decl)
+        assert fields[0].comment == "seconds"
+
+    def test_union_fields_extracted(self):
+        decl = (
+            "TYPE U_Data :\nUNION\n"
+            "    asBytes : ARRAY[0..3] OF BYTE;\n"
+            "    nWord   : DWORD;\n"
+            "END_UNION\nEND_TYPE"
+        )
+        fields = _parse_struct_fields(decl)
+        names = [f.name for f in fields]
+        assert "asBytes" in names
+        assert "nWord" in names
+
+    def test_empty_struct_returns_empty_list(self):
+        decl = "TYPE ST_Empty :\nSTRUCT\nEND_STRUCT\nEND_TYPE"
+        assert _parse_struct_fields(decl) == []
+
+
+# ---------------------------------------------------------------------------
+# Enum member parser
+# ---------------------------------------------------------------------------
+
+
+class TestParseEnumMembers:
+    def test_enum_members_extracted(self):
+        decl = (
+            "TYPE E_State :\n"
+            "(\n"
+            "    Idle := 0,\n"
+            "    Running := 1,\n"
+            "    Error := 2\n"
+            ");\nEND_TYPE"
+        )
+        members = _parse_enum_members(decl)
+        names = [m.name for m in members]
+        assert names == ["Idle", "Running", "Error"]
+
+    def test_enum_member_values_captured(self):
+        decl = (
+            "TYPE E_State :\n(\n"
+            "    Idle := 0,\n"
+            "    Running := 1\n"
+            ");\nEND_TYPE"
+        )
+        members = _parse_enum_members(decl)
+        assert members[0].var_type == "0"
+        assert members[1].var_type == "1"
+
+    def test_enum_members_without_explicit_values(self):
+        decl = "TYPE E_X :\n(\n    A,\n    B,\n    C\n);\nEND_TYPE"
+        members = _parse_enum_members(decl)
+        assert [m.name for m in members] == ["A", "B", "C"]
+        assert all(m.var_type == "" for m in members)
+
+    def test_non_enum_returns_empty_list(self):
+        # A struct should not produce enum members
+        decl = "TYPE ST_X :\nSTRUCT\n    x : INT;\nEND_STRUCT\nEND_TYPE"
+        assert _parse_enum_members(decl) == []
 
 
 # ---------------------------------------------------------------------------
@@ -235,3 +358,40 @@ class TestBuildProjectDoc:
     def test_empty_project_raises(self):
         with pytest.raises(ValueError, match="No TwinCAT source files"):
             build_project_doc("/tmp/nonexistent_project")
+
+    def test_gvl_variables_extracted(self):
+        project = build_project_doc(FIXTURES_PATH)
+        gvl = next(o for o in _objects(project) if o.name == "GVL_Params")
+        names = [v.name for v in gvl.variables]
+        assert "nMaxRetries" in names
+        assert "fTimeout" in names
+        assert "sProjectName" in names
+
+    def test_gvl_default_value(self):
+        project = build_project_doc(FIXTURES_PATH)
+        gvl = next(o for o in _objects(project) if o.name == "GVL_Params")
+        max_retries = next(v for v in gvl.variables if v.name == "nMaxRetries")
+        assert max_retries.default_value == "3"
+
+    def test_gvl_inline_block_comment(self):
+        project = build_project_doc(FIXTURES_PATH)
+        gvl = next(o for o in _objects(project) if o.name == "GVL_Params")
+        timeout = next(v for v in gvl.variables if v.name == "fTimeout")
+        assert timeout.comment == "seconds"
+
+    def test_struct_fields_extracted(self):
+        project = build_project_doc(FIXTURES_PATH)
+        st = next(o for o in _objects(project) if o.name == "ST_ExampleConfig")
+        names = [v.name for v in st.variables]
+        assert "nMaxRetries" in names
+        assert "fTimeout" in names
+        assert "sDescription" in names
+        assert "bEnabled" in names
+
+    def test_enum_members_extracted(self):
+        project = build_project_doc(FIXTURES_PATH)
+        e = next(o for o in _objects(project) if o.name == "E_ExampleState")
+        names = [v.name for v in e.variables]
+        assert names == ["Idle", "Running", "Error"]
+        values = [v.var_type for v in e.variables]
+        assert values == ["0", "1", "2"]

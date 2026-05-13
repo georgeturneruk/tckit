@@ -64,7 +64,7 @@ For each project the generator produces:
 | `hierarchy.html` | Inheritance tree and interface implementation groups |
 | `search-index.json` | lunr.js search index for client-side search |
 
-Features: cross-reference links between types, dark/light theme toggle, client-side search, "Used by" back-references, "Built with TcKit" footer.
+Features: parsed field tables for GVLs, structs and enums (with default values and inline comments), collapsible per-method implementation and declaration sources, cross-reference links between types, dark/light theme toggle, client-side search, "Used by" back-references, responsive layout that switches the sidebar to a tap-to-open drawer on narrow viewports, "Built with TcKit" footer.
 
 ## MCP tools
 

@@ -19,10 +19,15 @@ navigable HTML site with:
 
 - A solution-level index of every PLC project in the solution
 - Per-PLC pages for each function block, interface, and DUT
+- Field tables for GVLs, structs, and enums with parsed names, types,
+  default values, and inline comments
 - A type hierarchy view showing `EXTENDS` and `IMPLEMENTS` relationships
 - Client-side search across object names, methods, properties, and variables
 - Cross-linked type references so clicking a return type or variable type
   jumps to its definition
+- Collapsible source views for each method's implementation and the full
+  declaration, kept out of the way until you ask for them
+- Mobile-friendly responsive layout with a tap-to-open navigation drawer
 
 No TcUnit-specific tweaks. The same pipeline runs against any TwinCAT
 solution that has comments in the recognised styles.

@@ -4,6 +4,39 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **GVL fields are now extracted.** `_VAR_BLOCK_RE` previously skipped
+  `VAR_GLOBAL` blocks, so every GVL page rendered with an empty variable
+  table and only the raw declaration at the bottom. `GVL_Param_TcUnit` on
+  the published example now shows a proper field listing.
+- **Struct fields are now extracted.** TwinCAT structs use
+  `STRUCT … END_STRUCT` rather than `VAR … END_VAR`, which the parser
+  missed entirely. Added `_parse_struct_fields()` (covers `UNION` too).
+- **Enum members are now extracted** into a name/value table instead of
+  dumping the raw `.st` declaration.
+- **Inline `(* … *)` block comments** on variable lines are now captured
+  alongside `// …` line comments. The `(* seconds *)`-style annotations
+  in the TcUnit fixture used to be silently dropped.
+- **Default values** (`:= 3`, `:= TRUE`, etc.) on variable, GVL, and
+  struct-field declarations are now captured and rendered alongside the
+  type.
+- **Method and property return types** sit inline next to the name in
+  the item-card header (`Execute : BOOL`). Previously they floated to
+  the right of the row via `margin-left: auto` and were easy to miss.
+
+### Changed
+
+- `Implementation` per method and `Declaration source` at the bottom of
+  every object page are now collapsed by default using native HTML
+  `<details>`. No JS required to operate them.
+- Generated HTML is now responsive at narrow viewports. Added a mobile
+  `@media (max-width: 768px)` block: the sidebar becomes a tap-to-open
+  drawer, padding shrinks, headings scale down, and tables wrap on word
+  boundaries instead of forcing horizontal page scroll.
+
 ## [0.2.0] - 2026-05-09
 
 First release published to PyPI and as a Claude Code plugin.
