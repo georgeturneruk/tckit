@@ -219,6 +219,23 @@ Always follow this pattern — no exceptions:
 
 ---
 
+## Docs Discipline
+
+When a change touches user-facing behaviour, update the docs in the same PR.
+User-facing means any of:
+
+- MCP tool names, arguments, or return shapes
+- CLI commands or flags
+- Config keys (in `config.json`, `~/.tckit/config.toml`, or `.env`)
+- Install or setup steps
+- Ports, adapters, or the one-rule architecture statement
+- ADR status changes for design decisions that have shipped
+
+Update the README only when the surface shown there changes. Otherwise update the
+relevant page under `docs/content/`. Stale docs are a bug.
+
+---
+
 ## Quick Reference — Port Methods
 
 | Port | Key Methods |
