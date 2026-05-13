@@ -8,18 +8,19 @@
     The Docker container calls this bridge for anything that requires COM/XAE.
 
     Routes:
-      POST /build    -> harness\Invoke-TcBuild.ps1
-      POST /deploy   -> harness\Invoke-TcDeploy.ps1
-      POST /runtime  -> harness\Invoke-TcRuntime.ps1
-      POST /open     -> harness\Open-TcProject.ps1
-      POST /create   -> harness\New-TcProject.ps1
-      POST /pou      -> harness\Add-TcPou.ps1
-      POST /method   -> harness\Add-TcMethod.ps1
-      POST /item     -> harness\Update-TcPouItem.ps1
-      POST /item-patch    -> harness\Update-TcPouItemPatch.ps1
-      POST /add-variable  -> harness\Add-TcVariable.ps1
-      GET  /results  -> harness\Get-TcUnitResults.ps1
-      GET  /health   -> {"status": "ok"}
+      POST /build       -> harness\Invoke-TcBuild.ps1
+      POST /deploy      -> harness\Invoke-TcDeploy.ps1
+      POST /runtime     -> harness\Invoke-TcRuntime.ps1
+      POST /tcunit-run  -> harness\Invoke-TcUnitRun.ps1
+      POST /open        -> harness\Open-TcProject.ps1
+      POST /create      -> harness\New-TcProject.ps1
+      POST /pou         -> harness\Add-TcPou.ps1
+      POST /method      -> harness\Add-TcMethod.ps1
+      POST /item        -> harness\Update-TcPouItem.ps1
+      POST /item-patch  -> harness\Update-TcPouItemPatch.ps1
+      POST /add-variable -> harness\Add-TcVariable.ps1
+      POST /results     -> harness\Get-TcUnitResults.ps1
+      GET  /health      -> {"status": "ok"}
 
 .PARAMETER Port
     Port to listen on. Default: 8765.
@@ -161,6 +162,11 @@ try {
                     $result = Invoke-Harness -Script 'Invoke-TcRuntime.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
+                'POST /tcunit-run' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Invoke-TcUnitRun.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
                 'POST /open' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Open-TcProject.ps1' -Params $body
@@ -196,8 +202,9 @@ try {
                     $result = Invoke-Harness -Script 'Add-TcVariable.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
-                'GET /results' {
-                    $result = Invoke-Harness -Script 'Get-TcUnitResults.ps1'
+                'POST /results' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Get-TcUnitResults.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 default {

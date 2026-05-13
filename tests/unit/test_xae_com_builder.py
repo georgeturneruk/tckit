@@ -110,7 +110,11 @@ def test_start_runtime_posts_to_runtime_endpoint() -> None:
 
     path, payload, _ = client.calls[0]
     assert path == "/runtime"
-    assert payload == {"TargetAmsId": "1.2.3.4.1.1"}
+    assert payload == {
+        "TargetAmsId": "1.2.3.4.1.1",
+        "Mode": "Run",
+        "Wait": True,
+    }
 
 
 def test_get_status_starts_idle() -> None:
