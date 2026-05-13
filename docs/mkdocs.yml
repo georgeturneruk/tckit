@@ -49,6 +49,7 @@ nav:
       - Overview: capabilities/doc-generator/overview.md
       - html_generator: capabilities/doc-generator/html-generator.md
       - markdown_generator: capabilities/doc-generator/markdown-generator.md
+      - "Example: TcUnit": capabilities/doc-generator/tcunit-example.md
     - DocsSearcher:
       - Overview: capabilities/docs-searcher/overview.md
       - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys.md
