@@ -34,35 +34,23 @@ TcKit is the layer in between. Instead of dumping files at the model, it exposes
 | [DocGenerator](capabilities/doc-generator/overview.md) | Render docs from comments in ST source | Complete |
 | [ProjectWriter](capabilities/project-writer/overview.md) | Structural writes via the IDE's authoring interface | Complete |
 | [BuildRunner](capabilities/build-runner/overview.md) | Build, deploy, runtime control with structured diagnostics | Complete |
-| [TestRunner](capabilities/test-runner/overview.md) | Run unit tests, return parsed suite/test trees | Planned |
+| [TestRunner](capabilities/test-runner/overview.md) | Run unit tests, return parsed suite/test trees | Complete |
 
 ---
 
 ## Quick start
 
-```bash
-git clone https://github.com/turb5/tckit
-cd tckit
+In Claude Code:
 
-cp docker/.env.example docker/.env
-# Edit docker/.env with your paths
-
-docker compose -f docker/docker-compose.yml up
+```
+/plugin marketplace add georgeturneruk/tckit
+/plugin install tckit@tckit
+> Set me up for TcKit.
 ```
 
-Then add TcKit to your MCP client config:
+The bundled `tc-config` skill walks you through the prompts. The MCP server runs as `uvx tckit`, fetching the package from PyPI on first use.
 
-```json
-{
-  "mcpServers": {
-    "tckit": {
-      "url": "http://localhost:8000/sse"
-    }
-  }
-}
-```
-
-See [Getting Started → Installation](getting-started/installation.md) for the full setup, including the Windows bridge for write/build/test operations.
+For write, build, deploy, and test, you also need the Windows bridge running. See [Getting Started → Installation](getting-started/installation.md) for the pip and Docker paths, and [Bridge Setup](getting-started/bridge-setup.md) for the bridge.
 
 ---
 

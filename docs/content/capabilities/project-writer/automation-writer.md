@@ -34,4 +34,4 @@ For each MCP write operation, the adapter posts to a bridge endpoint:
 
 The harness scripts navigate to the source items via the system manager tree (`TIPC^<plc>^<plc> Project^POUs^...`), call `ITcSmTreeItem.CreateChild` for new POUs / methods, then write source via the `DeclarationText` and `ImplementationText` properties (from `ITcPlcDeclaration` / `ITcPlcImplementation`). PowerShell's COM dispatch resolves these properties without explicit interface casts. GUIDs are assigned by XAE — never generated manually.
 
-For the kind constants used by `CreateChild` (function block = 604, method = 609, property = 611, etc.) see [`scripts/SPIKE_NOTES.md`](https://github.com/turb5/tckit/blob/main/scripts/SPIKE_NOTES.md).
+For the kind constants used by `CreateChild` (function block = 604, method = 609, property = 611, etc.) see [`scripts/SPIKE_NOTES.md`](https://github.com/georgeturneruk/tckit/blob/main/scripts/SPIKE_NOTES.md).
