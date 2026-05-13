@@ -20,6 +20,7 @@ from typing import Any
 from tckit.ports.types import POUType, Result
 from tckit.ports.writer import ProjectWriter
 from tckit.utils.bridge_client import BridgeClient, BridgeError
+from tckit.utils.results import to_result
 
 
 class AutomationWriter(ProjectWriter):
@@ -171,12 +172,4 @@ class AutomationWriter(ProjectWriter):
             resp = self._client.post(path, payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
-        return _to_result(resp)
-
-
-def _to_result(resp: dict[str, Any]) -> Result:
-    return Result(
-        success=bool(resp.get("success", False)),
-        error=resp.get("error"),
-        details={k: v for k, v in resp.items() if k not in ("success", "error")},
-    )
+        return to_result(resp)

@@ -193,19 +193,22 @@ class BuildResult:
 # ---------------------------------------------------------------------------
 
 
-class TestStatus(StrEnum):
-    IDLE = "idle"
-    RUNNING = "running"
-    COMPLETE = "complete"
-    TIMEOUT = "timeout"
-    ERROR = "error"
+@dataclass
+class AssertFailure:
+    """A single failed TcUnit assertion (one entry per ``<failure>`` element)."""
+
+    message: str
+    expected: str = ""
+    actual: str = ""
+    line: int = 0
 
 
 @dataclass
 class TestCase:
     name: str
     passed: bool
-    message: str | None = None
+    asserts: int = 0
+    failures: list[AssertFailure] = field(default_factory=list)
     duration_seconds: float | None = None
 
 
@@ -224,8 +227,19 @@ class TestSuite:
 
 
 @dataclass
+class TestResultsSummary:
+    suites: int = 0
+    tests: int = 0
+    asserts: int = 0
+    failures: int = 0
+    errors: int = 0
+    duration_seconds: float = 0.0
+
+
+@dataclass
 class TestResults:
     suites: list[TestSuite] = field(default_factory=list)
+    summary: TestResultsSummary = field(default_factory=TestResultsSummary)
 
     @property
     def total_passed(self) -> int:
