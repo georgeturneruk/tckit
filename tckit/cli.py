@@ -7,6 +7,7 @@ Dispatches subcommands:
 - ``tckit config show``       print resolved config and its sources.
 - ``tckit config validate``   check config for missing or malformed values.
 - ``tckit doctor``            run health checks (config + bridge).
+- ``tckit docgen SRC OUT``    render HTML docs from a TwinCAT solution.
 
 The console script ``tckit`` is wired to :func:`main` via ``pyproject.toml``.
 ``python -m tckit.server`` keeps working for the bare-server invocation.
@@ -65,6 +66,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run health checks (config validation + bridge reachability).",
     )
 
+    # `tckit docgen <project_path> <output_path>`
+    docgen_parser = sub.add_parser(
+        "docgen",
+        help="Render HTML docs from a TwinCAT solution.",
+    )
+    docgen_parser.add_argument(
+        "project_path",
+        help="Path to the TwinCAT solution directory (containing a .sln file).",
+    )
+    docgen_parser.add_argument(
+        "output_path",
+        help="Directory where the generated HTML site will be written.",
+    )
+
     return parser
 
 
@@ -83,6 +98,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _doctor()
+
+    if args.command == "docgen":
+        return _docgen(args.project_path, args.output_path)
 
     return _run_server(args.transport)
 
@@ -147,6 +165,24 @@ def _config_validate() -> int:
     for issue in issues:
         print(f"  - {issue}")
     return 1
+
+
+def _docgen(project_path: str, output_path: str) -> int:
+    """Run the HTML doc generator against a TwinCAT solution."""
+    from tckit.adapters.doc_generators.html_generator import HtmlGenerator
+
+    result = HtmlGenerator().generate(project_path, output_path)
+    if not result.success:
+        print(f"docgen failed: {result.error}", file=sys.stderr)
+        return 1
+
+    details = result.details or {}
+    print(
+        f"Generated docs for {details.get('plcs', '?')} PLC project(s), "
+        f"{details.get('objects', '?')} object(s)."
+    )
+    print(f"Index: {details.get('index', output_path)}")
+    return 0
 
 
 def _doctor() -> int:
