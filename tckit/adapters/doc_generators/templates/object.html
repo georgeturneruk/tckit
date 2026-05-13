@@ -15,18 +15,43 @@
 
 {% macro var_table(vars, title, badge_class="") %}
   {% if vars %}
+  {% set has_defaults = vars | selectattr('default_value') | list | length > 0 %}
   <h3>
     {{ title }}
     {% if badge_class %}<span class="badge {{ badge_class }}" style="font-size:0.55rem;vertical-align:middle;">{{ title }}</span>{% endif %}
   </h3>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead>
+    <thead><tr>
+      <th>Name</th>
+      <th>Type</th>
+      {% if has_defaults %}<th>Default</th>{% endif %}
+      <th>Description</th>
+    </tr></thead>
     <tbody>
       {% for v in vars %}
       <tr>
         <td><code>{{ v.name }}</code></td>
         <td>{{ v.var_type | link_type }}</td>
+        {% if has_defaults %}<td>{% if v.default_value %}<code class="default-value">{{ v.default_value }}</code>{% endif %}</td>{% endif %}
         <td class="description">{{ v.comment }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+{% endmacro %}
+
+{% macro enum_table(members, title) %}
+  {% if members %}
+  <h3>{{ title }}</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Value</th><th>Description</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td><code>{{ m.name }}</code></td>
+        <td><code>{{ m.var_type }}</code></td>
+        <td class="description">{{ m.comment }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -64,7 +89,15 @@
 {{ var_table(obj.inputs,  'Inputs') }}
 {{ var_table(obj.inout,   'In/Out') }}
 {{ var_table(obj.outputs, 'Outputs') }}
-{{ var_table(obj.variables, 'Variables') }}
+{% if obj.obj_type == 'enum' %}
+  {{ enum_table(obj.variables, 'Members') }}
+{% elif obj.obj_type == 'struct' %}
+  {{ var_table(obj.variables, 'Fields') }}
+{% elif obj.obj_type == 'gvl' %}
+  {{ var_table(obj.variables, 'Globals') }}
+{% else %}
+  {{ var_table(obj.variables, 'Variables') }}
+{% endif %}
 
 {# Methods #}
 {% if obj.methods %}
@@ -72,13 +105,14 @@
 {% for method in obj.methods %}
 <div class="item-card">
   <div class="item-card-header">
-    {{ method.name }}
-    {% if method.visibility %}<span class="badge badge-{% if method.visibility == 'PUBLIC' %}pub{% elif method.visibility == 'PRIVATE' %}priv{% else %}prot{% endif %}">{{ method.visibility }}</span>{% endif %}
-    {% if method.is_abstract %}<span class="badge badge-prot">ABSTRACT</span>{% endif %}
-    {% if method.is_final %}<span class="badge badge-prot">FINAL</span>{% endif %}
-    {% if method.return_type %}
-      <span class="item-return-type">: {{ method.return_type | link_type }}</span>
-    {% endif %}
+    <span class="item-signature">
+      <span class="item-name">{{ method.name }}</span>{% if method.return_type %}<span class="item-return-type"> : {{ method.return_type | link_type }}</span>{% endif %}
+    </span>
+    <span class="item-badges">
+      {% if method.visibility %}<span class="badge badge-{% if method.visibility == 'PUBLIC' %}pub{% elif method.visibility == 'PRIVATE' %}priv{% else %}prot{% endif %}">{{ method.visibility }}</span>{% endif %}
+      {% if method.is_abstract %}<span class="badge badge-prot">ABSTRACT</span>{% endif %}
+      {% if method.is_final %}<span class="badge badge-prot">FINAL</span>{% endif %}
+    </span>
   </div>
   <div class="item-card-body">
     {% if method.comment.description %}
@@ -94,8 +128,10 @@
     {% endif %}
 
     {% if method.body %}
-      <h3>Implementation</h3>
-      <pre><code>{{ method.body }}</code></pre>
+      <details class="impl-details">
+        <summary>Implementation</summary>
+        <pre><code>{{ method.body }}</code></pre>
+      </details>
     {% endif %}
   </div>
 </div>
@@ -108,13 +144,14 @@
 {% for prop in obj.properties %}
 <div class="item-card">
   <div class="item-card-header">
-    {{ prop.name }}
-    {% if prop.visibility %}<span class="badge badge-{% if prop.visibility == 'PUBLIC' %}pub{% elif prop.visibility == 'PRIVATE' %}priv{% else %}prot{% endif %}">{{ prop.visibility }}</span>{% endif %}
-    {% if prop.has_get %}<span class="badge badge-get">GET</span>{% endif %}
-    {% if prop.has_set %}<span class="badge badge-set">SET</span>{% endif %}
-    {% if prop.return_type %}
-      <span class="item-return-type">: {{ prop.return_type | link_type }}</span>
-    {% endif %}
+    <span class="item-signature">
+      <span class="item-name">{{ prop.name }}</span>{% if prop.return_type %}<span class="item-return-type"> : {{ prop.return_type | link_type }}</span>{% endif %}
+    </span>
+    <span class="item-badges">
+      {% if prop.visibility %}<span class="badge badge-{% if prop.visibility == 'PUBLIC' %}pub{% elif prop.visibility == 'PRIVATE' %}priv{% else %}prot{% endif %}">{{ prop.visibility }}</span>{% endif %}
+      {% if prop.has_get %}<span class="badge badge-get">GET</span>{% endif %}
+      {% if prop.has_set %}<span class="badge badge-set">SET</span>{% endif %}
+    </span>
   </div>
   {% if prop.comment.description %}
   <div class="item-card-body">
@@ -146,7 +183,9 @@
 {% endif %}
 
 {# Declaration source #}
-<h2>Declaration</h2>
-<pre><code>{{ obj.declaration }}</code></pre>
+<details class="impl-details declaration-details">
+  <summary>Declaration source</summary>
+  <pre><code>{{ obj.declaration }}</code></pre>
+</details>
 
 {% endblock %}

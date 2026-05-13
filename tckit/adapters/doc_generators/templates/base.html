@@ -258,8 +258,33 @@
     .item-card { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 1rem; overflow: hidden; }
     .item-card-header { background: var(--bg-panel); padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-head); font-weight: 600; font-size: 0.9rem; flex-wrap: wrap; }
     .item-card-body { padding: 0.75rem 1rem; }
-    .item-return-type { color: var(--text-dim); font-size: 0.8rem; margin-left: auto; }
+    .item-signature { display: inline-flex; align-items: baseline; min-width: 0; }
+    .item-name { color: var(--text); }
+    .item-return-type { color: var(--text-dim); font-size: 0.85rem; font-weight: 400; }
+    .item-badges { display: inline-flex; align-items: center; gap: 0.3rem; margin-left: auto; flex-wrap: wrap; }
+    .default-value { color: var(--text-dim); font-size: 0.78rem; }
     .empty { color: var(--text-dim); font-style: italic; font-size: 0.85rem; }
+
+    /* ------------------------------------------------------------------ */
+    /* Collapsible Implementation / Declaration */
+    /* ------------------------------------------------------------------ */
+    details.impl-details { margin-bottom: 1rem; }
+    details.impl-details > summary {
+      cursor: pointer;
+      font-family: var(--font-head);
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      padding: 0.35rem 0;
+      list-style: none;
+      user-select: none;
+    }
+    details.impl-details > summary::-webkit-details-marker { display: none; }
+    details.impl-details > summary::before { content: "\25B8\00a0"; color: var(--accent); }
+    details.impl-details[open] > summary::before { content: "\25BE\00a0"; }
+    details.impl-details > summary:hover { color: var(--text); }
+    details.impl-details > pre { margin-top: 0.5rem; }
+    details.declaration-details { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 
     /* ------------------------------------------------------------------ */
     /* Footer */
@@ -273,6 +298,64 @@
     }
     footer a { color: var(--text-dim); }
     footer a:hover { color: var(--accent); }
+
+    /* ------------------------------------------------------------------ */
+    /* Sidebar disclosure (hidden on desktop, used as a drawer on mobile) */
+    /* ------------------------------------------------------------------ */
+    #sidebar > summary {
+      cursor: pointer;
+      font-family: var(--font-head);
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text);
+      padding: 0.6rem 0.75rem;
+      margin: -0.25rem -0.25rem 0.5rem -0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-code);
+      list-style: none;
+      user-select: none;
+    }
+    #sidebar > summary::-webkit-details-marker { display: none; }
+    #sidebar > summary::before { content: "\2630\00a0\00a0"; color: var(--accent); }
+    #sidebar[open] > summary::before { content: "\2715\00a0\00a0"; }
+
+    @media (min-width: 769px) {
+      #sidebar > summary { display: none; }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Narrow viewport (mobile / portrait tablet) */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 768px) {
+      html { font-size: 15px; }
+      .layout { flex-direction: column; }
+      nav {
+        width: 100%;
+        min-width: 0;
+        position: static;
+        height: auto;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+      }
+      main {
+        padding: 1rem 1.1rem 2rem;
+        max-width: 100%;
+      }
+      h1 { font-size: 1.4rem; }
+      h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+      h3 { font-size: 0.9rem; }
+      table { font-size: 0.78rem; display: block; overflow-x: auto; }
+      td, th { padding: 0.4rem 0.55rem; word-break: break-word; overflow-wrap: anywhere; }
+      pre { font-size: 0.72rem; padding: 0.7rem 0.85rem; }
+      footer { padding: 0.75rem 1.1rem; text-align: left; }
+      .top-bar { padding: 0.35rem 0.75rem; }
+      .item-card-header { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+      .item-card-body { padding: 0.65rem 0.75rem; }
+      .item-badges { margin-left: 0; flex-basis: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -287,34 +370,37 @@
 
 <div class="layout">
 <nav>
-  <a href="index.html" class="site-name">{{ project.name }}</a>
-  <a href="../index.html" class="nav-special">&laquo; Solution</a>
+  <details id="sidebar" open>
+    <summary>Navigation</summary>
+    <a href="index.html" class="site-name">{{ project.name }}</a>
+    <a href="../index.html" class="nav-special">&laquo; Solution</a>
 
-  <div id="search-wrap">
-    <input id="search" type="search" placeholder="Search…" autocomplete="off" spellcheck="false">
-    <div id="search-results" hidden></div>
-  </div>
+    <div id="search-wrap">
+      <input id="search" type="search" placeholder="Search…" autocomplete="off" spellcheck="false">
+      <div id="search-results" hidden></div>
+    </div>
 
-  <a href="hierarchy.html" class="nav-special">⬡ Hierarchy</a>
+    <a href="hierarchy.html" class="nav-special">⬡ Hierarchy</a>
 
-  {% set types = [
-    ('function_block', 'FB'),
-    ('program',        'PRG'),
-    ('function',       'FN'),
-    ('interface',      'ITF'),
-    ('gvl',            'GVL'),
-    ('struct',         'ST'),
-    ('enum',           'ENUM'),
-  ] %}
-  {% for type_key, type_label in types %}
-    {% set objs = project.objects | selectattr('obj_type', 'equalto', type_key) | list %}
-    {% if objs %}
-      <div class="nav-section">{{ type_label }}</div>
-      {% for obj in objs %}
-        <a href="{{ obj.name }}.html" {% if current_name == obj.name %}class="active"{% endif %}>{{ obj.name }}</a>
-      {% endfor %}
-    {% endif %}
-  {% endfor %}
+    {% set types = [
+      ('function_block', 'FB'),
+      ('program',        'PRG'),
+      ('function',       'FN'),
+      ('interface',      'ITF'),
+      ('gvl',            'GVL'),
+      ('struct',         'ST'),
+      ('enum',           'ENUM'),
+    ] %}
+    {% for type_key, type_label in types %}
+      {% set objs = project.objects | selectattr('obj_type', 'equalto', type_key) | list %}
+      {% if objs %}
+        <div class="nav-section">{{ type_label }}</div>
+        {% for obj in objs %}
+          <a href="{{ obj.name }}.html" {% if current_name == obj.name %}class="active"{% endif %}>{{ obj.name }}</a>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+  </details>
 </nav>
 
 <main>
@@ -328,6 +414,15 @@
 
 <script>
 (function() {
+  /* ---- Sidebar drawer (mobile) ---- */
+  /* Default to closed on narrow viewports so long nav lists do not push the
+     content off-screen. Desktop CSS hides the <summary> entirely, so the
+     `open` attribute is a no-op there. */
+  var sidebar = document.getElementById('sidebar');
+  if (sidebar && window.matchMedia('(max-width: 768px)').matches) {
+    sidebar.removeAttribute('open');
+  }
+
   /* ---- Theme toggle ---- */
   var root = document.documentElement;
   var btn = document.getElementById('theme-toggle');

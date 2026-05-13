@@ -29,6 +29,12 @@ _KEYWORDS = (
     "METHOD",
     "PROPERTY",
     "TYPE",
+    # VAR_GLOBAL marks the start of a GVL body. Without it the preamble
+    # walker happily consumes the whole declaration on a GVL (which has no
+    # other keyword), and _detect_style then misclassifies an inline
+    # (* per-variable comment *) inside the body as the object's doc
+    # comment. Adding the keyword bounds the preamble correctly.
+    "VAR_GLOBAL",
 )
 
 # ---------------------------------------------------------------------------

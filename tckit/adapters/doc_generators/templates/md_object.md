@@ -20,44 +20,48 @@
 {% endif %}
 ---
 
-{% if obj.inputs %}
-## Inputs
-
+{% macro md_var_table(vars) -%}
+{%- set has_defaults = vars | selectattr('default_value') | list | length > 0 -%}
+{% if has_defaults %}
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+{% for v in vars %}
+| `{{ v.name }}` | `{{ v.var_type }}` | {% if v.default_value %}`{{ v.default_value }}`{% endif %} | {{ v.comment }} |
+{% endfor %}
+{% else %}
 | Name | Type | Description |
 |------|------|-------------|
-{% for v in obj.inputs %}
+{% for v in vars %}
 | `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
 {% endfor %}
-
+{% endif %}
+{%- endmacro %}
+{% if obj.inputs %}
+## Inputs
+{{ md_var_table(obj.inputs) }}
 {% endif %}
 {% if obj.inout %}
 ## In/Out (Bidirectional)
-
-| Name | Type | Description |
-|------|------|-------------|
-{% for v in obj.inout %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
-{% endfor %}
-
+{{ md_var_table(obj.inout) }}
 {% endif %}
 {% if obj.outputs %}
 ## Outputs
-
-| Name | Type | Description |
-|------|------|-------------|
-{% for v in obj.outputs %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
-{% endfor %}
-
+{{ md_var_table(obj.outputs) }}
 {% endif %}
 {% if obj.variables %}
-## Variables
+{% if obj.obj_type == 'enum' %}
+## Members
 
-| Name | Type | Description |
-|------|------|-------------|
+| Name | Value | Description |
+|------|-------|-------------|
 {% for v in obj.variables %}
 | `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
 {% endfor %}
+{% else %}
+## {% if obj.obj_type == 'struct' %}Fields{% elif obj.obj_type == 'gvl' %}Globals{% else %}Variables{% endif %}
+
+{{ md_var_table(obj.variables) }}
+{% endif %}
 
 {% endif %}
 {% if obj.methods %}
@@ -76,23 +80,11 @@
 {% endif %}
 {% if method.inputs %}
 **Parameters:**
-
-| Name | Type | Description |
-|------|------|-------------|
-{% for v in method.inputs %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
-{% endfor %}
-
+{{ md_var_table(method.inputs) }}
 {% endif %}
 {% if method.inout %}
 **In/Out:**
-
-| Name | Type | Description |
-|------|------|-------------|
-{% for v in method.inout %}
-| `{{ v.name }}` | `{{ v.var_type }}` | {{ v.comment }} |
-{% endfor %}
-
+{{ md_var_table(method.inout) }}
 {% endif %}
 {% if method.comment.returns %}
 **Returns:** {{ method.comment.returns }}
