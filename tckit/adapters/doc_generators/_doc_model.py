@@ -111,10 +111,14 @@ _VAR_BLOCK_RE = re.compile(
     r"VAR(?P<kind>_INPUT|_OUTPUT|_IN_OUT|_STAT|_TEMP|_GLOBAL)?\b.*?END_VAR",
     re.DOTALL | re.IGNORECASE,
 )
+# Variable line regex. Every horizontal-whitespace match uses [ \t]* (not \s*)
+# to keep parsing strictly line-scoped. Otherwise the trailing-comment branch
+# would happily cross a newline and pick up the `(* ... *)` block comment
+# preceding the NEXT variable, attributing it to the variable above.
 _VAR_LINE_RE = re.compile(
-    r"^\s*(?P<name>[A-Za-z_]\w*)\s*:\s*(?P<type>[^:;=]+?)"
-    r"\s*(?::=\s*(?P<default>[^;]+?))?\s*;"
-    r"(?:\s*(?://\s*(?P<comment>.*)|\(\*\s*(?P<block_comment>.*?)\s*\*\)))?",
+    r"^[ \t]*(?P<name>[A-Za-z_]\w*)[ \t]*:[ \t]*(?P<type>[^:;=\n]+?)"
+    r"[ \t]*(?::=[ \t]*(?P<default>[^;\n]+?))?[ \t]*;"
+    r"(?:[ \t]*(?://[ \t]*(?P<comment>.*)|\(\*[ \t]*(?P<block_comment>.*?)[ \t]*\*\)))?",
     re.MULTILINE,
 )
 _STRUCT_BLOCK_RE = re.compile(
@@ -337,7 +341,11 @@ def _build_plc_doc_from_root(
     root: Path, *, plc_name: str, plcproj_path: str = ""
 ) -> PLCDoc:
     """Walk ``root`` for TwinCAT source files and assemble a PLCDoc."""
-    tcpou_files = sorted(root.glob("**/*.TcPOU"))
+    # .TcIO is the dedicated interface file extension used by some projects
+    # (e.g. TcUnit). parse_tcpou already handles <Itf> roots, so we glob both.
+    tcpou_files = sorted(
+        list(root.glob("**/*.TcPOU")) + list(root.glob("**/*.TcIO"))
+    )
     tcgvl_files = sorted(root.glob("**/*.TcGVL"))
     tcdut_files = sorted(root.glob("**/*.TcDUT"))
 

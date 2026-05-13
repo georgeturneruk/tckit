@@ -288,13 +288,37 @@ class TestStructGvlEnumRendering:
         assert "seconds" in cell_text
 
     def test_gvl_default_values_rendered(self, gvl_soup: BeautifulSoup) -> None:
-        # Default-value spans appear in non-<pre> table cells
+        # Defaults now sit in their own column; the cell text contains the
+        # bare value without the `:=` operator.
         import copy
         clean = copy.copy(gvl_soup)
         for pre in clean.find_all("pre"):
             pre.decompose()
-        cell_text = " ".join(td.get_text() for td in clean.find_all("td"))
-        assert ":= 3" in cell_text
+        code_texts = [c.get_text() for c in clean.find_all("code")]
+        assert "3" in code_texts  # default for nMaxRetries
+
+    def test_gvl_table_has_default_column(self, gvl_soup: BeautifulSoup) -> None:
+        # When any variable has a default, the table grows a Default column.
+        import copy
+        clean = copy.copy(gvl_soup)
+        for pre in clean.find_all("pre"):
+            pre.decompose()
+        headers = [th.get_text().strip() for th in clean.find_all("th")]
+        assert "Default" in headers
+
+    def test_fb_inputs_table_omits_default_column(self, fb_soup: BeautifulSoup) -> None:
+        # FB inputs in the sample fixture have no defaults — the Default
+        # column should NOT appear for that table.
+        # Locate the inputs table by walking from the "Inputs" heading.
+        inputs_heading = next(
+            (h for h in fb_soup.find_all("h3") if h.get_text().strip() == "Inputs"),
+            None,
+        )
+        assert inputs_heading is not None
+        table = inputs_heading.find_next("table")
+        headers = [th.get_text().strip() for th in table.find_all("th")]
+        assert "Default" not in headers
+        assert headers == ["Name", "Type", "Description"]
 
     def test_struct_fields_render(self, struct_soup: BeautifulSoup) -> None:
         code_texts = [c.get_text() for c in struct_soup.find_all("code")]

@@ -39,11 +39,33 @@ class TestExtractPreamble:
     def test_empty_declaration(self):
         assert _extract_preamble("") == ""
 
-    def test_no_keyword_returns_full_text(self):
-        # A GVL declaration has no keyword at line start (VAR_GLOBAL is not in keywords)
+    def test_stops_at_var_global(self):
+        # GVLs have VAR_GLOBAL as their natural boundary. Without it in the
+        # keyword list the preamble walker consumes the entire declaration,
+        # which causes _detect_style to misclassify inline (* ... *) block
+        # comments inside the body as the object's doc comment.
         decl = "// :Description: Some globals\nVAR_GLOBAL\n    x : BOOL;\nEND_VAR"
         preamble = _extract_preamble(decl)
         assert ":Description:" in preamble
+        assert "VAR_GLOBAL" not in preamble
+        assert "x : BOOL" not in preamble
+
+    def test_gvl_with_only_pragma_yields_short_preamble(self):
+        # A GVL like TcUnit's GVL_Param_TcUnit starts with {attribute ...}
+        # then VAR_GLOBAL and has no doc comment. The preamble should NOT
+        # include the variable bodies (which contain inline block comments).
+        decl = (
+            "{attribute 'qualified_only'}\n"
+            "VAR_GLOBAL CONSTANT\n"
+            "    n : INT := 1;\n"
+            "    (* explains m *)\n"
+            "    m : INT := 2;\n"
+            "END_VAR"
+        )
+        preamble = _extract_preamble(decl)
+        assert "{attribute" in preamble
+        assert "VAR_GLOBAL" not in preamble
+        assert "explains m" not in preamble
 
 
 # ---------------------------------------------------------------------------
@@ -215,3 +237,19 @@ class TestEdgeCases:
         decl = "// :return: The result value\nMETHOD Execute : BOOL"
         result = extract_comment(decl)
         assert result.returns == "The result value"
+
+    def test_gvl_without_doc_comment_yields_empty_description(self):
+        # Regression for the GVL_Param_TcUnit case: the GVL has only a
+        # pragma in its preamble; inline (* ... *) block comments inside
+        # the VAR_GLOBAL body must not be picked up as the GVL's doc.
+        decl = (
+            "{attribute 'qualified_only'}\n"
+            "VAR_GLOBAL CONSTANT\n"
+            "    n : INT := 1;\n"
+            "    (* explains m *)\n"
+            "    m : INT := 2;\n"
+            "END_VAR"
+        )
+        result = extract_comment(decl)
+        assert result.description == ""
+        assert "explains m" not in result.description

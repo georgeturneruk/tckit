@@ -105,6 +105,22 @@ class TestParseVariables:
         assert v.comment == "seconds"
         assert v.default_value == "5.0"
 
+    def test_block_comment_on_next_line_not_attributed_to_var_above(self):
+        # Regression: previously `\s*` between `;` and the trailing block
+        # comment crossed newlines, so a `(* ... *)` preceding the NEXT
+        # variable was wrongly attached to the variable above.
+        decl = (
+            "VAR_GLOBAL\n"
+            "    a : INT := 1;\n"
+            "    (* doc for b, NOT for a *)\n"
+            "    b : INT := 2;\n"
+            "END_VAR"
+        )
+        result = _parse_variables(decl)
+        by_name = {v.name: v for v in result["variable"]}
+        assert by_name["a"].comment == ""
+        assert by_name["b"].comment == ""  # We don't yet attach preceding comments either
+
 
 # ---------------------------------------------------------------------------
 # Struct field parser
@@ -395,3 +411,32 @@ class TestBuildProjectDoc:
         assert names == ["Idle", "Running", "Error"]
         values = [v.var_type for v in e.variables]
         assert values == ["0", "1", "2"]
+
+
+class TestInterfaceDiscovery:
+    """`.TcIO` is a separate extension that some projects (e.g. TcUnit) use for
+    interfaces. parse_tcpou already handles `<Itf>` roots, so the bug was a
+    missing glob in `_build_plc_doc_from_root`.
+    """
+
+    def test_tcio_file_is_picked_up(self, tmp_path):
+        project_dir = tmp_path / "tcio_project"
+        project_dir.mkdir()
+        (project_dir / "I_Sample.TcIO").write_text(
+            '<?xml version="1.0"?>'
+            '<TcPlcObject>'
+            '<Itf Name="I_Sample">'
+            '<Declaration><![CDATA[INTERFACE I_Sample\n]]></Declaration>'
+            '<Method Name="DoStuff">'
+            '<Declaration><![CDATA[METHOD DoStuff : BOOL\n]]></Declaration>'
+            '</Method>'
+            '</Itf>'
+            '</TcPlcObject>',
+            encoding="utf-8",
+        )
+        project = build_project_doc(str(project_dir))
+        names = [o.name for o in _objects(project)]
+        assert "I_Sample" in names
+        i = next(o for o in _objects(project) if o.name == "I_Sample")
+        assert i.obj_type == "interface"
+        assert [m.name for m in i.methods] == ["DoStuff"]

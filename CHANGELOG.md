@@ -8,6 +8,22 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ### Fixed
 
+- **`.TcIO` interface files are now discovered.** The doc generator only
+  globbed `.TcPOU`/`.TcGVL`/`.TcDUT`; projects that store interfaces in
+  the dedicated `.TcIO` extension (TcUnit being the canonical example)
+  had their interface pages silently dropped, leaving dangling links
+  from any FB that referenced them.
+- **GVL page-level description no longer eats the whole declaration.**
+  The comment extractor's preamble walker didn't recognise `VAR_GLOBAL`
+  as a boundary keyword, so for a GVL it consumed the entire declaration
+  and any inline `(* ... *)` per-variable comment was misclassified as
+  the GVL's doc comment.
+- **Block comments no longer leak across newlines into the wrong
+  variable.** The trailing-comment branch in `_VAR_LINE_RE` used
+  `\s*` (which crosses newlines) so a `(* ... *)` preceding the *next*
+  variable was being attached to the variable above. Tightened all
+  horizontal-whitespace matches in the variable-line regex to `[ \t]*`
+  and constrained type/default groups to a single line.
 - **GVL fields are now extracted.** `_VAR_BLOCK_RE` previously skipped
   `VAR_GLOBAL` blocks, so every GVL page rendered with an empty variable
   table and only the raw declaration at the bottom. `GVL_Param_TcUnit` on
@@ -21,8 +37,10 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   alongside `// …` line comments. The `(* seconds *)`-style annotations
   in the TcUnit fixture used to be silently dropped.
 - **Default values** (`:= 3`, `:= TRUE`, etc.) on variable, GVL, and
-  struct-field declarations are now captured and rendered alongside the
-  type.
+  struct-field declarations are now captured and rendered in their own
+  Default column. The column only appears when at least one row in the
+  table has a default, so FB inputs/outputs (which typically don't) keep
+  the previous three-column layout.
 - **Method and property return types** sit inline next to the name in
   the item-card header (`Execute : BOOL`). Previously they floated to
   the right of the row via `margin-left: auto` and were easy to miss.

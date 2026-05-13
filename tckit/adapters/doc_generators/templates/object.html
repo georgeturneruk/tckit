@@ -15,17 +15,24 @@
 
 {% macro var_table(vars, title, badge_class="") %}
   {% if vars %}
+  {% set has_defaults = vars | selectattr('default_value') | list | length > 0 %}
   <h3>
     {{ title }}
     {% if badge_class %}<span class="badge {{ badge_class }}" style="font-size:0.55rem;vertical-align:middle;">{{ title }}</span>{% endif %}
   </h3>
   <table>
-    <thead><tr><th>Name</th><th>Type</th><th>Description</th></tr></thead>
+    <thead><tr>
+      <th>Name</th>
+      <th>Type</th>
+      {% if has_defaults %}<th>Default</th>{% endif %}
+      <th>Description</th>
+    </tr></thead>
     <tbody>
       {% for v in vars %}
       <tr>
         <td><code>{{ v.name }}</code></td>
-        <td>{{ v.var_type | link_type }}{% if v.default_value %} <span class="default-value">:= {{ v.default_value }}</span>{% endif %}</td>
+        <td>{{ v.var_type | link_type }}</td>
+        {% if has_defaults %}<td>{% if v.default_value %}<code class="default-value">{{ v.default_value }}</code>{% endif %}</td>{% endif %}
         <td class="description">{{ v.comment }}</td>
       </tr>
       {% endfor %}
