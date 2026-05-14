@@ -243,6 +243,100 @@ def create_project(name: str, path: str) -> str:
         return _err(str(exc))
 
 
+def add_plc_project(
+    sln_path: str,
+    plc_name: str,
+    project_type: str = "standard",
+) -> str:
+    """Add a second (or further) PLC project to an existing TwinCAT solution.
+
+    Use this when authoring a multi-PLC layout, e.g. a Library + Tests split.
+    Call ``create_project`` first to author the sln + first PLC project, then
+    call this for each additional PLC.
+
+    :param sln_path: Absolute path to the existing .sln file. The harness
+        reopens the solution if it isn't already loaded.
+    :param plc_name: Name of the new PLC sub-project. Must not collide with
+        an existing PLC project name in the same sln.
+    :param project_type: ``"standard"`` (default) for a regular application
+        PLC project. ``"library"`` is reserved and currently rejected.
+    """
+    try:
+        if project_type not in ("standard", "library"):
+            return _err(
+                f"project_type must be 'standard' or 'library', got {project_type!r}."
+            )
+        result = _cfg.writer().add_plc_project(
+            sln_path, plc_name, project_type=project_type  # type: ignore[arg-type]
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def save_plc_as_library(
+    plc_name: str,
+    output_path: str,
+    install: bool = True,
+    repository: str = "System",
+) -> str:
+    """Save a PLC project as a .library file, optionally installing it.
+
+    Multi-PLC build orchestration: call this on any PLC project whose source
+    has changed before rebuilding a consumer PLC project that holds a
+    compiled-library reference to it. Compiled references resolve against
+    the installed copy, not the source — without a fresh save+install the
+    consumer build will pick up stale code. See the ``tc-build-test-loop``
+    skill for the full rule.
+
+    :param plc_name: PLC project to save as a library.
+    :param output_path: Absolute path for the generated ``.library`` artefact.
+    :param install: ``True`` (default) also installs into the named
+        repository in the same call.
+    :param repository: Library repository name. Defaults to ``"System"``
+        which is the standard TwinCAT installed-libraries repo.
+    """
+    try:
+        result = _cfg.writer().save_plc_as_library(
+            plc_name, output_path, install=install, repository=repository
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def add_library_reference(
+    consumer_plc_name: str,
+    library_name: str,
+    version: str = "*",
+    distributor: str = "Tc3 Project",
+) -> str:
+    """Add a library reference to a consumer PLC project.
+
+    The referenced library must already be installed in the resolved
+    repository — use ``save_plc_as_library`` with ``install=True`` first
+    for libraries produced from an in-sln PLC project.
+
+    :param consumer_plc_name: PLC project receiving the reference.
+    :param library_name: Library name as installed (typically matches the
+        source PLC project's name).
+    :param version: ``"*"`` (default) means latest available.
+    :param distributor: Library distributor / company string. Defaults to
+        ``"Tc3 Project"``; override to match the library's actual
+        distributor metadata if it differs.
+    """
+    try:
+        result = _cfg.writer().add_library_reference(
+            consumer_plc_name,
+            library_name,
+            version=version,
+            distributor=distributor,
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
@@ -600,6 +694,9 @@ _TOOLS = (
     get_dut,
     open_project,
     create_project,
+    add_plc_project,
+    save_plc_as_library,
+    add_library_reference,
     add_pou,
     add_method,
     update_pou_item,

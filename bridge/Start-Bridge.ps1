@@ -8,20 +8,23 @@
     The Docker container calls this bridge for anything that requires COM/XAE.
 
     Routes:
-      POST /build              -> harness\Invoke-TcBuild.ps1
-      POST /deploy             -> harness\Invoke-TcDeploy.ps1
-      POST /runtime            -> harness\Invoke-TcRuntime.ps1
-      POST /tcunit-run         -> harness\Invoke-TcUnitRun.ps1
-      POST /open               -> harness\Open-TcProject.ps1
-      POST /create             -> harness\New-TcProject.ps1
-      POST /pou                -> harness\Add-TcPou.ps1
-      POST /method             -> harness\Add-TcMethod.ps1
-      POST /item               -> harness\Update-TcPouItem.ps1
-      POST /item-patch         -> harness\Update-TcPouItemPatch.ps1
-      POST /add-variable       -> harness\Add-TcVariable.ps1
-      POST /results            -> harness\Get-TcUnitResults.ps1
-      POST /install-dependency -> Install-Module (allow-listed modules only)
-      GET  /health             -> {"status": "ok", "dependencies": {...}}
+      POST /build                 -> harness\Invoke-TcBuild.ps1
+      POST /deploy                -> harness\Invoke-TcDeploy.ps1
+      POST /runtime               -> harness\Invoke-TcRuntime.ps1
+      POST /tcunit-run            -> harness\Invoke-TcUnitRun.ps1
+      POST /open                  -> harness\Open-TcProject.ps1
+      POST /create                -> harness\New-TcProject.ps1
+      POST /add-plc-project       -> harness\Add-TcPlcProject.ps1
+      POST /save-as-library       -> harness\Save-TcPlcAsLibrary.ps1
+      POST /add-library-reference -> harness\Add-TcLibraryReference.ps1
+      POST /pou                   -> harness\Add-TcPou.ps1
+      POST /method                -> harness\Add-TcMethod.ps1
+      POST /item                  -> harness\Update-TcPouItem.ps1
+      POST /item-patch            -> harness\Update-TcPouItemPatch.ps1
+      POST /add-variable          -> harness\Add-TcVariable.ps1
+      POST /results               -> harness\Get-TcUnitResults.ps1
+      POST /install-dependency    -> Install-Module (allow-listed modules only)
+      GET  /health                -> {"status": "ok", "dependencies": {...}}
 
 .PARAMETER Port
     Port to listen on. Default: 8765.
@@ -298,6 +301,21 @@ try {
                 'POST /create' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'New-TcProject.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /add-plc-project' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcPlcProject.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /save-as-library' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Save-TcPlcAsLibrary.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /add-library-reference' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcLibraryReference.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /pou' {

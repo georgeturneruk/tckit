@@ -1,7 +1,7 @@
 ---
 name: tc-build-test-loop
-description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (build, deploy, start_runtime, run_tests, get_test_results). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, and the awaiting_confirmation handshake for deploy and start_runtime. Do NOT use for the initial code write itself (that is tc-write-st).
-allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime, mcp__tckit__run_tests, mcp__tckit__get_test_results, mcp__tckit__update_pou_item, mcp__tckit__get_pou_item, mcp__tckit__get_pou_interface
+description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (build, deploy, start_runtime, run_tests, get_test_results). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, the awaiting_confirmation handshake for deploy and start_runtime, and the save+install rule for multi-PLC solutions with library references. Do NOT use for the initial code write itself (that is tc-write-st).
+allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime, mcp__tckit__run_tests, mcp__tckit__get_test_results, mcp__tckit__update_pou_item, mcp__tckit__get_pou_item, mcp__tckit__get_pou_interface, mcp__tckit__save_plc_as_library
 ---
 
 # Build / deploy / test loop
@@ -33,6 +33,14 @@ If the response is `error` mentioning BLOCKED_NETIDS, the target is permanently 
 ## Build-before-deploy
 
 Never call `deploy` unless the most recent `build` returned `success: true`. If the user asks you to deploy and the last build failed or wasn't run this session, build first.
+
+## Multi-PLC builds with library references
+
+If the solution holds two or more PLC projects where one (the consumer) holds a compiled library reference to another (the library), the consumer build resolves against the *installed* library, not the source. Editing the library project's source has no effect on the consumer until the library is saved and reinstalled.
+
+When you've edited the library project (or aren't sure whether you have), call `save_plc_as_library(plc_name=<library>, output_path=<path>, install=True)` **before** rebuilding the consumer. Output path can be anywhere writable; the harness writes the `.library` and installs it to the system repo in one COM call. `get_structure` shows the per-PLC `libraries` list — if a consumer references a sibling PLC project by name, that's the trigger.
+
+If the solution has only one PLC project, or the consumer uses Source-Only references (resolved automatically by TwinCAT's build), this step doesn't apply. When in doubt, run the save-as-library — it's idempotent and adds no real cost.
 
 ## Test loop
 

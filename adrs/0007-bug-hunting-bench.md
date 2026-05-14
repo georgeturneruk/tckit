@@ -19,11 +19,15 @@ the bug, patching, and re-running until green. The W series
 exercises a fragment of that loop in isolation.
 
 The bug-hunting bench measures the loop end-to-end. It depends on
-two pieces of infrastructure that this design assumes are in
-place: multi-project sln support (ADR-0005) and a working
-TestRunner adapter (ADR-0006). It also depends on the portable
-TwinCAT CLAUDE.md template (ADR-0008) being available so the
-bench fixtures can carry a real copy at each sln root.
+four pieces of infrastructure: multi-project sln support
+(ADR-0005), a working TestRunner adapter (ADR-0006), the portable
+TwinCAT CLAUDE.md template (ADR-0008), and multi-PLC sln authoring
++ library tools (ADR-0009). The first three are `Implemented`;
+ADR-0009 is the prerequisite that surfaced during this ADR's
+planning round — TcKit had no documented way to add a second
+`.plcproj` to an existing sln, save it as a library, install it,
+or add a library reference. The bench fixtures need all four to
+exist before they can be authored.
 
 ## Decision
 
@@ -48,10 +52,20 @@ B1-off-by-one/
         └── FB_*Tests.TcPOU
 ```
 
-Tests is a linked-library reference to Library, using TwinCAT
-4026's "Source-Only" reference so building Tests picks up
-Library source changes without a save+install cycle. The bench's
-`--reset-cmd` reverts the whole task folder per run.
+Tests references Library as a compiled library: each bench run
+calls `mcp__tckit__save_plc_as_library` on Library (per ADR-0009)
+to produce a fresh `.library` file and install it into the system
+repo, then builds Tests against the installed library. This is
+what the IDE effectively does for the user when they press Build
+on a Source-Only-referenced sln, just done explicitly through
+documented automation interface methods. The original draft of
+this ADR specified a TwinCAT 4026 "Source-Only" reference, but
+that reference type has no publicly documented automation
+interface entry point; the compiled-library path produces
+equivalent build behaviour for the bench's purpose and uses only
+documented methods. The bench's reset reverts the whole task
+folder per run; the generated `.library` file is gitignored and
+regenerated per build.
 
 ### Task set (initial six)
 
@@ -112,14 +126,17 @@ prompts.
 
 ### Vanilla open-loop shape
 
-Vanilla's config has no MCP server and no bridge URL. The model
-reads the source, the failing test, and the assertion message;
-makes its edits; the session ends naturally when the model stops
-emitting tool calls. After session termination, the bench harness
-builds the sln and runs the test suite via the TestRunner adapter
-(ADR-0006) and writes `.test-result.json`. Vanilla gets exactly
-one validation cycle. It cannot iterate on test results because
-it cannot run the tests.
+Vanilla's `bench/configs/empty.json` has no MCP server and no
+bridge URL exposed to the model. The model reads the source, the
+failing test, and the assertion message; makes its edits; the
+session ends naturally when the model stops emitting tool calls.
+After session termination, the bench harness — not the model —
+builds the sln and runs the test suite via the bridge's
+`/tcunit-run` and `/results` routes and writes
+`.test-result.json`. The bridge is a harness-side resource; the
+vanilla session never sees it. Vanilla gets exactly one
+validation cycle. It cannot iterate on test results because it
+cannot run the tests.
 
 ### TcKit closed-loop shape
 
@@ -152,12 +169,26 @@ a finding worth surfacing per task.
 
 - `--task-folder` flag so a task is a directory (with its own
   sln, sources, and CLAUDE.md), not a single `.md` file.
+- Pre-build orchestration step: for every Library PLC project in
+  the fixture, call `/save-as-library` (per ADR-0009) so the
+  library is freshly installed before the consumer build. This
+  is the harness-side mirror of the rule documented in the
+  `tc-build-test-loop` skill for the TcKit-arm sessions.
 - Post-session validation step: build the sln, run tests via the
   bridge's `/tcunit-run` and `/results` routes, write
-  `.test-result.json`.
+  `.test-result.json`. This step uses the longer build-timeout
+  envelope (`TCKIT_BUILD_TIMEOUT`-class headroom, ~600s) rather
+  than the TestRunner adapter's default 180s HTTP envelope; cold
+  XAE + first deploy on a fresh fixture routinely exceeds 180s.
+- Test-files tamper guard: after each run, `git -C <repo-root>
+  diff --name-only -- <task-folder>/Tests/`. If non-empty, the
+  per-run JSON gets `tests_modified: true` and the run is graded
+  failed regardless of `/results`. The "read-only for grading"
+  rule needs enforcement, not just a polite instruction.
 - `bench/aggregate.py` gains a `PASS RATE` column and an
   `ITERATIONS` column derived from the per-run JSONs (counting
-  `run_tests` calls for TcKit, 1 for vanilla).
+  `mcp__tckit__run_tests` events in `tool_breakdown` for TcKit,
+  1 for vanilla).
 
 The task-folder flag is additive; the existing single-`.md`
 flow keeps working for the W series.
@@ -165,7 +196,11 @@ flow keeps working for the W series.
 ### What does not change
 
 - Reset between runs uses the existing `--reset-cmd` flag with a
-  per-task reset command (`git -C <task-folder> reset --hard HEAD`).
+  per-task reset command. The task folder lives inside the TcKit
+  repo (not an independent git root), so the correct reset is
+  path-scoped: `git -C <repo-root> checkout HEAD -- <task-folder>`.
+  A naive `git -C <task-folder> reset --hard HEAD` would resolve
+  to the TcKit repo and reset unrelated paths in the tree.
 - cwd isolation: each `claude -p` runs with cwd pinned to the
   task folder, never the TcKit repo.
 - Bridge runs in `XAE_MODE=headless` for autonomy.
@@ -229,3 +264,20 @@ unaffected.
   Initial fixture-authoring round will likely produce findings
   that loop back into this ADR's status notes (which bugs were
   too obvious, which prompts needed tightening).
+- 2026-05-14: Planning round surfaced a prerequisite the original
+  draft assumed but didn't acknowledge: TcKit has no documented
+  way to add a second `.plcproj` to an existing sln, save a PLC
+  project as a library, install it, or add a library reference.
+  Verified against Beckhoff infosys that `ITcSmTreeItem.CreateChild`,
+  `ITcPlcIECProject.SaveAsLibrary`, `ITcPlcLibraryManager.InstallLibrary`,
+  and `ITcPlcLibraryManager.AddLibrary` are all documented; the
+  Source-Only reference type the original draft specified is not.
+  Captured the prerequisite work in ADR-0009 and rewrote the
+  fixture-layout section here to use a compiled library reference
+  with an explicit save+install step before each build instead.
+  Equivalent build behaviour, fully documented API. Also corrected
+  the `--reset-cmd` example (was wrong for in-repo fixtures), added
+  the test-files tamper guard, fixed the MCP-namespaced tool name
+  for iteration counting, noted the longer cold-start timeout, and
+  clarified that the bridge is harness-side only (vanilla never
+  sees it).

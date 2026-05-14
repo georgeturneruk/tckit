@@ -31,6 +31,10 @@ Beckhoff XML `(*~ <docu> ~*)` is also accepted. Match the style already present 
 
 If a TwinCAT automation interface (such as TcKit) is available, use it for any structural change. Direct edits to `.TcPOU` and `.plcproj` XML break GUID tracking in ways that may survive a build but corrupt later operations. When in doubt, ask before editing those files by hand.
 
+## Multi-PLC builds with library references
+
+If this solution contains two or more PLC projects where one references another as a compiled library, the consumer build resolves against the *installed* library. After editing the library project's source, save+install the library (via TcKit's `save_plc_as_library` or the IDE's "PLC project → Save as library and install") before rebuilding the consumer; otherwise the consumer picks up stale code.
+
 ## TcUnit test projects
 
 If this project hosts TcUnit suites that TcKit's runner will execute, declare the XML output path as a `VAR_GLOBAL CONSTANT` so the runner can resolve it without env config:

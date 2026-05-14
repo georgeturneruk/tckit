@@ -15,7 +15,7 @@ there's only one PLC project in the sln.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from tckit.ports.types import POUType, Result
 from tckit.ports.writer import ProjectWriter
@@ -139,6 +139,67 @@ class AutomationWriter(ProjectWriter):
             payload["ItemName"] = item_name
         return self._call(
             "/add-variable", self._with_project(payload, plc_name=plc_name)
+        )
+
+    def add_plc_project(
+        self,
+        sln_path: str,
+        plc_name: str,
+        *,
+        project_type: Literal["standard", "library"] = "standard",
+    ) -> Result:
+        if project_type == "library":
+            return Result(
+                success=False,
+                error="project_type='library' not yet supported; pass 'standard'.",
+            )
+        return self._call(
+            "/add-plc-project",
+            {
+                "ProjectPath": sln_path,
+                "PlcName": plc_name,
+                "ProjectType": project_type,
+            },
+        )
+
+    def save_plc_as_library(
+        self,
+        plc_name: str,
+        output_path: str,
+        *,
+        install: bool = True,
+        repository: str = "System",
+    ) -> Result:
+        return self._call(
+            "/save-as-library",
+            self._with_project(
+                {
+                    "OutputPath": output_path,
+                    "Install": install,
+                    "Repository": repository,
+                },
+                plc_name=plc_name,
+            ),
+        )
+
+    def add_library_reference(
+        self,
+        consumer_plc_name: str,
+        library_name: str,
+        *,
+        version: str = "*",
+        distributor: str = "Tc3 Project",
+    ) -> Result:
+        return self._call(
+            "/add-library-reference",
+            self._with_project(
+                {
+                    "LibraryName": library_name,
+                    "Version": version,
+                    "Distributor": distributor,
+                },
+                plc_name=consumer_plc_name,
+            ),
         )
 
     # ------------------------------------------------------------------
