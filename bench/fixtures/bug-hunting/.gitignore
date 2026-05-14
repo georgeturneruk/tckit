@@ -1,0 +1,18 @@
+# Bug-hunting bench fixtures regenerate the .library artefact per run
+# via `save_plc_as_library`; never commit it.
+*.library
+
+# XAE-generated transient state that lands under the fixture during
+# authoring or build. The committed source files (.sln, .plcproj,
+# .TcPOU) are the canonical fixture; everything below is rebuilt.
+_Boot/
+_CompileInfo/
+_Deployment/
+_Libraries/
+_Output/
+*.tpzip
+*.tszip
+*.tpy
+*.suo
+*.~u
+.vs/

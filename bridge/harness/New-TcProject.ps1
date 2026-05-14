@@ -56,11 +56,17 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
 
-    # Step 1: empty solution shell.
-    $dte.Solution.Create($Path, $Name)
+    # Defensive: close any solution the bridge attached to so Create starts
+    # from a clean DTE state. Solution.Close() is a no-op when nothing is loaded.
+    try { $dte.Solution.Close($false) | Out-Null } catch { }
+
+    # Step 1: empty solution shell. COM methods on Solution emit objects
+    # into the PowerShell output stream; suppress so the trailing hashtable
+    # is the only value the harness returns.
+    $dte.Solution.Create($Path, $Name) | Out-Null
 
     # Step 2: TwinCAT project from template.
-    $dte.Solution.AddFromTemplate($TemplatePath, $Path, $Name, $false)
+    $dte.Solution.AddFromTemplate($TemplatePath, $Path, $Name, $false) | Out-Null
 
     # Step 3: PLC sub-project under TIPC.
     $sm = Get-TcSysManager -Dte $dte
@@ -69,7 +75,7 @@ try {
 
     # Step 4: persist the solution.
     $solutionPath = Join-Path $Path ("$Name.sln")
-    $dte.Solution.SaveAs($solutionPath)
+    $dte.Solution.SaveAs($solutionPath) | Out-Null
 
     return @{
         success = $true

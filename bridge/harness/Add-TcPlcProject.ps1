@@ -60,8 +60,9 @@ try {
 
     $tipc.CreateChild($PlcName, 0, $null, 'Standard PLC Template.plcproj') | Out-Null
     # Persist back to the existing sln file (SaveAs is for fresh sln; Save is
-    # the right call when the sln already lives at $ProjectPath).
-    $dte.Solution.SaveAs($dte.Solution.FullName)
+    # the right call when the sln already lives at $ProjectPath). Suppress
+    # the COM return value so it doesn't leak into the harness output stream.
+    $dte.Solution.SaveAs($dte.Solution.FullName) | Out-Null
 
     return @{
         success = $true
