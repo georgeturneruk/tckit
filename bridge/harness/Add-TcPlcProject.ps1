@@ -97,12 +97,19 @@ try {
 
     # Step 3: find the new sysmanager (the one whose TIPC has no children
     # yet — the only freshly-added .tsproj) and add the PLC under it.
-    $managers = Get-TcSysManagers -Dte $dte
+    # AddFromTemplate returns before XAE has finished exposing the new
+    # EnvDTE Project; Get-TcSysManagers may still see only the existing
+    # one. Poll until an empty-TIPC sysmanager appears.
     $newSm = $null
-    foreach ($sm in $managers) {
-        try {
-            if ($sm.LookupTreeItem('TIPC').ChildCount -eq 0) { $newSm = $sm; break }
-        } catch { continue }
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        $managers = Get-TcSysManagers -Dte $dte
+        foreach ($sm in $managers) {
+            try {
+                if ($sm.LookupTreeItem('TIPC').ChildCount -eq 0) { $newSm = $sm; break }
+            } catch { continue }
+        }
+        if ($null -ne $newSm) { break }
+        Start-Sleep -Milliseconds 250
     }
     if ($null -eq $newSm) {
         return @{ success = $false; error = "Could not locate the new TwinCAT project's empty TIPC after AddFromTemplate." }
