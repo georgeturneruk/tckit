@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
-	<Project ProjectGUID="{4932A28F-3E66-46D0-A406-311E9901E067}" Target64Bit="true" ShowHideConfigurations="#x6">
+	<Project ProjectGUID="{F6FCF089-AE29-4223-9B13-908DFEA632D9}" Target64Bit="true" ShowHideConfigurations="#x6">
 		<System>
 			<Tasks>
 				<Task Id="3" Priority="20" CycleTime="100000" AmsPort="350" AdtTasks="true">
@@ -9,7 +9,7 @@
 			</Tasks>
 		</System>
 		<Plc>
-			<Project GUID="{2B919F42-7221-4C54-8B41-9655FEA25CB3}" Name="B4Pipeline_Plc" PrjFilePath="B4Pipeline_Plc\B4Pipeline_Plc.plcproj" TmcFilePath="B4Pipeline_Plc\B4Pipeline_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
+			<Project GUID="{61AE10B1-FDA1-4B6F-9545-DCBDC8611572}" Name="B4Pipeline_Plc" PrjFilePath="B4Pipeline_Plc\B4Pipeline_Plc.plcproj" TmcFilePath="B4Pipeline_Plc\B4Pipeline_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
 				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2">
 					<Name>B4Pipeline_Plc Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>

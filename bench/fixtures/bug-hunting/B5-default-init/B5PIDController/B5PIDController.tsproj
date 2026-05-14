@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
-	<Project ProjectGUID="{6C3BFAAA-E587-4C93-A49D-C4C71F34B6EA}" Target64Bit="true" ShowHideConfigurations="#x6">
+	<Project ProjectGUID="{206BD2C4-367F-4E5A-B21C-1A1A5931FC6C}" Target64Bit="true" ShowHideConfigurations="#x6">
 		<System>
 			<Tasks>
 				<Task Id="3" Priority="20" CycleTime="100000" AmsPort="350" AdtTasks="true">
@@ -9,7 +9,7 @@
 			</Tasks>
 		</System>
 		<Plc>
-			<Project GUID="{4441647A-98F2-4276-9D3D-9FF4A936C5D7}" Name="B5PIDController_Plc" PrjFilePath="B5PIDController_Plc\B5PIDController_Plc.plcproj" TmcFilePath="B5PIDController_Plc\B5PIDController_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
+			<Project GUID="{9DAF1E52-F5EE-4208-A3E1-B92318B77E4D}" Name="B5PIDController_Plc" PrjFilePath="B5PIDController_Plc\B5PIDController_Plc.plcproj" TmcFilePath="B5PIDController_Plc\B5PIDController_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e" SymbolicMapping="true">
 				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2">
 					<Name>B5PIDController_Plc Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>

@@ -3,25 +3,28 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{2e3417ff-4f05-44b6-95e6-9f169dbdae74}</ProjectGuid>
+    <ProjectGuid>{22b45f3d-1fc8-4717-a0b6-3f289fce12dd}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>TrafficLightTests</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{a27eed8f-8896-4c89-9130-c33bba1eca11}</Application>
-    <TypeSystem>{9b28f97a-c8c9-4d21-bcec-e915157de91a}</TypeSystem>
-    <Implicit_Task_Info>{af850d55-5c53-4636-8de1-78afeb1e17f2}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{d173bf2d-2dcc-4198-a5ff-98b2145a7d35}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{1ab48d36-2265-40a6-99d9-ae9bcfcc6477}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{2273b68c-a4d8-4b38-8a4d-b4ad3a4c9907}</LibraryReferences>
+    <Application>{52445635-15e4-4f33-8cb5-2b6f8bcd9d40}</Application>
+    <TypeSystem>{1116bab3-c334-4bcc-99fd-7076b9f0676c}</TypeSystem>
+    <Implicit_Task_Info>{7a770ad4-4911-4533-9e44-b1cc8a320cdc}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{e8309867-9502-4084-a2e4-a620a97f8da7}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{a61fdedb-4b4a-4295-abbe-8ba73d172545}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{f36f1145-a22d-45e9-a689-0f50b127c15d}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\FB_TrafficLightConsumer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\GVL_TcUnit.TcGVL">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\MAIN.TcPOU">

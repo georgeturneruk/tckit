@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="FB_PipelineStage" Id="{1918ee7b-13f4-4bcd-8466-37cca1c6c7db}" SpecialFunc="None">
+  <POU Name="FB_PipelineStage" Id="{e54a5241-6129-4d57-96a3-a274d04e94dd}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_PipelineStage
 VAR_INPUT
     value : INT;
@@ -14,14 +14,15 @@ END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[]]></ST>
     </Implementation>
-    <Method Name="Step" Id="{d0c937b3-f656-4aa9-8ca9-c22da5eef8c9}">
+    <Method Name="Step" Id="{1a2d2250-826f-4e43-bad4-d885461d4cd0}">
       <Declaration><![CDATA[METHOD Step : INT
-inner(value := value);
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[inner(value := value);
 // MISSING: bError := inner.bError;
 Step := value;
-]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[]]></ST>
+]]></ST>
       </Implementation>
     </Method>
   </POU>

@@ -3,19 +3,19 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{cbbb0fb9-385f-49e0-9985-91742e303b5c}</ProjectGuid>
+    <ProjectGuid>{70e6d58d-04de-41ea-a6fe-1fcdbac70c5d}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>B3TrafficLight_Plc</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{21b096c9-5266-4c46-8b40-175529574ea4}</Application>
-    <TypeSystem>{5364cf9e-f71e-4b38-aa34-688e66070a76}</TypeSystem>
-    <Implicit_Task_Info>{561b9b49-daad-4a8b-b868-74b326fa8820}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{5fc3c4d5-61c1-4e71-adf7-4fdae9243ffe}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{fa7ead55-b7b2-4ef0-b338-4a3a6214b0ba}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{72376608-d78d-492c-9019-6830f7cb9ff9}</LibraryReferences>
+    <Application>{cdb1ec53-3579-4656-a9c1-f8ae32381793}</Application>
+    <TypeSystem>{1845504a-526e-4c24-bb66-c38f8df40246}</TypeSystem>
+    <Implicit_Task_Info>{ce59a985-e6c2-4f9a-8d33-70809f4af62b}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{5df3d430-832e-4dc7-b9bc-9dc61513b203}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{0994dcce-4192-459e-83ea-d22fd4092303}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{64990f53-771b-42a6-aee8-5aa2daa6b810}</LibraryReferences>
     <Company>Tc3 Project</Company>
     <Title>B3TrafficLight_Plc</Title>
     <ProjectVersion>1.0.0.0</ProjectVersion>

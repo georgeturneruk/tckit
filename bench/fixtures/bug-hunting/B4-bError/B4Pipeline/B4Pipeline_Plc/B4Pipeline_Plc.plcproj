@@ -3,19 +3,19 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{2b919f42-7221-4c54-8b41-9655fea25cb3}</ProjectGuid>
+    <ProjectGuid>{61ae10b1-fda1-4b6f-9545-dcbdc8611572}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>B4Pipeline_Plc</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{a98e0d05-a794-4a82-8bbb-eb6f9636c5fd}</Application>
-    <TypeSystem>{2a779a46-2850-492f-ac43-f9da722f5d1b}</TypeSystem>
-    <Implicit_Task_Info>{0ddf9c8e-0c51-4462-83e4-4ff7062fdc2a}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{67cd09a7-8098-4a79-aaa5-02f38860d673}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{df8b35b9-d618-4b66-889e-380b3e6e3569}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{caeb02ee-7915-4835-8bdd-9b5176ea21ed}</LibraryReferences>
+    <Application>{fc63e69e-907d-48af-95cd-dde0f205e59f}</Application>
+    <TypeSystem>{6243fe93-5eaa-4215-b5d0-32ea713cc47b}</TypeSystem>
+    <Implicit_Task_Info>{5473ebfd-89fc-4619-9d1f-3652390b5c99}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{0ea61721-e24e-4d32-8d1e-c844af203344}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{ec215b7e-50ae-4d2b-8a9b-72594d480e75}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{62ca9051-1c98-41e8-9ad9-653f4b7a7155}</LibraryReferences>
     <Company>Tc3 Project</Company>
     <Title>B4Pipeline_Plc</Title>
     <ProjectVersion>1.0.0.0</ProjectVersion>

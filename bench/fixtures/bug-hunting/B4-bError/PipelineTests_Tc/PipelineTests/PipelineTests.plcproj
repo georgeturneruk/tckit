@@ -3,25 +3,28 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{c2b325ed-98e6-46ed-9717-2fc1a6f31877}</ProjectGuid>
+    <ProjectGuid>{c7f435bf-2b9c-464c-83a1-b0442b6b0618}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>PipelineTests</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{d56b5c17-cf91-4579-bc3c-b552042be007}</Application>
-    <TypeSystem>{1d73daf2-d80e-4f69-8c81-6e3470eff0a0}</TypeSystem>
-    <Implicit_Task_Info>{05867d10-346a-49d4-9cb8-df029d9f2787}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{273346d9-24cb-4feb-b5e1-7972f9acfc6b}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{1ff22c04-9f99-4fbf-af4b-95dc3d9a6dd4}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{d3d779fd-e663-4fbe-a7ed-0c2ebf0cefbd}</LibraryReferences>
+    <Application>{12d216b1-ee0d-401c-9aa2-e7cc73b6332b}</Application>
+    <TypeSystem>{4e1f40c2-bc00-45ec-9dda-9c7703d6764b}</TypeSystem>
+    <Implicit_Task_Info>{289c0a94-dcf5-4408-a88c-472b2ac25744}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{0d66cd29-0f02-471c-bc3e-3e81c047033e}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{38c9a911-7449-438f-8903-5352b7e8f926}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{5f7ceae9-ca02-4490-a688-f0f068c67c2b}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\FB_PipelineConsumer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\GVL_TcUnit.TcGVL">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\MAIN.TcPOU">
