@@ -1,10 +1,10 @@
 ---
 adr: 0006
 title: TestRunner adapter for TcUnit
-status: Proposed
+status: Implemented
 created: 2026-05-12
 issue:
-pr:
+pr: 64, 65, 67, 68, 69
 ---
 
 ## Context
@@ -226,3 +226,54 @@ invoking the run, then waits for it to reappear.
   model; that's brittle in an MCP session and asymmetric with the
   rest of the BuildRunner port. The stub signatures already carry
   the parameter; this ADR's implementation just fills in the bodies.
+- 2026-05-13: Port narrowed during Phase 0 implementation. Dropped
+  ``wait_complete`` and ``get_status`` from the ``TestRunner`` ABC,
+  and removed the ``TestStatus`` enum. Neither was wired through
+  ``tckit/server.py`` and the wait already lives server-side inside
+  ``Invoke-TcUnitRun.ps1``, so both abstract methods were dead by
+  design. The two-method ABC (``run_tests`` + ``get_results``) is
+  the honest shape; this ADR's pseudocode for "Adapter implementation"
+  is now larger than what shipped — read the code, not this section,
+  for the exact surface.
+- 2026-05-13: ``TestResults`` widened to the shape this ADR specifies
+  (``AssertFailure``, ``TestResultsSummary``, ``summary`` block,
+  ``asserts`` / ``failures`` on ``TestCase``). ``TestCase.message``
+  dropped because ``AssertFailure.message`` carries the same detail
+  per failure.
+- 2026-05-13: ``_to_result`` extracted from ``automation_writer.py``
+  to ``tckit/utils/results.py``. New ``tcunit_runner`` adapter uses
+  the shared helper without violating the One Rule.
+- 2026-05-14: Bench validation surfaced two real bugs. (1) The
+  original Phase 1 draft called ``ITcSysManager.SetConfigMode()``
+  which doesn't exist — TC3 has no purely-COM Config-mode API. (2)
+  An ADS-based fix initially used ``AdsState.Config`` (15, steady-state)
+  instead of ``AdsState.Reconfig`` (16, the transition command).
+  Both were rendered moot by the next item.
+- 2026-05-14: Operator-side rethink. Instead of loading
+  ``TwinCAT.Ads.dll`` ourselves and reinventing the runtime-mode
+  WriteControl wire, the bridge depends on Beckhoff's signed
+  ``TcXaeMgmt`` PowerShell module. ``Invoke-TcRuntime.ps1`` shrinks
+  to a wrapper around ``Restart-TwinCAT``; ``Invoke-TcUnitRun.ps1``
+  uses ``New-TcSession`` + ``Read-TcValue`` for symbol polling.
+  ``_TcUnit.psm1`` shrinks from ~150 lines to ~60. ``tckit doctor``
+  reads the bridge's new ``/health`` dependencies block and prompts
+  the operator to install missing modules via a new bridge
+  ``/install-dependency`` route (allow-listed, ``CurrentUser`` scope).
+- 2026-05-14: Bench-validated end-to-end on a local 4026 runtime:
+  ``tckit doctor`` -> install prompt -> ``TcXaeMgmt`` 7.0.54 installed
+  via the bridge route -> ``Invoke-TcRuntime -Mode Config`` then
+  ``-Mode Run`` round-tripped against ``192.168.0.142.1.1``,
+  confirmed via ``Get-AdsState``. Caught and fixed during the
+  bench session: ``-AcceptLicense`` parameter compatibility with
+  PowerShellGet 1.0.0.1, the PSGet 2.2.5+ bootstrap chicken-and-egg
+  (run install in a fresh subprocess), and ``TcXaeMgmt`` 7.x's
+  ``-ThrowError`` cast bug (work around by reading the
+  ``WriteControlInfo`` object directly).
+- 2026-05-14: Marked ``Implemented`` once #68 landed (covering the
+  TcXaeMgmt refactor on top of #65). Full PR set:
+  [#64](https://github.com/georgeturneruk/tckit/pull/64) port +
+  schema, [#65](https://github.com/georgeturneruk/tckit/pull/65)
+  bridge harness, [#67](https://github.com/georgeturneruk/tckit/pull/67)
+  docs + template, [#68](https://github.com/georgeturneruk/tckit/pull/68)
+  TcXaeMgmt refactor, [#69](https://github.com/georgeturneruk/tckit/pull/69)
+  Python adapter.
