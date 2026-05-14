@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="FB_RollingAverageConsumer" Id="{47a94d22-7f5a-432e-b639-de5a04df2165}" SpecialFunc="None">
+  <POU Name="FB_RollingAverageConsumer" Id="{d09f4244-e47f-4e29-b442-c50bc18fe19d}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_RollingAverageConsumer
 VAR
-    adder : B1RollingAverage.FB_RollingAverage;
+    adder : B1RollingAverage_Plc.FB_RollingAverage;
     lastResult : INT;
 END_VAR]]></Declaration>
     <Implementation>

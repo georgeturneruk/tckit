@@ -282,8 +282,11 @@ function Set-TcItemSource {
         $Declaration = $parts.declaration
         $Implementation = $parts.implementation
     }
-    if ($null -ne $Declaration) { $Item.DeclarationText = $Declaration }
-    if ($null -ne $Implementation) { $Item.ImplementationText = $Implementation }
+    if ($Declaration) { $Item.DeclarationText = $Declaration }
+    # GVL tree items don't expose ImplementationText — they're declaration-
+    # only. Skipping the empty-string assignment lets GVL writes round-trip
+    # cleanly. FBs/methods/etc. with a real body still write fine.
+    if ($Implementation) { $Item.ImplementationText = $Implementation }
 }
 
 function Get-TcItemSource {

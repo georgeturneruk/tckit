@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="FB_RollingAverage" Id="{d3c8842e-30bf-45b6-80b0-1af7a42c9e79}" SpecialFunc="None">
+  <POU Name="FB_RollingAverage" Id="{41e4f492-3ae5-498c-b8ff-a39c88c63647}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_RollingAverage
 VAR
     samples : ARRAY[0..15] OF INT;
@@ -10,7 +10,7 @@ END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[]]></ST>
     </Implementation>
-    <Method Name="Step" Id="{bd5e6fc3-c885-4b2a-a2cf-e1e77985afae}">
+    <Method Name="Step" Id="{c174831a-9762-45b7-8b37-6479933673af}">
       <Declaration><![CDATA[METHOD Step : INT
 VAR_INPUT
     sample : INT;

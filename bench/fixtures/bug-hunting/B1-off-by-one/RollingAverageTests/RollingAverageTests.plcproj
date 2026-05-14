@@ -3,22 +3,25 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{055b050b-e1e0-4757-8437-d0c6780468bc}</ProjectGuid>
+    <ProjectGuid>{98d7f3b6-90bb-4736-806a-1de030f8754e}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>RollingAverageTests</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{c3d4efd4-0276-4a68-95c8-432044ff1b05}</Application>
-    <TypeSystem>{adcdae19-9a73-41e4-a26b-e595a418b720}</TypeSystem>
-    <Implicit_Task_Info>{d26f7cdb-bc6e-4c55-8751-0c9f99edf583}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{ffd34c56-0d15-4a67-8bd3-729d7dcc2d03}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{f9f7aa51-5260-412e-a97a-e9524a5d185a}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{143ab984-a394-43c5-8255-b39bedcc3874}</LibraryReferences>
+    <Application>{bdc39662-0701-463d-961d-c835278cc7b4}</Application>
+    <TypeSystem>{8a2c6749-547b-47b0-85cd-6c5b46a8e337}</TypeSystem>
+    <Implicit_Task_Info>{d448e1e1-9c0d-4d04-9ace-4fd04ce19784}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{5d5acb41-234c-4192-a698-38528282009f}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{aef37ecc-c16a-4fcf-92e4-164627269410}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{54c7f36c-defd-403f-b3c4-51720870bcbd}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="PlcTask.TcTTO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\FB_RollingAverageConsumer.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\MAIN.TcPOU">
@@ -45,11 +48,20 @@
       <Namespace>Tc3_Module</Namespace>
       <SystemLibrary>true</SystemLibrary>
     </PlaceholderReference>
+    <PlaceholderReference Include="TcUnit">
+      <DefaultResolution>TcUnit, * (www.tcunit.org)</DefaultResolution>
+      <Namespace>TcUnit</Namespace>
+    </PlaceholderReference>
   </ItemGroup>
   <ItemGroup>
-    <LibraryReference Include="B1RollingAverage,newest,Tc3 Project">
-      <Namespace>B1RollingAverage</Namespace>
+    <LibraryReference Include="B1RollingAverage_Plc,newest,Tc3 Project">
+      <Namespace>B1RollingAverage_Plc</Namespace>
     </LibraryReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderResolution Include="TcUnit">
+      <Resolution>TcUnit, * (www.tcunit.org)</Resolution>
+    </PlaceholderResolution>
   </ItemGroup>
   <ProjectExtensions>
     <PlcProjectOptions>
