@@ -3,25 +3,28 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{1a61dc20-b349-4546-bfed-bc9b8689ed61}</ProjectGuid>
+    <ProjectGuid>{b0ed563f-2994-410c-b788-3433a8ea5821}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>PIDControllerTests</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{b6c92855-f941-4aae-812a-dce813ddef00}</Application>
-    <TypeSystem>{7c12397f-f391-4f80-b1b2-b2a522e3cffc}</TypeSystem>
-    <Implicit_Task_Info>{f7acc166-c9db-4397-8a97-786a7dbd6230}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{a2d49b31-1d76-4d13-9497-e5307bb58df3}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{478fa23f-bd53-4f2b-8f02-d8998b508e27}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{86ebc5b1-4bff-464f-8e0b-888c1a50c901}</LibraryReferences>
+    <Application>{72646070-2da2-48d2-b51f-6b2533efadf5}</Application>
+    <TypeSystem>{b1961be4-cb7c-4452-ad0b-b319558f96b7}</TypeSystem>
+    <Implicit_Task_Info>{f1104c6f-6799-4173-a52c-897ec7499502}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{bbadd3af-60f1-49bf-a889-f3f5b0380231}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{c61d6ed8-4706-4771-8b0e-47839401aae4}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{4e0c3786-4a33-4374-b1b5-6107d0ceba0b}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="PlcTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\FB_PIDControllerConsumer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\GVL_TcUnit.TcGVL">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\MAIN.TcPOU">

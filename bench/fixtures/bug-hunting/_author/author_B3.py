@@ -40,6 +40,8 @@ END_VAR
 # its way down.
 STEP_METHOD = """\
 METHOD Step : INT
+VAR
+END_VAR
 CASE state OF
     0:
         state := 1;

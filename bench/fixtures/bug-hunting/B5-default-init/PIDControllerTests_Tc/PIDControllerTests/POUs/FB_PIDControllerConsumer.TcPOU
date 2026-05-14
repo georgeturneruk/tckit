@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="FB_PIDControllerConsumer" Id="{1826ecbb-94e9-4be5-b511-9cd937d3e867}" SpecialFunc="None">
+  <POU Name="FB_PIDControllerConsumer" Id="{7225539e-70b0-4b3f-b810-b7cb18fb252d}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_PIDControllerConsumer
 VAR
     controller : B5PIDController_Plc.FB_PIDController;

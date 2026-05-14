@@ -3,19 +3,19 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{4441647a-98f2-4276-9d3d-9ff4a936c5d7}</ProjectGuid>
+    <ProjectGuid>{9daf1e52-f5ee-4208-a3e1-b92318b77e4d}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>B5PIDController_Plc</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{0012d2d6-4b11-4001-af18-947b5dc8e46f}</Application>
-    <TypeSystem>{a8e6b4bb-6381-4c73-988b-72b40aaefb47}</TypeSystem>
-    <Implicit_Task_Info>{63090254-a1b4-4cb7-8218-42d24d59ae43}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{e85279d9-b93c-44bd-be4e-50726a14accb}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{9761bb04-6276-4f50-962c-ffd54488650d}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{3152877c-a87e-4d18-af02-fdf5236ea64f}</LibraryReferences>
+    <Application>{aa11d0bd-6d2c-48c9-8984-34b6b3a718ec}</Application>
+    <TypeSystem>{d964b007-79f1-42ef-bf88-0a2e2cb784d0}</TypeSystem>
+    <Implicit_Task_Info>{57e77148-8873-4798-a719-06b6435a24f0}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{541b2b68-4929-4ca4-bdec-ba2246217296}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{bafff31b-baad-4650-a389-2665bd36a94f}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{4cc6a545-b1ba-4be4-a647-ea5812b569ce}</LibraryReferences>
     <Company>Tc3 Project</Company>
     <Title>B5PIDController_Plc</Title>
     <ProjectVersion>1.0.0.0</ProjectVersion>
