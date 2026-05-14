@@ -66,10 +66,41 @@ try {
         return @{ success = $false; error = "SetTargetNetId failed: $($_.Exception.Message)" }
     }
 
+    # Mode transitions:
+    # * Run  — ITcSysManager.StartRestartTwinCAT() (pure COM, no ADS needed)
+    # * Config — no equivalent on ITcSysManager; the standard route is an
+    #   ADS WriteControl to the system service (port 10000) with
+    #   ADSSTATE_RECONFIG (=2) or ADSSTATE_CONFIG (=16). Requires
+    #   TwinCAT.Ads.dll to be installed.
     try {
         switch ($Mode) {
-            'Run'    { $sm.StartRestartTwinCAT() }
-            'Config' { $sm.SetConfigMode() }
+            'Run' {
+                $sm.StartRestartTwinCAT()
+            }
+            'Config' {
+                try { Get-TcAdsAssembly } catch {
+                    return @{
+                        success = $false
+                        error   = "Cannot switch to Config mode: $($_.Exception.Message) TwinCAT 3 has no purely-COM API for the Run -> Config transition; install the ADS .NET API or pass a path via TCADS_DLL_PATH."
+                    }
+                }
+                $configClient = $null
+                try {
+                    $configClient = New-Object 'TwinCAT.Ads.AdsClient'
+                    $configClient.Connect($TargetAmsId, 10000)  # 10000 = system service
+                    # WriteControl(state, deviceState, data). State 16 = Config.
+                    $configClient.WriteControl(
+                        [TwinCAT.Ads.StateInfo]::new([TwinCAT.Ads.AdsState]::Config, [uint16]0)
+                    )
+                } catch {
+                    return @{ success = $false; error = "ADS WriteControl(Config) failed: $($_.Exception.Message)" }
+                } finally {
+                    if ($null -ne $configClient) {
+                        try { $configClient.Disconnect() } catch { }
+                        try { $configClient.Dispose() } catch { }
+                    }
+                }
+            }
         }
     } catch {
         return @{ success = $false; error = "Mode transition to '$Mode' failed: $($_.Exception.Message)" }
