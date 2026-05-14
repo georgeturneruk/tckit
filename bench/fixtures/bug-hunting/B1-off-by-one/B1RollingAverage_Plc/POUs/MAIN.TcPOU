@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="MAIN" Id="{8c9288a6-940e-4294-86c6-05784e018246}">
+  <POU Name="MAIN" Id="{61be8268-078e-44ff-8840-b308aec80eef}">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
 END_VAR

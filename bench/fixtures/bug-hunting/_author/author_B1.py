@@ -170,10 +170,10 @@ def main() -> int:
 
     os.environ["PLC_PROJECT_PATH"] = str(sln_path)
 
-    # The first PLC project auto-created by create_project takes the
-    # sln name, not the LIBRARY_PLC name. Tests becomes a sibling under
+    # create_project defaults the first PLC to ${SlnName}_Plc — see
+    # bridge/harness/New-TcProject.ps1. Tests becomes a sibling under
     # the same TIPC node via add_plc_project.
-    first_plc = SLN_NAME
+    first_plc = LIBRARY_PLC
 
     # 2) add_plc_project — Tests sibling.
     _check(

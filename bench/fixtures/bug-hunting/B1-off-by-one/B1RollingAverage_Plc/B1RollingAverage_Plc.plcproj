@@ -3,21 +3,21 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{d74bd973-b4ed-4df6-810b-2517b9b357c8}</ProjectGuid>
+    <ProjectGuid>{49e28ba4-55ff-4af7-8da1-43579e8b53a5}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
-    <Name>B1RollingAverage</Name>
+    <Name>B1RollingAverage_Plc</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{755f2c18-65a6-4b62-91b4-8296f6081a4e}</Application>
-    <TypeSystem>{ad5b04aa-7076-4199-8001-6ecf9b2c8e81}</TypeSystem>
-    <Implicit_Task_Info>{74252bb3-9d0f-4f3b-8964-f87cd0475218}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{1a5e8a6b-5258-44bd-a5b0-653c032c467f}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{533f1ef1-30e7-4c7e-a455-b9f9436d8e50}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{fdb6ff0c-1922-4549-a167-c2967ba98b3d}</LibraryReferences>
+    <Application>{69979ea8-3b5b-4e0a-a635-eaaa4641635b}</Application>
+    <TypeSystem>{d357572f-7e0e-4db1-ac27-c7ef14860aa2}</TypeSystem>
+    <Implicit_Task_Info>{42a3b080-8498-4db6-a659-6c37fa8cfd10}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{d4c69e04-9c1f-4925-ae23-4f28497e5555}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{0af5b365-0944-4195-b020-f08cd9726893}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{78f34ec5-4c8e-46c3-b935-57efafa22fa0}</LibraryReferences>
     <Company>Tc3 Project</Company>
-    <Title>B1RollingAverage</Title>
+    <Title>B1RollingAverage_Plc</Title>
     <ProjectVersion>1.0.0.0</ProjectVersion>
   </PropertyGroup>
   <ItemGroup>
