@@ -1,10 +1,10 @@
 ---
 adr: 0009
 title: Multi-PLC sln authoring + library tools (writer port)
-status: Proposed
+status: Implemented
 created: 2026-05-14
 issue:
-pr:
+pr: 71
 ---
 
 ## Context
@@ -286,3 +286,15 @@ method or an optional `library_path` parameter.
   Implementation lands as a single PR; ADR-0007's Phase C0 (the
   pilot fixture authoring) is the first real exercise of these
   tools.
+- 2026-05-14: Implemented in
+  [#71](https://github.com/georgeturneruk/tckit/pull/71). Port,
+  adapter, MCP server, bridge harness scripts, routes, skill +
+  template updates, unit tests, integration test, and docs page
+  all landed in one squash commit. Two parameter defaults
+  (`distributor="Tc3 Project"` on `add_library_reference` and the
+  `References` tree-item path inside `Add-TcLibraryReference.ps1`)
+  remain spike-by-implementation: the integration test in
+  `tests/integration/test_multi_plc_library.py` is the
+  validation. If it fails with "library not found" against a real
+  4026 install, the distributor needs adjusting from the actual
+  `SaveAsLibrary` output; expected as a small follow-up.
