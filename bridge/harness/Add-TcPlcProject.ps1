@@ -63,6 +63,7 @@ try {
     # the right call when the sln already lives at $ProjectPath). Suppress
     # the COM return value so it doesn't leak into the harness output stream.
     $dte.Solution.SaveAs($dte.Solution.FullName) | Out-Null
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

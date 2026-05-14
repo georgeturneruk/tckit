@@ -62,9 +62,9 @@ try {
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
     $libManager.AddLibrary($LibraryName, $Version, $Distributor) | Out-Null
     # AddLibrary mutates only in-memory state; persist to .plcproj so the
-    # change survives a re-open / git-reset cycle. File.SaveAll is the
-    # IDE-side command for "save everything".
-    try { $dte.ExecuteCommand('File.SaveAll') | Out-Null } catch { }
+    # change survives a re-open / git-reset cycle. See Save-TcSolution
+    # for the cross-cutting rationale.
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

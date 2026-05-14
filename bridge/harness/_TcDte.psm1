@@ -175,6 +175,30 @@ function Open-TcSolution {
     return $Dte.Solution
 }
 
+function Save-TcSolution {
+    <#
+    .SYNOPSIS
+        Flush the active TcXaeShell solution to disk via File.SaveAll.
+
+    .DESCRIPTION
+        Bridge writes via COM mutate XAE's in-memory model and usually
+        get persisted on close. Without an explicit SaveAll, XAE also
+        writes its own copy asynchronously, which can race the
+        external-file-watcher and produce 'project file has been
+        modified outside of TcXaeShell' prompts — and, intermittently,
+        crash XAE on the next solution operation. Calling SaveAll after
+        each write step keeps the in-memory and on-disk views
+        synchronised.
+
+        Best-effort: silently ignores failures (e.g. ExecuteCommand
+        rejected during a build) so callers don't have to wrap.
+    #>
+    param([Parameter(Mandatory)]$Dte)
+    try {
+        Invoke-WithComRetry { $Dte.ExecuteCommand('File.SaveAll') } | Out-Null
+    } catch { }
+}
+
 function Wait-TcPlcProjectsLoaded {
     <#
     .SYNOPSIS
@@ -516,4 +540,4 @@ Export-ModuleMember -Function `
     Resolve-TcPlcName, Get-TcPlcProjectNode, Get-TcPousFolder, Find-TcChild, `
     Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
-    Invoke-WithComRetry, Wait-TcPlcProjectsLoaded
+    Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution

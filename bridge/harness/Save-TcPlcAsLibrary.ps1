@@ -110,6 +110,10 @@ try {
     # an explicit cast — same pattern as Set-TcItemSource for the
     # ITcPlcDeclaration / ITcPlcImplementation interfaces.
     $plcProject.SaveAsLibrary($OutputPath, [bool]$Install) | Out-Null
+    # The ProduceXml/ConsumeXml round-trip above wrote new ProjectInfo
+    # values into the in-memory model; SaveAll flushes them so the
+    # .plcproj on disk matches what SaveAsLibrary just emitted.
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

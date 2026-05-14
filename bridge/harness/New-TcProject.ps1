@@ -93,6 +93,7 @@ try {
     # Step 4: persist the solution.
     $solutionPath = Join-Path $Path ("$Name.sln")
     $dte.Solution.SaveAs($solutionPath) | Out-Null
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

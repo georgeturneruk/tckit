@@ -84,6 +84,7 @@ try {
     $patched = $combined.Substring(0, $idx) + $NewString + $combined.Substring($idx + $OldString.Length)
 
     Set-TcItemSource -Item $item -Code $patched
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true
