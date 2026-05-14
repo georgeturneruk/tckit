@@ -7,6 +7,25 @@ The bridge service is a PowerShell REST API that runs natively on the Windows ma
 - Windows 10/11
 - TwinCAT 3.1 Build 4026 installed
 - PowerShell 5.1+
+- **TcXaeMgmt PowerShell module** (see below)
+
+## TcXaeMgmt PowerShell module
+
+The bridge uses Beckhoff's official [TcXaeMgmt](https://www.powershellgallery.com/packages/TcXaeMgmt) module for ADS operations (runtime mode transitions and live PLC symbol reads). Signed by Beckhoff, no transitive dependencies, supports PowerShell 5.1+.
+
+Three install paths, in order of operator-effort:
+
+1. **PowerShell Gallery (recommended)** — one command, no admin needed:
+   ```powershell
+   Install-Module -Name TcXaeMgmt -Scope CurrentUser -Force
+   ```
+   Or just run `tckit doctor` — if the module is missing, the doctor prompts to install it for you.
+
+2. **Already bundled with TwinCAT** — when the ADS API option was included in your TwinCAT installer, the module ships at `C:\TwinCAT\AdsApi\PowerShell\TcXaeMgmt`. Add `C:\TwinCAT\AdsApi\PowerShell\` to `$env:PSModulePath` to make it discoverable. Per [Beckhoff's manual-install docs](https://infosys.beckhoff.com/content/1033/tc3_ads_ps_tcxaemgmt/5531475467.html).
+
+3. **Offline / firewalled environments** — download the [TE1000 archive](https://www.beckhoff.com/en-en/download/628465946) and unpack onto a path on `$env:PSModulePath`.
+
+The bridge requires `>= 6.0` to cover both TwinCAT 4024 and 4026 sites. `tckit doctor` reports the installed version after the bridge is up.
 
 ## Starting the bridge
 

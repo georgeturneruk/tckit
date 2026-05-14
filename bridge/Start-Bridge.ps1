@@ -8,19 +8,20 @@
     The Docker container calls this bridge for anything that requires COM/XAE.
 
     Routes:
-      POST /build       -> harness\Invoke-TcBuild.ps1
-      POST /deploy      -> harness\Invoke-TcDeploy.ps1
-      POST /runtime     -> harness\Invoke-TcRuntime.ps1
-      POST /tcunit-run  -> harness\Invoke-TcUnitRun.ps1
-      POST /open        -> harness\Open-TcProject.ps1
-      POST /create      -> harness\New-TcProject.ps1
-      POST /pou         -> harness\Add-TcPou.ps1
-      POST /method      -> harness\Add-TcMethod.ps1
-      POST /item        -> harness\Update-TcPouItem.ps1
-      POST /item-patch  -> harness\Update-TcPouItemPatch.ps1
-      POST /add-variable -> harness\Add-TcVariable.ps1
-      POST /results     -> harness\Get-TcUnitResults.ps1
-      GET  /health      -> {"status": "ok"}
+      POST /build              -> harness\Invoke-TcBuild.ps1
+      POST /deploy             -> harness\Invoke-TcDeploy.ps1
+      POST /runtime            -> harness\Invoke-TcRuntime.ps1
+      POST /tcunit-run         -> harness\Invoke-TcUnitRun.ps1
+      POST /open               -> harness\Open-TcProject.ps1
+      POST /create             -> harness\New-TcProject.ps1
+      POST /pou                -> harness\Add-TcPou.ps1
+      POST /method             -> harness\Add-TcMethod.ps1
+      POST /item               -> harness\Update-TcPouItem.ps1
+      POST /item-patch         -> harness\Update-TcPouItemPatch.ps1
+      POST /add-variable       -> harness\Add-TcVariable.ps1
+      POST /results            -> harness\Get-TcUnitResults.ps1
+      POST /install-dependency -> Install-Module (allow-listed modules only)
+      GET  /health             -> {"status": "ok", "dependencies": {...}}
 
 .PARAMETER Port
     Port to listen on. Default: 8765.
@@ -37,6 +38,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $HarnessDir = Join-Path $PSScriptRoot 'harness'
+
+# Allow-list for /install-dependency. Only modules TcKit itself surfaces via
+# the doctor are installable through the bridge. Pinned to the same minimum
+# version the harness scripts require.
+$InstallableDependencies = @{
+    'TcXaeMgmt' = @{ MinimumVersion = '6.0' }
+}
 
 function Write-Log {
     param([string]$Message, [string]$Level = 'INFO')
@@ -104,6 +112,107 @@ function Read-RequestBody {
     return @{}
 }
 
+function Get-BridgeDependencies {
+    <#
+    .SYNOPSIS
+        Report the installed version of each bridge dependency, or $null
+        if the module isn't available on the current PSModulePath.
+    #>
+    $deps = @{}
+    foreach ($name in $InstallableDependencies.Keys) {
+        $mod = Get-Module -ListAvailable $name -ErrorAction SilentlyContinue |
+            Sort-Object Version -Descending | Select-Object -First 1
+        $deps[$name] = if ($mod) { $mod.Version.ToString() } else { $null }
+    }
+    return $deps
+}
+
+function Install-BridgeDependency {
+    <#
+    .SYNOPSIS
+        Install one allow-listed module from PSGallery into CurrentUser
+        scope. Returns the resulting version on success.
+    #>
+    param([string]$Name)
+
+    if (-not $InstallableDependencies.ContainsKey($Name)) {
+        return @{ success = $false; error = "Module '$Name' is not in the bridge install allow-list." }
+    }
+    $spec = $InstallableDependencies[$Name]
+    # Windows PowerShell 5.1 ships with PowerShellGet 1.0.0.1 and no
+    # NuGet provider. Beckhoff requires PowerShellGet >= 2.2.5 (see
+    # https://infosys.beckhoff.com/content/1033/tc3_ads_ps_tcxaemgmt/5531473547.html).
+    # We bootstrap both, then run the real install in a fresh PowerShell
+    # subprocess so the new PowerShellGet is the one that loads — the
+    # current process is already bound to 1.0.0.1.
+    try {
+        $nuget = Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+            Where-Object { $_.Version -ge [version]'2.8.5.201' } | Select-Object -First 1
+        if (-not $nuget) {
+            Install-PackageProvider -Name NuGet `
+                                    -MinimumVersion 2.8.5.201 `
+                                    -Scope CurrentUser `
+                                    -Force `
+                                    -ErrorAction Stop | Out-Null
+        }
+        # Trust PSGallery so Install-Module doesn't prompt.
+        $repo = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+        if ($repo -and $repo.InstallationPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+        }
+        # Upgrade PowerShellGet itself if too old. -Force allows side-by-side install.
+        $psget = Get-Module -ListAvailable PowerShellGet | Sort-Object Version -Descending | Select-Object -First 1
+        if (-not $psget -or $psget.Version -lt [version]'2.2.5') {
+            Install-Module -Name PowerShellGet `
+                           -Scope CurrentUser `
+                           -MinimumVersion 2.2.5 `
+                           -Force `
+                           -AllowClobber `
+                           -ErrorAction Stop
+        }
+    } catch {
+        return @{ success = $false; error = "PSGet/NuGet bootstrap failed: $($_.Exception.Message)" }
+    }
+
+    # Run the real Install-Module in a fresh PowerShell subprocess so the
+    # newly-installed PowerShellGet is loaded (the bridge's parent process
+    # is already pinned to PowerShellGet 1.0.0.1 in-memory).
+    # The subprocess loads the freshly-bootstrapped PowerShellGet 2.2.5+,
+    # which both supports and requires -AcceptLicense for licence-tagged
+    # modules like TcXaeMgmt.
+    $installScript = @"
+`$ErrorActionPreference = 'Stop'
+try {
+    Install-Module -Name '$Name' -Scope CurrentUser -MinimumVersion '$($spec.MinimumVersion)' -Force -AcceptLicense -ErrorAction Stop
+    `$mod = Get-Module -ListAvailable '$Name' | Sort-Object Version -Descending | Select-Object -First 1
+    @{ ok = `$true; version = if (`$mod) { `$mod.Version.ToString() } else { `$null } } | ConvertTo-Json -Compress
+} catch {
+    @{ ok = `$false; error = `$_.Exception.Message } | ConvertTo-Json -Compress
+}
+"@
+    $tempScript = Join-Path ([IO.Path]::GetTempPath()) ("tckit-install-{0}.ps1" -f ([Guid]::NewGuid()))
+    Set-Content -LiteralPath $tempScript -Value $installScript -Encoding UTF8
+    try {
+        $rawJson = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
+        $parsed = $rawJson | ConvertFrom-Json
+    } catch {
+        return @{ success = $false; error = "Install subprocess failed: $($_.Exception.Message)" }
+    } finally {
+        Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $parsed.ok) {
+        return @{ success = $false; error = "Install-Module $Name failed: $($parsed.error)" }
+    }
+    return @{
+        success = $true
+        details = @{
+            name    = $Name
+            version = $parsed.version
+            scope   = 'CurrentUser'
+        }
+    }
+}
+
 function Invoke-Harness {
     param([string]$Script, [hashtable]$Params = @{})
     $scriptPath = Join-Path $HarnessDir $Script
@@ -145,7 +254,21 @@ try {
         try {
             switch ("$method $path") {
                 'GET /health' {
-                    Send-JsonResponse -Response $res -Body @{ status = 'ok'; version = '0.1.0' }
+                    Send-JsonResponse -Response $res -Body @{
+                        status       = 'ok'
+                        version      = '0.1.0'
+                        dependencies = Get-BridgeDependencies
+                    }
+                }
+                'POST /install-dependency' {
+                    $body   = Read-RequestBody -Request $req
+                    $name   = if ($body.ContainsKey('name')) { [string]$body['name'] } else { '' }
+                    if (-not $name) {
+                        Send-JsonResponse -Response $res -Body @{ success = $false; error = "'name' field required." } -StatusCode 400
+                    } else {
+                        $result = Install-BridgeDependency -Name $name
+                        Send-JsonResponse -Response $res -Body $result
+                    }
                 }
                 'POST /build' {
                     $body   = Read-RequestBody -Request $req

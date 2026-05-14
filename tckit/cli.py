@@ -28,7 +28,12 @@ from tckit.config import (
     _user_home,
     load_config,
 )
-from tckit.utils.diagnostics import bridge_health, validate_config
+from tckit.utils.diagnostics import (
+    bridge_dependencies,
+    bridge_health,
+    install_bridge_dependency,
+    validate_config,
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -61,9 +66,17 @@ def _build_parser() -> argparse.ArgumentParser:
     config_sub.add_parser("validate", help="Check config for malformed values.")
 
     # `tckit doctor`
-    sub.add_parser(
+    doctor_parser = sub.add_parser(
         "doctor",
         help="Run health checks (config validation + bridge reachability).",
+    )
+    doctor_parser.add_argument(
+        "--no-install",
+        action="store_true",
+        help=(
+            "Don't prompt to install missing bridge dependencies; just "
+            "report them. Use in CI or non-interactive contexts."
+        ),
     )
 
     # `tckit docgen <project_path> <output_path>`
@@ -97,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "doctor":
-        return _doctor()
+        return _doctor(no_install=args.no_install)
 
     if args.command == "docgen":
         return _docgen(args.project_path, args.output_path)
@@ -185,15 +198,38 @@ def _docgen(project_path: str, output_path: str) -> int:
     return 0
 
 
-def _doctor() -> int:
+def _doctor(no_install: bool = False) -> int:
     cfg = load_config()
+    bridge_url = cfg.get("BRIDGE_URL")
+
     sections: list[tuple[str, bool, list[str]]] = []
 
     issues = validate_config(cfg)
     sections.append(("Config", not issues, issues))
 
-    ok, msg = bridge_health(cfg.get("BRIDGE_URL"))
-    sections.append(("Bridge", ok, [msg]))
+    bridge_ok, bridge_msg = bridge_health(bridge_url)
+    sections.append(("Bridge", bridge_ok, [bridge_msg]))
+
+    # Bridge dependencies only checked when the bridge is reachable.
+    dep_section_ok = True
+    dep_lines: list[str] = []
+    missing_deps: list[str] = []
+    if bridge_ok:
+        deps = bridge_dependencies(bridge_url)
+        if not deps:
+            dep_lines.append(
+                "bridge /health returned no dependencies block "
+                "(older bridge? upgrade Start-Bridge.ps1)"
+            )
+        else:
+            for name, version in sorted(deps.items()):
+                if version is None:
+                    dep_lines.append(f"{name}: not installed")
+                    missing_deps.append(name)
+                    dep_section_ok = False
+                else:
+                    dep_lines.append(f"{name}: {version}")
+        sections.append(("Bridge dependencies", dep_section_ok, dep_lines))
 
     print("TcKit doctor")
     print("=" * 50)
@@ -206,14 +242,50 @@ def _doctor() -> int:
         if not ok:
             overall = False
 
+    # Offer to install missing bridge dependencies.
+    if missing_deps and not no_install:
+        for dep in missing_deps:
+            if _prompt_yes(
+                f"\nInstall missing bridge dependency '{dep}' via PowerShell Gallery now?"
+            ):
+                ok, msg = install_bridge_dependency(dep, bridge_url)
+                status = "OK" if ok else "FAIL"
+                print(f"  [{status}] {msg}")
+                if ok:
+                    overall = True  # treat the install success as recovering the dep section
+            else:
+                print(f"  Skipped {dep}; install with:")
+                print(
+                    f"    Install-Module -Name {dep} -Scope CurrentUser -Force"
+                )
+
     print("\n" + "=" * 50)
     print(f"Overall: {'PASS' if overall else 'FAIL'}")
     if not overall:
-        print(
-            "\nHint: if the bridge is down, start it with .\\bridge\\Start-Bridge.ps1 "
-            "(Windows) or check BRIDGE_URL."
-        )
+        if not bridge_ok:
+            print(
+                "\nHint: if the bridge is down, start it with .\\bridge\\Start-Bridge.ps1 "
+                "(Windows) or check BRIDGE_URL."
+            )
+        elif missing_deps and no_install:
+            print(
+                "\nHint: bridge dependencies missing. Run without --no-install "
+                "to prompt for installation, or install manually:"
+            )
+            for dep in missing_deps:
+                print(
+                    f"  Install-Module -Name {dep} -Scope CurrentUser -Force"
+                )
     return 0 if overall else 1
+
+
+def _prompt_yes(question: str) -> bool:
+    """Prompt ``question`` with default-yes. Returns True on Y/y/Enter."""
+    try:
+        answer = input(f"{question} [Y/n] ").strip().lower()
+    except EOFError:
+        return False
+    return answer in ("", "y", "yes")
 
 
 if __name__ == "__main__":

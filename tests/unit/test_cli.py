@@ -10,7 +10,6 @@ import pytest
 
 from tckit import cli
 
-
 # ---------------------------------------------------------------------------
 # _build_parser — argument routing
 # ---------------------------------------------------------------------------
@@ -89,14 +88,31 @@ def test_main_dispatches_config_validate(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_main_dispatches_doctor(monkeypatch: pytest.MonkeyPatch) -> None:
     called: dict[str, bool] = {}
 
-    def fake_doctor() -> int:
+    def fake_doctor(no_install: bool = False) -> int:
         called["doctor"] = True
+        called["no_install"] = no_install
         return 0
 
     monkeypatch.setattr(cli, "_doctor", fake_doctor)
     rc = cli.main(["doctor"])
     assert rc == 0
     assert called.get("doctor") is True
+    assert called.get("no_install") is False
+
+
+def test_main_dispatches_doctor_with_no_install_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, bool] = {}
+
+    def fake_doctor(no_install: bool = False) -> int:
+        captured["no_install"] = no_install
+        return 0
+
+    monkeypatch.setattr(cli, "_doctor", fake_doctor)
+    rc = cli.main(["doctor", "--no-install"])
+    assert rc == 0
+    assert captured["no_install"] is True
 
 
 def test_main_dispatches_to_server_when_no_subcommand(
@@ -185,37 +201,45 @@ def test_config_validate_exits_one_when_bad_netid(
 # ---------------------------------------------------------------------------
 
 
+def _stub_doctor_deps(monkeypatch: pytest.MonkeyPatch, deps: dict) -> None:
+    """Stub the bridge dependency probe used by _doctor."""
+    monkeypatch.setattr(
+        "tckit.cli.bridge_dependencies", lambda url=None: deps
+    )
+
+
 def test_doctor_returns_zero_when_all_checks_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "tckit.cli.validate_config", lambda cfg: []
-    )
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
     )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": "6.2.127"})
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        rc = cli._doctor()
+        rc = cli._doctor(no_install=True)
     assert rc == 0
     assert "PASS" in buf.getvalue()
+    assert "TcXaeMgmt: 6.2.127" in buf.getvalue()
 
 
 def test_doctor_returns_one_when_bridge_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        "tckit.cli.validate_config", lambda cfg: []
-    )
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health",
         lambda url=None: (False, "not reachable at http://x"),
     )
+    # Dependencies probe should not be called when bridge is down; stub anyway
+    # so any accidental call returns deterministically.
+    _stub_doctor_deps(monkeypatch, {})
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        rc = cli._doctor()
+        rc = cli._doctor(no_install=True)
     assert rc == 1
     assert "FAIL" in buf.getvalue()
     assert "Start-Bridge.ps1" in buf.getvalue()
@@ -231,10 +255,77 @@ def test_doctor_returns_one_when_config_invalid(
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
     )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": "6.2.127"})
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        rc = cli._doctor()
+        rc = cli._doctor(no_install=True)
     assert rc == 1
     assert "FAIL" in buf.getvalue()
     assert "TARGET_AMS_ID" in buf.getvalue()
+
+
+def test_doctor_no_install_reports_missing_dep_and_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": None})
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    assert rc == 1
+    output = buf.getvalue()
+    assert "TcXaeMgmt: not installed" in output
+    assert "FAIL" in output
+    assert "Install-Module" in output
+
+
+def test_doctor_prompts_and_installs_missing_dep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": None})
+    monkeypatch.setattr("tckit.cli._prompt_yes", lambda question: True)
+    installed: list[str] = []
+
+    def fake_install(name: str, url: str | None = None) -> tuple[bool, str]:
+        installed.append(name)
+        return True, f"installed {name} 6.2.127"
+
+    monkeypatch.setattr("tckit.cli.install_bridge_dependency", fake_install)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=False)
+    assert installed == ["TcXaeMgmt"]
+    assert "installed TcXaeMgmt 6.2.127" in buf.getvalue()
+    assert rc == 0
+
+
+def test_doctor_skips_install_when_user_declines(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": None})
+    monkeypatch.setattr("tckit.cli._prompt_yes", lambda question: False)
+
+    def reject_install(name: str, url: str | None = None) -> tuple[bool, str]:
+        raise AssertionError("install_bridge_dependency must not be called")
+
+    monkeypatch.setattr("tckit.cli.install_bridge_dependency", reject_install)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=False)
+    assert "Skipped TcXaeMgmt" in buf.getvalue()
+    assert rc == 1

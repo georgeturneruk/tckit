@@ -76,3 +76,51 @@ def bridge_health(url: str | None = None) -> tuple[bool, str]:
     if ok:
         return True, f"reachable at {base}"
     return False, f"not reachable at {base}"
+
+
+def bridge_dependencies(url: str | None = None) -> dict[str, str | None]:
+    """Return the bridge's reported PowerShell-module dependencies.
+
+    Each value is the installed version string, or ``None`` if the module
+    is missing on the bridge's PSModulePath. Returns an empty dict when the
+    bridge is unreachable or its /health response lacks a dependencies
+    block (older bridges).
+    """
+    client = BridgeClient(base_url=url) if url else BridgeClient()
+    try:
+        try:
+            resp = client.get("/health", timeout=2.0)
+        except Exception:  # noqa: BLE001 — bridge errors absorbed; caller handles via bridge_health
+            return {}
+    finally:
+        client.close()
+    deps = resp.get("dependencies")
+    if not isinstance(deps, dict):
+        return {}
+    return {str(k): (str(v) if v is not None else None) for k, v in deps.items()}
+
+
+def install_bridge_dependency(
+    name: str, url: str | None = None
+) -> tuple[bool, str]:
+    """POST to the bridge's ``/install-dependency`` route to install ``name``.
+
+    Returns ``(ok, message)``. The bridge enforces an allow-list of module
+    names; unknown names come back as a failure with an explanatory error.
+    """
+    client = BridgeClient(base_url=url) if url else BridgeClient()
+    try:
+        try:
+            resp = client.post(
+                "/install-dependency", {"name": name}, timeout=120.0
+            )
+        except Exception as exc:  # noqa: BLE001 — bridge errors surfaced verbatim
+            return False, f"error contacting bridge: {exc}"
+    finally:
+        client.close()
+
+    if resp.get("success"):
+        details = resp.get("details") or {}
+        version = details.get("version") or "unknown"
+        return True, f"installed {name} {version}"
+    return False, str(resp.get("error") or f"unknown install failure for {name}")
