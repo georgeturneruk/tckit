@@ -29,15 +29,31 @@
 .PARAMETER Repository
     Library repository name. Default 'System' — the standard TwinCAT
     installed-libraries repo.
+
+.PARAMETER Title
+    Library Title metadata. SaveAsLibrary refuses to write a managed
+    library when Title is unset, and the Standard PLC Template leaves
+    the IEC project's ProjectInfo block empty. Defaults to PlcName.
+
+.PARAMETER Company
+    Library Company / distributor metadata. Defaults to 'Tc3 Project'
+    to match the AddLibrary distributor default in
+    Add-TcLibraryReference.ps1.
+
+.PARAMETER LibraryVersion
+    Library Version metadata. Defaults to '1.0.0.0'.
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
-    [string]$PlcName     = $env:PLC_PROJECT_NAME,
+    [string]$ProjectPath    = $env:PLC_PROJECT_PATH,
+    [string]$PlcName        = $env:PLC_PROJECT_NAME,
     [string]$OutputPath,
-    [bool]  $Install     = $true,
-    [string]$Repository  = 'System',
-    [string]$ComVersion  = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
-    [string]$XaeMode     = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
+    [bool]  $Install        = $true,
+    [string]$Repository     = 'System',
+    [string]$Title          = '',
+    [string]$Company        = 'Tc3 Project',
+    [string]$LibraryVersion = '1.0.0.0',
+    [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
+    [string]$XaeMode        = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
 )
 
 Set-StrictMode -Version Latest
@@ -67,10 +83,33 @@ try {
     }
 
     $plcProject = Get-TcPlcProjectNode -SysManager $sm -PlcName $plc
+
+    # SaveAsLibrary refuses to write a managed library if the IEC project's
+    # ProjectInfo/Title is empty. The Standard PLC Template doesn't set
+    # one; populate Title / Company / Version via ProduceXml + ConsumeXml
+    # (the documented metadata round-trip pattern) before SaveAsLibrary.
+    if (-not $Title) { $Title = $plc }
+    $effectiveTitle   = $Title
+    $effectiveCompany = $Company
+    $effectiveVersion = $LibraryVersion
+    try {
+        [xml]$projXml = $plcProject.ProduceXml(0)
+        $info = $projXml.SelectSingleNode('//ProjectInfo')
+        if ($null -eq $info) {
+            return @{ success = $false; error = "ProjectInfo node not found in PLC project XML for '$plc'." }
+        }
+        $info.SelectSingleNode('Title').InnerText   = $effectiveTitle
+        $info.SelectSingleNode('Company').InnerText = $effectiveCompany
+        $info.SelectSingleNode('Version').InnerText = $effectiveVersion
+        $plcProject.ConsumeXml($projXml.OuterXml) | Out-Null
+    } catch {
+        return @{ success = $false; error = "Failed to set library metadata: $($_.Exception.Message)" }
+    }
+
     # COM dispatch resolves SaveAsLibrary against ITcPlcIECProject without
     # an explicit cast — same pattern as Set-TcItemSource for the
     # ITcPlcDeclaration / ITcPlcImplementation interfaces.
-    $plcProject.SaveAsLibrary($OutputPath, [bool]$Install)
+    $plcProject.SaveAsLibrary($OutputPath, [bool]$Install) | Out-Null
 
     return @{
         success = $true
@@ -79,6 +118,9 @@ try {
             output_path  = $OutputPath
             installed    = [bool]$Install
             repository   = if ($Install) { $Repository } else { $null }
+            title        = $effectiveTitle
+            company      = $effectiveCompany
+            version      = $effectiveVersion
         }
     }
 }

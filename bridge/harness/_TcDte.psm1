@@ -134,21 +134,34 @@ function Get-TcSysManager {
         when emitted via `return`. We use Write-Output -NoEnumerate to
         prevent unrolling — same trick is used by all helpers below that
         return a tree item.
-    #>
-    param([Parameter(Mandatory)]$Dte)
 
-    if ($Dte.Solution.Projects.Count -eq 0) {
-        throw 'No projects in active solution. Call Open-TcSolution first.'
-    }
-    foreach ($proj in $Dte.Solution.Projects) {
-        $obj = $null
-        try { $obj = $proj.Object } catch { continue }
-        if ($null -eq $obj) { continue }
-        try {
-            $obj.LookupTreeItem('TIPC') | Out-Null
-            Write-Output $obj -NoEnumerate
-            return
-        } catch { continue }
+        Retries the probe a few times with short sleeps to absorb a race
+        where Solution.Projects[i].Object is briefly $null while XAE is
+        finishing a project mutation (observed across back-to-back harness
+        calls after add_pou / SaveAsLibrary etc.).
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [int]$MaxAttempts = 8,
+        [int]$DelayMs = 250
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        if ($Dte.Solution.Projects.Count -eq 0) {
+            Start-Sleep -Milliseconds $DelayMs
+            continue
+        }
+        foreach ($proj in $Dte.Solution.Projects) {
+            $obj = $null
+            try { $obj = $proj.Object } catch { continue }
+            if ($null -eq $obj) { continue }
+            try {
+                $obj.LookupTreeItem('TIPC') | Out-Null
+                Write-Output $obj -NoEnumerate
+                return
+            } catch { continue }
+        }
+        Start-Sleep -Milliseconds $DelayMs
     }
     throw 'No TwinCAT project (ITcSysManager) found in solution.'
 }

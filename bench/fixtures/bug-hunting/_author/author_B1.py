@@ -44,7 +44,9 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_DIR = REPO_ROOT / "bench" / "fixtures" / "bug-hunting" / "B1-off-by-one"
 
 SLN_NAME = "B1RollingAverage"
-LIBRARY_PLC = "RollingAverageLib"
+# `create_project` names the first PLC after the sln, so the library PLC
+# inherits SLN_NAME — both as its tree name and its library namespace.
+LIBRARY_PLC = SLN_NAME
 TESTS_PLC = "RollingAverageTests"
 LIBRARY_FB = "FB_RollingAverage"
 CONSUMER_FB = "FB_RollingAverageConsumer"
@@ -92,10 +94,10 @@ Step := DINT_TO_INT(sum / sampleCount);
 # Consumer FB lives in Tests and exists so the build resolves the
 # library reference end-to-end. Once TcUnit wiring lands (follow-up),
 # this FB graduates into a proper FB_TestSuite descendant.
-CONSUMER_FB_CODE = """\
+CONSUMER_FB_CODE = f"""\
 FUNCTION_BLOCK FB_RollingAverageConsumer
 VAR
-    adder : RollingAverageLib.FB_RollingAverage;
+    adder : {LIBRARY_PLC}.FB_RollingAverage;
     lastResult : INT;
 END_VAR
 lastResult := adder.Step(sample := 10);
