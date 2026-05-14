@@ -32,6 +32,22 @@ Describe 'Invoke-TcRuntime.ps1 (mocked Restart-TwinCAT)' {
 "@
         Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psd1') -Value $psd1
         Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psm1') -Value @'
+if (-not ('TwinCAT.Management.Automation.WriteControlInfo' -as [type])) {
+    Add-Type -TypeDefinition @'
+namespace TwinCAT.Management.Automation {
+    public class WriteControlInfo {
+        public bool Succeeded { get; set; }
+        public string AdsErrorCode { get; set; }
+        public string Requested { get; set; }
+        public string Original { get; set; }
+        public string Reached { get; set; }
+        public System.TimeSpan Latency { get; set; }
+        public int PollCycles { get; set; }
+        public object[] LogMessages { get; set; }
+    }
+}
+'@
+}
 function Restart-TwinCAT {
     [CmdletBinding()]
     param(
@@ -39,8 +55,7 @@ function Restart-TwinCAT {
         $Command,
         [switch]$Force,
         [switch]$NoWait,
-        [int]$WaitTimeout,
-        [switch]$ThrowError
+        [int]$WaitTimeout
     )
     $global:LastRestartTwinCAT = @{
         NetId       = $NetId
@@ -48,8 +63,17 @@ function Restart-TwinCAT {
         Force       = [bool]$Force
         NoWait      = [bool]$NoWait
         WaitTimeout = $WaitTimeout
-        ThrowError  = [bool]$ThrowError
     }
+    $info = New-Object 'TwinCAT.Management.Automation.WriteControlInfo'
+    $info.Succeeded = $true
+    $info.AdsErrorCode = 'NoError'
+    $info.Requested = $Command
+    $info.Original = 'Run'
+    $info.Reached = if ($NoWait) { 'Invalid' } else { $Command }
+    $info.Latency = [System.TimeSpan]::FromMilliseconds(12)
+    $info.PollCycles = if ($NoWait) { 0 } else { 1 }
+    $info.LogMessages = @()
+    return $info
 }
 Export-ModuleMember -Function Restart-TwinCAT
 '@

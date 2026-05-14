@@ -57,24 +57,45 @@ try {
     }
     $restartCommand = $cmdMap[$Mode]
 
-    $args = @{
+    # NB: don't pass -ThrowError. TcXaeMgmt 7.x has a bogus
+    # InvalidCastException in the -ThrowError post-processing
+    # (AdsClient vs AdsConnection) that fires even on successful
+    # transitions. Read the WriteControlInfo object instead.
+    $restartArgs = @{
         NetId       = $TargetAmsId
         Command     = $restartCommand
         Force       = $true
         WaitTimeout = $WaitTimeoutSec * 1000
-        ThrowError  = $true
     }
-    if (-not $Wait) { $args.NoWait = $true }
+    if (-not $Wait) { $restartArgs.NoWait = $true }
 
-    Restart-TwinCAT @args | Out-Null
-
+    $info = Restart-TwinCAT @restartArgs 2>&1 | Where-Object { $_ -is [TwinCAT.Management.Automation.WriteControlInfo] } | Select-Object -First 1
+    if ($null -eq $info) {
+        return @{
+            success = $false
+            error   = "Restart-TwinCAT -Command $restartCommand on $TargetAmsId returned no WriteControlInfo."
+        }
+    }
+    if (-not $info.Succeeded -or $info.AdsErrorCode -ne 'NoError') {
+        $logs = @($info.LogMessages) -join '; '
+        return @{
+            success = $false
+            error   = "Restart-TwinCAT -Command $restartCommand failed (AdsErrorCode=$($info.AdsErrorCode); logs: $logs)."
+        }
+    }
     return @{
         success = $true
         details = @{
-            target  = $TargetAmsId
-            mode    = $Mode
-            command = $restartCommand
-            waited  = [bool]$Wait
+            target        = $TargetAmsId
+            mode          = $Mode
+            command       = $restartCommand
+            waited        = [bool]$Wait
+            requested     = [string]$info.Requested
+            original      = [string]$info.Original
+            reached       = [string]$info.Reached
+            ads_error     = [string]$info.AdsErrorCode
+            latency_ms    = [int]$info.Latency.TotalMilliseconds
+            poll_cycles   = [int]$info.PollCycles
         }
     }
 }

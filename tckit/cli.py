@@ -256,7 +256,7 @@ def _doctor(no_install: bool = False) -> int:
             else:
                 print(f"  Skipped {dep}; install with:")
                 print(
-                    f"    Install-Module -Name {dep} -Scope CurrentUser -Force -AcceptLicense"
+                    f"    Install-Module -Name {dep} -Scope CurrentUser -Force"
                 )
 
     print("\n" + "=" * 50)
@@ -274,7 +274,7 @@ def _doctor(no_install: bool = False) -> int:
             )
             for dep in missing_deps:
                 print(
-                    f"  Install-Module -Name {dep} -Scope CurrentUser -Force -AcceptLicense"
+                    f"  Install-Module -Name {dep} -Scope CurrentUser -Force"
                 )
     return 0 if overall else 1
 

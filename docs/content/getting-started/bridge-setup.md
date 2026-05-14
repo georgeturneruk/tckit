@@ -17,7 +17,7 @@ Three install paths, in order of operator-effort:
 
 1. **PowerShell Gallery (recommended)** — one command, no admin needed:
    ```powershell
-   Install-Module -Name TcXaeMgmt -Scope CurrentUser -Force -AcceptLicense
+   Install-Module -Name TcXaeMgmt -Scope CurrentUser -Force
    ```
    Or just run `tckit doctor` — if the module is missing, the doctor prompts to install it for you.
 

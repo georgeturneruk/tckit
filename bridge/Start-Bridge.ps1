@@ -139,23 +139,75 @@ function Install-BridgeDependency {
         return @{ success = $false; error = "Module '$Name' is not in the bridge install allow-list." }
     }
     $spec = $InstallableDependencies[$Name]
+    # Windows PowerShell 5.1 ships with PowerShellGet 1.0.0.1 and no
+    # NuGet provider. Beckhoff requires PowerShellGet >= 2.2.5 (see
+    # https://infosys.beckhoff.com/content/1033/tc3_ads_ps_tcxaemgmt/5531473547.html).
+    # We bootstrap both, then run the real install in a fresh PowerShell
+    # subprocess so the new PowerShellGet is the one that loads — the
+    # current process is already bound to 1.0.0.1.
     try {
-        Install-Module -Name $Name `
-                       -Scope CurrentUser `
-                       -MinimumVersion $spec.MinimumVersion `
-                       -Force `
-                       -AcceptLicense `
-                       -ErrorAction Stop
+        $nuget = Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue |
+            Where-Object { $_.Version -ge [version]'2.8.5.201' } | Select-Object -First 1
+        if (-not $nuget) {
+            Install-PackageProvider -Name NuGet `
+                                    -MinimumVersion 2.8.5.201 `
+                                    -Scope CurrentUser `
+                                    -Force `
+                                    -ErrorAction Stop | Out-Null
+        }
+        # Trust PSGallery so Install-Module doesn't prompt.
+        $repo = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+        if ($repo -and $repo.InstallationPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+        }
+        # Upgrade PowerShellGet itself if too old. -Force allows side-by-side install.
+        $psget = Get-Module -ListAvailable PowerShellGet | Sort-Object Version -Descending | Select-Object -First 1
+        if (-not $psget -or $psget.Version -lt [version]'2.2.5') {
+            Install-Module -Name PowerShellGet `
+                           -Scope CurrentUser `
+                           -MinimumVersion 2.2.5 `
+                           -Force `
+                           -AllowClobber `
+                           -ErrorAction Stop
+        }
     } catch {
-        return @{ success = $false; error = "Install-Module $Name failed: $($_.Exception.Message)" }
+        return @{ success = $false; error = "PSGet/NuGet bootstrap failed: $($_.Exception.Message)" }
     }
-    $mod = Get-Module -ListAvailable $Name -ErrorAction SilentlyContinue |
-        Sort-Object Version -Descending | Select-Object -First 1
+
+    # Run the real Install-Module in a fresh PowerShell subprocess so the
+    # newly-installed PowerShellGet is loaded (the bridge's parent process
+    # is already pinned to PowerShellGet 1.0.0.1 in-memory).
+    # The subprocess loads the freshly-bootstrapped PowerShellGet 2.2.5+,
+    # which both supports and requires -AcceptLicense for licence-tagged
+    # modules like TcXaeMgmt.
+    $installScript = @"
+`$ErrorActionPreference = 'Stop'
+try {
+    Install-Module -Name '$Name' -Scope CurrentUser -MinimumVersion '$($spec.MinimumVersion)' -Force -AcceptLicense -ErrorAction Stop
+    `$mod = Get-Module -ListAvailable '$Name' | Sort-Object Version -Descending | Select-Object -First 1
+    @{ ok = `$true; version = if (`$mod) { `$mod.Version.ToString() } else { `$null } } | ConvertTo-Json -Compress
+} catch {
+    @{ ok = `$false; error = `$_.Exception.Message } | ConvertTo-Json -Compress
+}
+"@
+    $tempScript = Join-Path ([IO.Path]::GetTempPath()) ("tckit-install-{0}.ps1" -f ([Guid]::NewGuid()))
+    Set-Content -LiteralPath $tempScript -Value $installScript -Encoding UTF8
+    try {
+        $rawJson = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
+        $parsed = $rawJson | ConvertFrom-Json
+    } catch {
+        return @{ success = $false; error = "Install subprocess failed: $($_.Exception.Message)" }
+    } finally {
+        Remove-Item -LiteralPath $tempScript -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $parsed.ok) {
+        return @{ success = $false; error = "Install-Module $Name failed: $($parsed.error)" }
+    }
     return @{
         success = $true
         details = @{
             name    = $Name
-            version = if ($mod) { $mod.Version.ToString() } else { $null }
+            version = $parsed.version
             scope   = 'CurrentUser'
         }
     }
