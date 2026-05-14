@@ -73,8 +73,8 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-    $sm = Get-TcSysManager -Dte $dte
-    $plc = Resolve-TcPlcName -SysManager $sm -Explicit $PlcName
+    $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
+    $sm = Get-TcSysManager -Dte $dte -PlcName $plc
 
     # Ensure parent directory exists; SaveAsLibrary will not create it.
     $outDir = Split-Path -Parent $OutputPath

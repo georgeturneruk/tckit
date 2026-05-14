@@ -52,8 +52,8 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-    $sm = Get-TcSysManager -Dte $dte
-    $plcName = Resolve-TcPlcName -SysManager $sm -Explicit $PlcName
+    $plcName = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
+    $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 
     $pous = Get-TcPousFolder -SysManager $sm -PlcName $plcName
     $newItem = $pous.CreateChild($Name, $kind, $null, $null)

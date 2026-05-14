@@ -3,14 +3,22 @@
     Deploy a built TwinCAT configuration to a target runtime via COM.
 
 .DESCRIPTION
-    Sets the target NetId on the active configuration and calls
-    ActivateConfiguration() on the system-manager root.
+    Sets the target NetId on the chosen TwinCAT project's system manager
+    and calls ActivateConfiguration(). In a multi-tsproj sln (one .tsproj
+    per PLC, as produced by Add-TcPlcProject) you must pass -PlcName so
+    the right TwinCAT project is targeted; in a single-tsproj sln the
+    PlcName is optional.
 
 .PARAMETER ProjectPath
     Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
 
 .PARAMETER TargetAmsId
     AMS Net ID of the target (e.g. 192.168.1.100.1.1). Falls back to TARGET_AMS_ID env var.
+
+.PARAMETER PlcName
+    Name of the PLC whose containing TwinCAT project should be deployed.
+    Optional; falls back to PLC_PROJECT_NAME env var, then to the only
+    PLC in the solution if there's exactly one.
 
 .PARAMETER ComVersion
     DTE COM version. Default 17.0.
@@ -21,6 +29,7 @@
 param(
     [string]$ProjectPath = $env:PLC_PROJECT_PATH,
     [string]$TargetAmsId = $env:TARGET_AMS_ID,
+    [string]$PlcName     = $env:PLC_PROJECT_NAME,
     [string]$ComVersion  = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode     = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
@@ -37,17 +46,8 @@ try {
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
 
-    # Find a TwinCAT project and grab its system manager. Probe by calling
-    # LookupTreeItem('TIPC') — only ITcSysManager exposes it. (All COM objects
-    # report GetType().Name == 'System.__ComObject', so type-name checks fail.)
-    $sm = $null
-    foreach ($proj in $dte.Solution.Projects) {
-        $obj = $null
-        try { $obj = $proj.Object } catch { continue }
-        if ($null -eq $obj) { continue }
-        try { $obj.LookupTreeItem('TIPC') | Out-Null; $sm = $obj; break } catch { continue }
-    }
-    if ($null -eq $sm) { return @{ success = $false; error = 'No TwinCAT project (ITcSysManager) found.' } }
+    $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
+    $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
 
     # Set target NetId, then activate.
     try {
@@ -62,7 +62,7 @@ try {
         return @{ success = $false; error = "ActivateConfiguration failed: $($_.Exception.Message)" }
     }
 
-    return @{ success = $true; details = @{ target = $TargetAmsId } }
+    return @{ success = $true; details = @{ target = $TargetAmsId; plc = $resolvedPlc } }
 }
 catch {
     return @{ success = $false; error = $_.Exception.Message }

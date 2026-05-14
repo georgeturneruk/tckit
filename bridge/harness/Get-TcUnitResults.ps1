@@ -190,8 +190,8 @@ try {
         }
         $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
         Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-        $sm = Get-TcSysManager -Dte $dte
-        $resolvedPlc = Resolve-TcPlcName -SysManager $sm -Explicit $PlcName
+        $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
+        $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
         $plcNode = Get-TcPlcProjectNode -SysManager $sm -PlcName $resolvedPlc
         $XmlPath = Get-TcUnitXmlPath -PlcNode $plcNode
     }
