@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_TrafficLight" Id="{bb714433-311f-4a1c-a08f-af4230b2ee6c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TrafficLight
+VAR
+    state : INT;  // 0=Red, 1=RedAmber, 2=Green, 3=Amber
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{4122d60d-9b9b-4f5d-bbcb-8cf5fc27f0fb}">
+      <Declaration><![CDATA[METHOD Step : INT
+CASE state OF
+    0:
+        state := 1;
+    1:
+        state := 2;
+    2:
+        state := 0;
+    3:
+        state := 0;
+END_CASE;
+Step := state;
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

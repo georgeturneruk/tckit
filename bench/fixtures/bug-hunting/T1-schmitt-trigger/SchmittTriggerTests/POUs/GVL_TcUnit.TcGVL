@@ -1,9 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1">
-  <GVL Name="GVL_TcUnit" Id="{d9e6e827-5d64-49d8-a639-c78588334d45}">
-    <Declaration><![CDATA[VAR_GLOBAL CONSTANT
-    TcUnit_ResultExportXmlPath : T_MaxString :=
-        'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml';
-END_VAR]]></Declaration>
-  </GVL>
-</TcPlcObject>

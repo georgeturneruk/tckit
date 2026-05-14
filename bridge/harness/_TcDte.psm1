@@ -295,23 +295,22 @@ function Wait-TcPlcProjectsLoaded {
     }
 }
 
-function Get-TcSysManager {
+function Get-TcSysManagers {
     <#
     .SYNOPSIS
-        Find the loaded TwinCAT project's ITcSysManager. Probes by trying
-        LookupTreeItem('TIPC') because all COM objects share GetType().Name.
+        Return every ITcSysManager in the loaded solution.
 
-    .NOTES
-        ITcSmTreeItem exposes _NewEnum (its child enumerator), which means
-        PowerShell treats the object itself as a collection and unrolls it
-        when emitted via `return`. We use Write-Output -NoEnumerate to
-        prevent unrolling — same trick is used by all helpers below that
-        return a tree item.
+    .DESCRIPTION
+        A sln may host more than one TwinCAT project; each TwinCAT project
+        exposes its own ITcSysManager via its EnvDTE Project.Object. The
+        wizard "Add → New Project → TwinCAT XAE Project" pattern produces
+        exactly this layout (two sibling .tsprojs sharing one .sln), and
+        our refactored Add-TcPlcProject follows it. So callers that want
+        to find a PLC by name need to iterate every sysmanager.
 
-        Retries the probe a few times with short sleeps to absorb a race
-        where Solution.Projects[i].Object is briefly $null while XAE is
-        finishing a project mutation (observed across back-to-back harness
-        calls after add_pou / SaveAsLibrary etc.).
+        Probes each EnvDTE project by trying LookupTreeItem('TIPC') and
+        retries the iteration to absorb the brief window where
+        Projects[i].Object is $null while XAE is finishing a mutation.
     #>
     param(
         [Parameter(Mandatory)]$Dte,
@@ -324,43 +323,107 @@ function Get-TcSysManager {
             Start-Sleep -Milliseconds $DelayMs
             continue
         }
+        $found = @()
         foreach ($proj in $Dte.Solution.Projects) {
             $obj = $null
             try { $obj = $proj.Object } catch { continue }
             if ($null -eq $obj) { continue }
             try {
                 $obj.LookupTreeItem('TIPC') | Out-Null
-                Write-Output $obj -NoEnumerate
-                return
+                $found += $obj
             } catch { continue }
         }
+        if ($found.Count -gt 0) { return ,$found }
         Start-Sleep -Milliseconds $DelayMs
     }
     throw 'No TwinCAT project (ITcSysManager) found in solution.'
 }
 
+function Get-TcSysManager {
+    <#
+    .SYNOPSIS
+        Return one ITcSysManager. If -PlcName is given, return the sysmanager
+        whose TIPC contains that PLC. Otherwise return the first sysmanager
+        in the solution.
+
+    .DESCRIPTION
+        Sln-wide operations that don't care which .tsproj they hit (e.g.
+        first-project discovery during create) pass no -PlcName. PLC-scoped
+        operations pass the PLC name so we land on the right .tsproj in a
+        multi-PLC sln.
+
+        Backwards-compatible with the single-tsproj case: when only one
+        sysmanager exists, calling with or without -PlcName yields the
+        same object.
+
+        ITcSmTreeItem exposes _NewEnum, so PowerShell treats it as a
+        collection and unrolls on `return`; we use Write-Output -NoEnumerate
+        to keep the COM object intact.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [string]$PlcName = '',
+        [int]$MaxAttempts = 8,
+        [int]$DelayMs = 250
+    )
+    if (-not $PlcName) {
+        $managers = Get-TcSysManagers -Dte $Dte -MaxAttempts $MaxAttempts -DelayMs $DelayMs
+        Write-Output $managers[0] -NoEnumerate
+        return
+    }
+    # When looking up by PLC name, retry the whole enumeration on each
+    # attempt. Get-TcSysManagers returns as soon as ANY sysmanager is
+    # exposed, so a snapshot mid-mutation can see only one of the two
+    # projects in a multi-tsproj sln and miss the PLC we want.
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $managers = @()
+        try { $managers = Get-TcSysManagers -Dte $Dte -MaxAttempts 1 -DelayMs 0 } catch { }
+        foreach ($sm in $managers) {
+            try {
+                $tipc = $sm.LookupTreeItem('TIPC')
+                for ($i = 1; $i -le $tipc.ChildCount; $i++) {
+                    if ($tipc.Child($i).Name -eq $PlcName) {
+                        Write-Output $sm -NoEnumerate
+                        return
+                    }
+                }
+            } catch { continue }
+        }
+        Start-Sleep -Milliseconds $DelayMs
+    }
+    throw "PLC project '$PlcName' not found in any TwinCAT project under the solution."
+}
+
 function Resolve-TcPlcName {
     <#
     .SYNOPSIS
-        Pick the PLC project name to operate on. If $Explicit is non-empty, use
-        it. Otherwise: if exactly one PLC project exists under TIPC, use that.
-        If multiple exist and no name was provided, throw.
+        Pick the PLC project name to operate on. If $Explicit is non-empty,
+        return it. Otherwise scan every TwinCAT project under the solution
+        and return the unique PLC name; throw with the candidate list if
+        there's zero or more than one across all .tsprojs.
     #>
     param(
-        [Parameter(Mandatory)]$SysManager,
+        [Parameter(Mandatory)]$Dte,
         [string]$Explicit = ''
     )
     if ($Explicit) { return $Explicit }
-    $tipc = $SysManager.LookupTreeItem('TIPC')
-    if ($tipc.ChildCount -eq 0) {
+    $managers = Get-TcSysManagers -Dte $Dte
+    $names = @()
+    foreach ($sm in $managers) {
+        try {
+            $tipc = $sm.LookupTreeItem('TIPC')
+            for ($i = 1; $i -le $tipc.ChildCount; $i++) {
+                $names += $tipc.Child($i).Name
+            }
+        } catch { continue }
+    }
+    if ($names.Count -eq 0) {
         throw 'No PLC projects under TIPC. Add one (or pass -PlcName explicitly).'
     }
-    if ($tipc.ChildCount -gt 1) {
-        $names = @()
-        for ($i = 1; $i -le $tipc.ChildCount; $i++) { $names += $tipc.Child($i).Name }
-        throw "Multiple PLC projects under TIPC ($($names -join ', ')). Pass -PlcName to disambiguate."
+    if ($names.Count -gt 1) {
+        throw "Multiple PLC projects in solution ($($names -join ', ')). Pass -PlcName to disambiguate."
     }
-    return $tipc.Child(1).Name
+    return $names[0]
 }
 
 function Get-TcPlcProjectNode {
@@ -574,7 +637,7 @@ function Read-TcBuildLog {
 # ------------------------------------------------------------------
 
 Export-ModuleMember -Function `
-    Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, `
+    Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcProjectNode, Get-TcPousFolder, Find-TcChild, `
     Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `

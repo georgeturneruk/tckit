@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PipelineInner" Id="{41e22962-c3d3-42fe-bb0e-f025a9d33aab}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PipelineInner
+VAR_INPUT
+    value : INT;
+END_VAR
+VAR_OUTPUT
+    bError : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Inner raises an error for any negative input.
+bError := value < 0;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

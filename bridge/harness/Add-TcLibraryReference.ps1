@@ -55,8 +55,8 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-    $sm = Get-TcSysManager -Dte $dte
-    $plc = Resolve-TcPlcName -SysManager $sm -Explicit $PlcName
+    $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
+    $sm = Get-TcSysManager -Dte $dte -PlcName $plc
 
     # References node is the library manager via COM dispatch.
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")

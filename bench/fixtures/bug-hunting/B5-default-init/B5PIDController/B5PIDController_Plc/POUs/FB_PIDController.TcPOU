@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PIDController" Id="{28c72856-3348-4e4b-84bf-fbef7e2d84de}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PIDController
+VAR_INPUT
+    fError : REAL;
+END_VAR
+VAR_OUTPUT
+    fOutput : REAL;
+END_VAR
+VAR
+    fGain : REAL := 0.0;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{152fd223-7e98-4377-9c62-fe843b267f44}">
+      <Declaration><![CDATA[METHOD Step : REAL
+fOutput := fError * fGain;
+Step := fOutput;
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

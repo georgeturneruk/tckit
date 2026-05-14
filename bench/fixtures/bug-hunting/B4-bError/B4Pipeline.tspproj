@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
-	<Project ProjectGUID="{D8849471-27BD-464B-A6BF-46B6ED4A607D}" Target64Bit="true" ShowHideConfigurations="#x6">
-		<Plc>
-			<Project GUID="{755D75E7-B489-4BC8-9887-8ACD85449655}" Name="B4Pipeline_Plc" PrjFilePath="B4Pipeline_Plc\B4Pipeline_Plc.plcproj" TmcFilePath="B4Pipeline_Plc\B4Pipeline_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
-			<Project GUID="{EFE31A9A-B21B-4418-9BC1-A57F19FFA43D}" Name="PipelineTests" PrjFilePath="PipelineTests\PipelineTests.plcproj" TmcFilePath="PipelineTests\PipelineTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
-		</Plc>
-	</Project>
-</TcSmProject>

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Counter" Id="{fa85c2dd-db41-46de-b2b7-1fbdee95ea6f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Counter
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="GetSignedDelta" Id="{38c47d71-280c-4dc2-970f-09a801435665}">
+      <Declaration><![CDATA[METHOD GetSignedDelta : UDINT
+VAR_INPUT
+    a : INT;
+    b : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GetSignedDelta := DINT_TO_UDINT(INT_TO_DINT(a) - INT_TO_DINT(b));
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
