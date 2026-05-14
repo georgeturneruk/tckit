@@ -327,3 +327,44 @@ method or an optional `library_path` parameter.
   `add_plc_project` callers are unaffected (they already supply an
   explicit name). The integration test and B1 fixture follow the new
   convention.
+- 2026-05-14: **Reverse the multi-PLC layout entirely** in
+  [#81](https://github.com/georgeturneruk/tckit/pull/81). The previous
+  pattern (one PLC-only `.tspproj`, two PLCs under one `<Plc>` element)
+  authored cleanly and built in-memory but crashed
+  `TcXaeShell.exe` on every `Solution.Open` from disk with an
+  `AccessViolationException` in `TwinCAT System Manager.x64.dll`
+  during `IVsParentProject.OpenChildren()`. Root cause: the PLC-only
+  `.tspproj` template, written via `Solution.AddFromTemplate`, doesn't
+  persist the System Manager `<Instance>` block for additional PLCs;
+  the on-disk file is just a 4-line skeleton. The wizard's
+  `File → New → TwinCAT XAE Project` path uses a full `.tsproj`
+  template, with one PLC per TwinCAT project and additional projects
+  added as siblings at sln level. We now match that:
+  - `New-TcProject` uses the full template
+    (`Components\Base\PrjTemplate\TwinCAT Project.tsproj`) and places
+    the `.tsproj` in a subdir named after itself.
+  - `Add-TcPlcProject` adds a second TwinCAT project at sln level,
+    suffixed `_Tc` so its name doesn't collide with the PLC's;
+    same-name objects at different tree levels also crash XAE on
+    save.
+  - Both call `File.SaveAll` after the structural mutation;
+    `Solution.SaveAs` alone doesn't flush `<System>`/`<Plc>`/`<Instance>`
+    to disk.
+  - In multi-tsproj slns every TwinCAT project exposes its own
+    `ITcSysManager`; `_TcDte.psm1` gains `Get-TcSysManagers` (plural)
+    and `Get-TcSysManager` takes an optional `-PlcName` to pick the
+    sysmanager hosting the named PLC. The 12 downstream harness
+    scripts switch to `Resolve-TcPlcName -Dte $dte` followed by
+    `Get-TcSysManager -Dte $dte -PlcName $plc`. `Invoke-TcDeploy`
+    gains a `-PlcName` parameter for the same reason.
+  - `Resolve-TcPlcName`'s port signature is unchanged from a caller
+    POV; what changed is what it scans. Callers that don't care
+    about the .tsproj wrapping continue to work unchanged.
+
+  ADR-0009's port signatures (`create_project`, `add_plc_project`,
+  `save_plc_as_library`, `add_library_reference`,
+  `add_library_placeholder`) are unchanged from
+  [#71](https://github.com/georgeturneruk/tckit/pull/71); only the
+  on-disk shape and the bridge implementation differ. Compiled
+  library references still go through the same `AddLibrary` /
+  `AddPlaceholder` calls.

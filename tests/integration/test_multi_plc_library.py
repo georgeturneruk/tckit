@@ -134,7 +134,10 @@ def test_end_to_end_multi_plc_with_library_reference(
     assert add_consumer.success, f"add_pou (consumer FB) failed: {add_consumer.error}"
 
     # 6) Build the Tests PLC project. Success here proves the library reference
-    #    resolved and the installed library was usable.
+    #    resolved and the installed library was usable. Note: this only exercises
+    #    in-memory authoring; the on-disk round-trip (close + reopen from disk)
+    #    is covered separately by the bench bug-hunting fixtures, which load
+    #    their pre-authored .sln from disk on every run.
     built = builder.build(str(sln_path), plc_name=TESTS_PLC_NAME)
     assert built.success, (
         f"Tests PLC build failed: {[e.message for e in built.errors]}"
