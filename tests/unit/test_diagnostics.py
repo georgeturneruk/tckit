@@ -8,11 +8,12 @@ import pytest
 from tckit.config import TcKitConfig
 from tckit.utils.bridge_client import BridgeClient
 from tckit.utils.diagnostics import (
+    bridge_dependencies,
     bridge_health,
+    install_bridge_dependency,
     is_valid_ams_netid,
     validate_config,
 )
-
 
 # ---------------------------------------------------------------------------
 # is_valid_ams_netid — six dot-separated octets
@@ -168,3 +169,149 @@ def test_bridge_health_returns_error_on_connection_failure(
     # ConnectError gets wrapped into BridgeUnavailableError by BridgeClient,
     # which makes health() return False — so the message reads "not reachable".
     assert "test-bridge" in msg
+
+
+# ---------------------------------------------------------------------------
+# bridge_dependencies — extracts dependencies block from /health
+# ---------------------------------------------------------------------------
+
+
+def test_bridge_dependencies_extracts_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "ok",
+                "version": "0.1.0",
+                "dependencies": {"TcXaeMgmt": "6.2.127"},
+            },
+        )
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    deps = bridge_dependencies()
+    assert deps == {"TcXaeMgmt": "6.2.127"}
+
+
+def test_bridge_dependencies_marks_missing_as_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "ok",
+                "dependencies": {"TcXaeMgmt": None},
+            },
+        )
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    deps = bridge_dependencies()
+    assert deps == {"TcXaeMgmt": None}
+
+
+def test_bridge_dependencies_returns_empty_when_block_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Older bridge with no dependencies block.
+        return httpx.Response(200, json={"status": "ok", "version": "0.1.0"})
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    deps = bridge_dependencies()
+    assert deps == {}
+
+
+def test_bridge_dependencies_returns_empty_on_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("nope")
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    assert bridge_dependencies() == {}
+
+
+# ---------------------------------------------------------------------------
+# install_bridge_dependency — POST to /install-dependency
+# ---------------------------------------------------------------------------
+
+
+def test_install_bridge_dependency_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/install-dependency"
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "details": {
+                    "name": "TcXaeMgmt",
+                    "version": "6.2.127",
+                    "scope": "CurrentUser",
+                },
+            },
+        )
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    ok, msg = install_bridge_dependency("TcXaeMgmt")
+    assert ok is True
+    assert "TcXaeMgmt" in msg
+    assert "6.2.127" in msg
+
+
+def test_install_bridge_dependency_failure_surfaces_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"success": False, "error": "Install-Module timed out"},
+        )
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    ok, msg = install_bridge_dependency("TcXaeMgmt")
+    assert ok is False
+    assert "Install-Module timed out" in msg
+
+
+def test_install_bridge_dependency_handles_bridge_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("nope")
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+    ok, msg = install_bridge_dependency("TcXaeMgmt")
+    assert ok is False
+    assert "bridge" in msg.lower()

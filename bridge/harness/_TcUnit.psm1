@@ -1,20 +1,24 @@
 <#
 .SYNOPSIS
-    TcUnit-specific helpers: live-runtime symbol reads via ADS, the
-    TcUnit_ResultExportXmlPath constant lookup, and file-freshness polling.
+    TcUnit-specific helpers: the TcUnit_ResultExportXmlPath constant lookup,
+    a session-based symbol-equality poll, and file-freshness polling.
 
 .DESCRIPTION
     Sibling module to _TcDte.psm1. _TcDte owns DTE / project-tree navigation;
-    this module owns concerns that touch the running runtime (ADS) or the
-    TcUnit project convention. Exported functions:
+    this module owns concerns that are specific to the TcUnit runner.
 
-      Get-TcAdsAssembly       — locate and load TwinCAT.Ads.dll once per session
-      Connect-TcAdsClient     — open an ADS connection to a target's PLC port
-      Get-TcSymbolValue       — read a single ADS symbol value
-      Wait-TcSymbolEquals     — poll a symbol until it equals a value or times out
-      Get-TcUnitXmlPath       — resolve the TcUnit_ResultExportXmlPath constant
-                                 from the test project (falls back to default)
-      Wait-TcFileFresh        — wait for a file to appear with mtime > a given epoch
+    Runtime ADS work (symbol reads, runtime-state transitions) goes through
+    Beckhoff's official TcXaeMgmt module. Callers create a TcSession via
+    New-TcSession from TcXaeMgmt and pass it to Wait-TcSymbolEquals here.
+
+    Exported functions:
+      Wait-TcSymbolEquals    — poll a PLC symbol on a TcSession until it
+                                equals a value or times out
+      Get-TcUnitXmlPath      — resolve the TcUnit_ResultExportXmlPath
+                                constant from the test project's GVL
+                                declarations (falls back to default)
+      Wait-TcFileFresh       — wait for a file to appear with mtime > a
+                                given epoch
 #>
 
 Set-StrictMode -Version Latest
@@ -24,86 +28,38 @@ Set-StrictMode -Version Latest
 # ------------------------------------------------------------------
 
 $script:TcUnitDefaultXmlPath = 'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml'
-$script:TcUnitPlcRuntimePort = 851
-$script:TcAdsAssemblyLoaded  = $false
 
 # ------------------------------------------------------------------
-# ADS assembly + client
+# Symbol polling
 # ------------------------------------------------------------------
-
-function Get-TcAdsAssembly {
-    <#
-    .SYNOPSIS
-        Load TwinCAT.Ads.dll once per session. Honours $env:TCADS_DLL_PATH.
-    #>
-    if ($script:TcAdsAssemblyLoaded) { return }
-
-    $candidates = @()
-    if ($env:TCADS_DLL_PATH) { $candidates += $env:TCADS_DLL_PATH }
-    $candidates += @(
-        'C:\TwinCAT\AdsApi\.NET\v4.0\TwinCAT.Ads.dll',
-        'C:\TwinCAT\AdsApi\TcAdsDll\.NET\v4.0\TwinCAT.Ads.dll',
-        'C:\TwinCAT\3.1\Components\Plc\TwinCAT.Ads.dll'
-    )
-    foreach ($path in $candidates) {
-        if ($path -and (Test-Path $path)) {
-            Add-Type -Path $path
-            $script:TcAdsAssemblyLoaded = $true
-            return
-        }
-    }
-    throw "TwinCAT.Ads.dll not found. Tried: $($candidates -join '; '). Set TCADS_DLL_PATH to override."
-}
-
-function Connect-TcAdsClient {
-    <#
-    .SYNOPSIS
-        Open a TwinCAT.Ads.AdsClient connected to the PLC runtime on the
-        target NetId. Caller MUST Disconnect()/Dispose() — wrap in try/finally.
-    #>
-    param(
-        [Parameter(Mandatory)][string]$TargetAmsId,
-        [int]$Port = $script:TcUnitPlcRuntimePort
-    )
-    Get-TcAdsAssembly
-    $client = New-Object 'TwinCAT.Ads.AdsClient'
-    $client.Connect($TargetAmsId, $Port)
-    return $client
-}
-
-# ------------------------------------------------------------------
-# Symbol reads
-# ------------------------------------------------------------------
-
-function Get-TcSymbolValue {
-    <#
-    .SYNOPSIS
-        Read a single ADS symbol value. ``$Type`` is a .NET type, e.g.
-        ``[bool]``, ``[uint32]``, ``[int]``.
-
-    .EXAMPLE
-        Get-TcSymbolValue -Client $c -Symbol 'TcUnit.G_TestRunner.bTestSuitesFinished' -Type ([bool])
-    #>
-    param(
-        [Parameter(Mandatory)]$Client,
-        [Parameter(Mandatory)][string]$Symbol,
-        [Parameter(Mandatory)][type]$Type
-    )
-    return $Client.ReadValue($Symbol, $Type)
-}
 
 function Wait-TcSymbolEquals {
     <#
     .SYNOPSIS
-        Poll a symbol until it equals the expected value or timeout expires.
+        Poll a PLC symbol on an existing TcXaeMgmt session until it equals
+        the expected value or the timeout expires.
+
+    .PARAMETER Session
+        A TcSession created by New-TcSession (from TcXaeMgmt).
+
+    .PARAMETER Path
+        Symbol path, e.g. ``TcUnit.G_TestRunner.bTestSuitesFinished``.
+
+    .PARAMETER Expected
+        Value the symbol must reach for success.
+
+    .PARAMETER TimeoutMs
+        Maximum total wait, in milliseconds.
+
+    .PARAMETER PollIntervalMs
+        Sleep between reads, in milliseconds.
 
     .OUTPUTS
         @{ success = bool; value = <last read>; elapsed_ms = int }
     #>
     param(
-        [Parameter(Mandatory)]$Client,
-        [Parameter(Mandatory)][string]$Symbol,
-        [Parameter(Mandatory)][type]$Type,
+        [Parameter(Mandatory)]$Session,
+        [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)]$Expected,
         [int]$TimeoutMs = 120000,
         [int]$PollIntervalMs = 500
@@ -112,7 +68,7 @@ function Wait-TcSymbolEquals {
     $last = $null
     while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
         try {
-            $last = Get-TcSymbolValue -Client $Client -Symbol $Symbol -Type $Type
+            $last = Read-TcValue -Session $Session -Path $Path
             if ($last -eq $Expected) {
                 $sw.Stop()
                 return @{ success = $true; value = $last; elapsed_ms = [int]$sw.ElapsedMilliseconds }
@@ -143,8 +99,8 @@ function Get-TcUnitXmlPath {
         otherwise returns the canonical default
         ``C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml``.
 
-        This reads the compile-time constant text, not a runtime symbol.
-        Robust across runtime states (pre-Run, Run, Config).
+        Compile-time constant text, not a runtime symbol read — robust
+        across pre-Run / Run / Config states.
 
     .PARAMETER PlcNode
         The PLC project tree item (TIPC^<plc>^<plc> Project). Get one via
@@ -184,7 +140,7 @@ function Wait-TcFileFresh {
     .SYNOPSIS
         Wait for a file to appear with a LastWriteTime strictly newer than
         a known epoch. Used to confirm TcUnit has finished writing its XML
-        after the suites flag flipped to true.
+        after the suites-finished flag flipped to true.
 
     .OUTPUTS
         @{ success = bool; mtime = DateTime; elapsed_ms = int }
@@ -215,6 +171,6 @@ function Wait-TcFileFresh {
 # ------------------------------------------------------------------
 
 Export-ModuleMember -Function `
-    Get-TcAdsAssembly, Connect-TcAdsClient, `
-    Get-TcSymbolValue, Wait-TcSymbolEquals, `
-    Get-TcUnitXmlPath, Wait-TcFileFresh
+    Wait-TcSymbolEquals, `
+    Get-TcUnitXmlPath, `
+    Wait-TcFileFresh

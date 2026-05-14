@@ -1,3 +1,4 @@
+#Requires -Modules @{ ModuleName='TcXaeMgmt'; ModuleVersion='6.0' }
 <#
 .SYNOPSIS
     Run a TcUnit test cycle to completion against a target runtime.
@@ -10,12 +11,14 @@
          declarations (falls back to the canonical default).
       3. Delete the existing XML file so we can detect the new write.
       4. Capture the start epoch.
-      5. Ensure the target runtime is in Run mode (-Wait inline).
-      6. Poll TcUnit.G_TestRunner.bTestSuitesFinished via ADS until true
-         or -TimeoutSeconds expires.
+      5. Ensure the target runtime is in Run mode (Invoke-TcRuntime -Wait).
+      6. Open a TcSession on the PLC runtime port (851) and poll
+         TcUnit.G_TestRunner.bTestSuitesFinished until true or
+         -TimeoutSeconds expires.
       7. Wait for the XML file to land with mtime > start epoch.
-      8. Read live summary counters via ADS and return them alongside
-         the XML path (the full structured shape comes from /results).
+      8. Read live summary counters via Read-TcValue and return them
+         alongside the XML path (the full structured shape comes from
+         /results).
 
 .PARAMETER ProjectPath
     Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
@@ -51,6 +54,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+Import-Module TcXaeMgmt -MinimumVersion 6.0 -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot '_TcUnit.psm1') -Force
 
@@ -59,7 +63,7 @@ try {
     if (-not $TargetAmsId) { return @{ success = $false; error = 'TargetAmsId required.' } }
 
     # ----------------------------------------------------------------
-    # Attach DTE, resolve PLC project + XML path
+    # Attach DTE, resolve PLC project + XML path (compile-time concerns)
     # ----------------------------------------------------------------
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
@@ -80,18 +84,15 @@ try {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
     # ----------------------------------------------------------------
-    # Ensure runtime is in Run mode
+    # Ensure runtime is in Run mode (Invoke-TcRuntime delegates to
+    # Restart-TwinCAT via TcXaeMgmt)
     # ----------------------------------------------------------------
     $runtimeScript = Join-Path $PSScriptRoot 'Invoke-TcRuntime.ps1'
     $runtimeResult = & $runtimeScript `
-        -ProjectPath $ProjectPath `
         -TargetAmsId $TargetAmsId `
         -Mode 'Run' `
-        -PlcName $resolvedPlc `
         -Wait $true `
-        -WaitTimeoutSec 30 `
-        -ComVersion $ComVersion `
-        -XaeMode $XaeMode
+        -WaitTimeoutSec 30
     if (-not $runtimeResult.success) {
         return @{
             success = $false
@@ -101,15 +102,14 @@ try {
     }
 
     # ----------------------------------------------------------------
-    # Poll bTestSuitesFinished via ADS
+    # Open a TcSession on the PLC runtime + poll bTestSuitesFinished
     # ----------------------------------------------------------------
-    $client = $null
+    $session = $null
     try {
-        $client = Connect-TcAdsClient -TargetAmsId $TargetAmsId
+        $session = New-TcSession -NetId $TargetAmsId -Port 851
         $finished = Wait-TcSymbolEquals `
-            -Client $client `
-            -Symbol 'TcUnit.G_TestRunner.bTestSuitesFinished' `
-            -Type ([bool]) `
+            -Session $session `
+            -Path 'TcUnit.G_TestRunner.bTestSuitesFinished' `
             -Expected $true `
             -TimeoutMs ($TimeoutSeconds * 1000) `
             -PollIntervalMs $PollIntervalMs
@@ -152,7 +152,7 @@ try {
         }
         foreach ($key in $counterMap.Keys) {
             try {
-                $summary[$key] = [int](Get-TcSymbolValue -Client $client -Symbol $counterMap[$key] -Type ([uint32]))
+                $summary[$key] = [int](Read-TcValue -Session $session -Path $counterMap[$key])
             } catch {
                 # Symbol unknown on this TcUnit version; leave default 0.
             }
@@ -167,9 +167,8 @@ try {
         }
     }
     finally {
-        if ($null -ne $client) {
-            try { $client.Disconnect() } catch { }
-            try { $client.Dispose() } catch { }
+        if ($null -ne $session) {
+            try { Close-TcSession -Session $session } catch { }
         }
     }
 }
