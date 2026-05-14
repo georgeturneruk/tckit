@@ -15,4 +15,5 @@ _Output/
 *.tpy
 *.suo
 *.~u
+*.bak
 .vs/

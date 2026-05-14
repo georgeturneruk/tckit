@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_RollingAverageConsumer" Id="{47a94d22-7f5a-432e-b639-de5a04df2165}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RollingAverageConsumer
+VAR
+    adder : B1RollingAverage.FB_RollingAverage;
+    lastResult : INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[lastResult := adder.Step(sample := 10);
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

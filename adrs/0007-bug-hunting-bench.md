@@ -281,18 +281,19 @@ unaffected.
   for iteration counting, noted the longer cold-start timeout, and
   clarified that the bridge is harness-side only (vanilla never
   sees it).
-- 2026-05-14: Phase C0 (B1 pilot-fixture authoring) kicked off.
-  Authoring script + fixture scaffolding (CLAUDE.md copy, TASK.md
-  prompt, .gitignore, README) landed; the script drove the bridge
-  end-to-end and surfaced two bridge bugs in the ADR-0009 surface
-  on the first live run — `New-TcProject.ps1` and
-  `Add-TcPlcProject.ps1` were not suppressing the COM-method return
-  values from `Solution.Create` / `AddFromTemplate` / `SaveAs`, so
-  the harness returned a JSON array instead of an object and
-  `to_result` raised `AttributeError: 'list' object has no
-  attribute 'get'`. Fixed both scripts to pipe the offending calls
-  to `Out-Null` and made `New-TcProject.ps1` defensively close any
-  attached solution before `Create`. The committed generated
-  fixture tree (`.sln`, `.plcproj`, `.TcPOU`) is gated on an
-  operator-driven bridge restart to pick up the new ADR-0009 routes
-  + the bug fixes; the script is ready to run once that happens.
+- 2026-05-14: Phase C0 (B1 pilot-fixture authoring) landed. The
+  Python authoring script drove the full ADR-0009 chain end-to-end
+  against a live 4026 install: `create_project` → `add_plc_project`
+  → `add_pou` (library) → `add_method` → `save_plc_as_library` →
+  `add_library_reference` → `add_pou` (consumer) → `build` on Tests.
+  The consumer build resolved the library reference against the
+  installed library and completed clean, validating both ADR-0009
+  spike-by-implementation defaults (`distributor="Tc3 Project"` and
+  the `TIPC^<plc>^<plc> Project^References` tree path). C0 caught
+  six bridge bugs total along the way, fixed in PRs #73 (Out-Null
+  on COM call outputs, Create-fallback after close) and #74 (Title
+  metadata round-trip in `save_plc_as_library`, File.SaveAll after
+  `AddLibrary` to persist the reference to .plcproj, retry/backoff
+  in `Get-TcSysManager` for the .Object null race, Create-first then
+  fall-back-and-retry pattern in `New-TcProject`). Generated tree
+  committed under `bench/fixtures/bug-hunting/B1-off-by-one/`.
