@@ -21,7 +21,12 @@
     Directory in which to create the project.
 
 .PARAMETER PlcName
-    Name of the PLC sub-project. Defaults to $Name.
+    Name of the PLC sub-project. Defaults to "${Name}_Plc" so the PLC's
+    name does not collide with the sln / TwinCAT-project name. TwinCAT
+    treats the VS Project node (wrapping the .tspproj) and the PLC
+    project under TIPC as separate tree items; giving them the same
+    name has caused TcXaeShell to crash on solution load. Pass
+    explicitly if you need the legacy "PLC == sln" naming.
 
 .PARAMETER TemplatePath
     Optional explicit template .tspproj path. If omitted, the standard 4026
@@ -44,7 +49,7 @@ Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 try {
     if (-not $Name) { return @{ success = $false; error = 'Name required.' } }
     if (-not $Path) { return @{ success = $false; error = 'Path required.' } }
-    if (-not $PlcName) { $PlcName = $Name }
+    if (-not $PlcName) { $PlcName = "${Name}_Plc" }
 
     if (-not $TemplatePath) {
         $TemplatePath = 'C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\PlcTemplate\TwinCAT PLC Project.tspproj'

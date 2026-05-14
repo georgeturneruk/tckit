@@ -17,19 +17,21 @@ Authoring a sln that holds two or more PLC projects with a library reference bet
 writer.create_project("MyProj", "C:/work")
 sln_path = "C:/work/MyProj.sln"
 
-# 2) Author the library source in the first PLC project (auto-named after sln).
-writer.add_pou("FB_Adder", POUType.FUNCTION_BLOCK, "...", plc_name="MyProj")
+# 2) Author the library source. The first PLC is named "MyProj_Plc" by
+#    default — distinct from the sln name to avoid the tree-item collision
+#    that crashes TcXaeShell on solution load.
+writer.add_pou("FB_Adder", POUType.FUNCTION_BLOCK, "...", plc_name="MyProj_Plc")
 
 # 3) Save it as a .library and install it into the system repo.
 writer.save_plc_as_library(
-    "MyProj", "C:/work/MyProj.library", install=True
+    "MyProj_Plc", "C:/work/MyProj_Plc.library", install=True
 )
 
 # 4) Add a second PLC project (the consumer).
 writer.add_plc_project(sln_path, "Tests")
 
 # 5) Add a library reference from Tests to the just-installed library.
-writer.add_library_reference("Tests", "MyProj")
+writer.add_library_reference("Tests", "MyProj_Plc")
 
 # 6) Author the consumer source against the library.
 writer.add_pou("FB_TestAdder", POUType.FUNCTION_BLOCK, "...", plc_name="Tests")
@@ -37,6 +39,18 @@ writer.add_pou("FB_TestAdder", POUType.FUNCTION_BLOCK, "...", plc_name="Tests")
 # 7) Build the consumer. The reference resolves against the installed library.
 builder.build(sln_path, plc_name="Tests")
 ```
+
+## Why the first PLC isn't named after the sln
+
+A TwinCAT solution holds, at minimum, three named tree items that the IDE keeps separate:
+
+- the `.sln` itself,
+- the VS Project node that wraps the `.tspproj` (the "TwinCAT project"),
+- the PLC project under TIPC.
+
+If the second and third share a name, TcXaeShell has been observed to crash on solution load — the COM call comes back with `RPC_E_CALL_REJECTED` or `MK_E_UNAVAILABLE` and the process dies. To avoid this, `create_project(name, path)` defaults the first PLC project to `${name}_Plc`. Pass an explicit name to the harness if you need a different value.
+
+`add_plc_project` is unaffected — it already requires an explicit PLC name, so the collision can't arise there.
 
 ## Build orchestration: save+install before consumer build
 

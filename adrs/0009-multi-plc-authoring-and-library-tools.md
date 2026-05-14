@@ -315,3 +315,15 @@ method or an optional `library_path` parameter.
   `test_end_to_end_add_library_placeholder` reads the produced
   `.plcproj` and asserts the `<PlaceholderReference>` element
   lands.
+- 2026-05-14: Renamed the first PLC produced by `create_project` from
+  `${SlnName}` to `${SlnName}_Plc`. Observed during Phase C0 retries:
+  when the sln, the VS Project node (the `.tspproj` wrapper) and the
+  first PLC under TIPC all share one name, TcXaeShell crashes on
+  solution load with `RPC_E_CALL_REJECTED` / `MK_E_UNAVAILABLE` and
+  the process dies. Giving the PLC a distinct default name keeps the
+  three tree items disambiguated. Change is purely at the harness
+  default — `create_project`'s port signature is unchanged, and the
+  harness still accepts an explicit `PlcName` parameter to override.
+  `add_plc_project` callers are unaffected (they already supply an
+  explicit name). The integration test and B1 fixture follow the new
+  convention.
