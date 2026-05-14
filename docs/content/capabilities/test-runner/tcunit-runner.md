@@ -2,6 +2,7 @@
 
 **Port:** `TestRunner`
 **Module:** `tckit.adapters.test_runners.tcunit_runner.TcUnitRunner`
+**Requires:** the [TcUnit library](https://github.com/tcunit/TcUnit) installed in the system library repository (distributor `www.tcunit.org`). Without it, projects that reference TcUnit will fail to build with "library not found".
 
 End-to-end TcUnit test driver: orchestrates a run against a target
 runtime, polls for completion via ADS, and parses TcUnit's

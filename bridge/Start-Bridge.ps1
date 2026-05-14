@@ -17,6 +17,7 @@
       POST /add-plc-project       -> harness\Add-TcPlcProject.ps1
       POST /save-as-library       -> harness\Save-TcPlcAsLibrary.ps1
       POST /add-library-reference -> harness\Add-TcLibraryReference.ps1
+      POST /add-library-placeholder -> harness\Add-TcLibraryPlaceholder.ps1
       POST /pou                   -> harness\Add-TcPou.ps1
       POST /method                -> harness\Add-TcMethod.ps1
       POST /item                  -> harness\Update-TcPouItem.ps1
@@ -316,6 +317,11 @@ try {
                 'POST /add-library-reference' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Add-TcLibraryReference.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /add-library-placeholder' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcLibraryPlaceholder.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /pou' {

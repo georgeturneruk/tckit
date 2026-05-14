@@ -234,3 +234,44 @@ class ProjectWriter(ABC):
             override if the project's company info differs.
         """
         ...
+
+    @abstractmethod
+    def add_library_placeholder(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+        default_library: str,
+        *,
+        version: str = "*",
+        distributor: str = "",
+    ) -> Result:
+        """Add a library placeholder reference to a consumer PLC project.
+
+        Wraps ``ITcPlcLibraryManager.AddPlaceholder(placeholder_name,
+        default_lib, default_version, default_distributor)`` on the consumer
+        PLC's library manager. Produces a ``<PlaceholderReference>`` entry in
+        the consumer's ``.plcproj`` rather than the ``<LibraryReference>``
+        produced by ``add_library_reference`` — the placeholder is resolved
+        at build time and can be re-pointed without editing the reference.
+
+        Use this for libraries that are conventionally referenced via a
+        placeholder (TcUnit, Tc2_System, Tc2_Standard, Tc3_Module, etc.) so
+        the on-disk reference matches what the IDE writes when an operator
+        adds the library through "Add Library...".
+
+        :param consumer_plc_name: PLC project receiving the reference.
+        :param placeholder_name: Placeholder name. By convention typically
+            matches ``default_library`` but can differ (e.g. ``Placeholder_NC``
+            -> ``Tc2_NC``).
+        :param default_library: Library that the placeholder resolves to by
+            default. Must already be installed in the system repository for
+            the consumer to build.
+        :param version: Default library version. ``"*"`` (default) means
+            latest available.
+        :param distributor: Default library distributor / company string.
+            Empty default matches the documented API default; for non-system
+            libraries (e.g. ``"www.tcunit.org"`` for TcUnit,
+            ``"Beckhoff Automation GmbH"`` for Tc2/Tc3 libraries) pass the
+            distributor explicitly so the placeholder resolves correctly.
+        """
+        ...

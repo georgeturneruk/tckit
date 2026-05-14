@@ -298,3 +298,20 @@ method or an optional `library_path` parameter.
   validation. If it fails with "library not found" against a real
   4026 install, the distributor needs adjusting from the actual
   `SaveAsLibrary` output; expected as a small follow-up.
+- 2026-05-14: Extended writer port with `add_library_placeholder`,
+  wrapping `ITcPlcLibraryManager.AddPlaceholder(placeholder_name,
+  default_lib, default_version, default_distributor)`
+  ([infosys 242882699](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242882699.html)).
+  Surfaced as a gap during ADR-0007 Phase C0: the bench's TcUnit
+  reference is conventionally a `<PlaceholderReference>`, not a
+  `<LibraryReference>`, and `add_library_reference` produces the
+  wrong on-disk shape for it. Same shape as `add_library_reference`
+  — adapter, MCP tool, bridge route `/add-library-placeholder`,
+  harness `Add-TcLibraryPlaceholder.ps1`. Distributor defaults to
+  empty string (matching the documented API default); callers must
+  pass it explicitly for non-system libraries (`"www.tcunit.org"`
+  for TcUnit, `"Beckhoff Automation GmbH"` for Tc2/Tc3). The
+  on-disk verification in
+  `test_end_to_end_add_library_placeholder` reads the produced
+  `.plcproj` and asserts the `<PlaceholderReference>` element
+  lands.

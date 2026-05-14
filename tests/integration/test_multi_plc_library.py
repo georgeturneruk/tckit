@@ -138,3 +138,52 @@ def test_end_to_end_multi_plc_with_library_reference(
     assert built.success, (
         f"Tests PLC build failed: {[e.message for e in built.errors]}"
     )
+
+
+def test_end_to_end_add_library_placeholder(
+    sln_workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """add_library_placeholder lands a <PlaceholderReference> entry on disk.
+
+    Uses ``Tc2_Utilities`` — a Beckhoff-shipped library that is not in the
+    Standard PLC Template's default reference set, so the test doesn't
+    collide with a pre-existing placeholder. The build step proves the
+    placeholder resolves against the installed library.
+    """
+    client = _bridge_or_skip()
+    sln_name = "PlaceholderRoundtrip"
+    sln_path = sln_workdir / f"{sln_name}.sln"
+
+    writer = AutomationWriter(client=client)
+    builder = XaeComBuilder(client=client)
+
+    created = writer.create_project(sln_name, str(sln_workdir))
+    assert created.success, f"create_project failed: {created.error}"
+    monkeypatch.setenv("PLC_PROJECT_PATH", str(sln_path))
+
+    first_plc = sln_name  # auto-created first PLC matches sln name
+    ph = writer.add_library_placeholder(
+        first_plc,
+        "Tc2_Utilities",
+        "Tc2_Utilities",
+        distributor="Beckhoff Automation GmbH",
+    )
+    assert ph.success, f"add_library_placeholder failed: {ph.error}"
+
+    # The placeholder reference should land in the .plcproj as a
+    # <PlaceholderReference> element. Confirm by reading the file.
+    plcproj_path = sln_workdir / first_plc / f"{first_plc}.plcproj"
+    assert plcproj_path.exists(), f"expected .plcproj at {plcproj_path}"
+    xml = plcproj_path.read_text(encoding="utf-8")
+    assert '<PlaceholderReference Include="Tc2_Utilities">' in xml, (
+        "expected <PlaceholderReference> entry to land on disk; got:\n"
+        + xml
+    )
+
+    # The default PLC template already provides MAIN so the build has
+    # something to compile. A successful build proves the placeholder
+    # resolved against the installed library at compile time.
+    built = builder.build(str(sln_path), plc_name=first_plc)
+    assert built.success, (
+        f"Placeholder-resolving build failed: {[e.message for e in built.errors]}"
+    )
