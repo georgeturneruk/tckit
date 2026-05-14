@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
+	<Project ProjectGUID="{1B71B336-644F-47E7-A9EA-E304D25DA345}" Target64Bit="true" ShowHideConfigurations="#x6">
+		<Plc>
+			<Project GUID="{E832909D-1811-445A-BBD8-FBC9AD1503E9}" Name="B5PIDController_Plc" PrjFilePath="B5PIDController_Plc\B5PIDController_Plc.plcproj" TmcFilePath="B5PIDController_Plc\B5PIDController_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
+			<Project GUID="{796F8454-570C-4CC5-BCC0-EB3915D056B6}" Name="PIDControllerTests" PrjFilePath="PIDControllerTests\PIDControllerTests.plcproj" TmcFilePath="PIDControllerTests\PIDControllerTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
+		</Plc>
+	</Project>
+</TcSmProject>

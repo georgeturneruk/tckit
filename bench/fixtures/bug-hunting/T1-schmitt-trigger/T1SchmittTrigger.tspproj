@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
+	<Project ProjectGUID="{02905E37-B9EA-41BE-AE3A-0F2568062DE6}" Target64Bit="true" ShowHideConfigurations="#x6">
+		<Plc>
+			<Project GUID="{41FAC50B-445F-4649-99CD-3A6CB9BA664B}" Name="T1SchmittTrigger_Plc" PrjFilePath="T1SchmittTrigger_Plc\T1SchmittTrigger_Plc.plcproj" TmcFilePath="T1SchmittTrigger_Plc\T1SchmittTrigger_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
+			<Project GUID="{58E758CC-74B1-43D9-A8E5-3598B1B1A0CF}" Name="SchmittTriggerTests" PrjFilePath="SchmittTriggerTests\SchmittTriggerTests.plcproj" TmcFilePath="SchmittTriggerTests\SchmittTriggerTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
+		</Plc>
+	</Project>
+</TcSmProject>

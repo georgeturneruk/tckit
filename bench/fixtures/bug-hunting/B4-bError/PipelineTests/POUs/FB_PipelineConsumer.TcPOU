@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PipelineConsumer" Id="{bf5f8c6f-78c6-457d-978d-4572836a1b84}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PipelineConsumer
+VAR
+    stage : B4Pipeline_Plc.FB_PipelineStage;
+    bStageError : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[stage(value := -1);
+bStageError := stage.bError;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
