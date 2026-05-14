@@ -31,6 +31,19 @@ Beckhoff XML `(*~ <docu> ~*)` is also accepted. Match the style already present 
 
 If a TwinCAT automation interface (such as TcKit) is available, use it for any structural change. Direct edits to `.TcPOU` and `.plcproj` XML break GUID tracking in ways that may survive a build but corrupt later operations. When in doubt, ask before editing those files by hand.
 
+## TcUnit test projects
+
+If this project hosts TcUnit suites that TcKit's runner will execute, declare the XML output path as a `VAR_GLOBAL CONSTANT` so the runner can resolve it without env config:
+
+```pascal
+VAR_GLOBAL CONSTANT
+    TcUnit_ResultExportXmlPath : T_MaxString :=
+        'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml';
+END_VAR
+```
+
+The path is read from the declaration text at run time (compile-time constant lookup), so it's robust across runtime states. The canonical path above works for most setups; override the literal if you need somewhere else.
+
 ## Project notes
 
 <!-- Replace with project-specific guidance. -->
