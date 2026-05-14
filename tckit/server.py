@@ -337,6 +337,49 @@ def add_library_reference(
         return _err(str(exc))
 
 
+def add_library_placeholder(
+    consumer_plc_name: str,
+    placeholder_name: str,
+    default_library: str,
+    version: str = "*",
+    distributor: str = "",
+) -> str:
+    """Add a library placeholder reference to a consumer PLC project.
+
+    Produces a ``<PlaceholderReference>`` entry in the consumer's
+    ``.plcproj`` (vs the ``<LibraryReference>`` produced by
+    ``add_library_reference``). Use this for libraries conventionally
+    referenced via a placeholder — TcUnit, Tc2_System, Tc2_Standard,
+    Tc3_Module, etc.
+
+    The placeholder's default-resolution library must already be installed
+    in the system repository for the consumer to build. System placeholders
+    resolve against vendor libraries shipped with TwinCAT; in-sln libraries
+    produced via ``save_plc_as_library`` resolve against that install.
+
+    :param consumer_plc_name: PLC project receiving the reference.
+    :param placeholder_name: Placeholder name (typically matches
+        ``default_library`` but can differ).
+    :param default_library: Library the placeholder resolves to by default.
+    :param version: Default library version. ``"*"`` (default) means latest.
+    :param distributor: Default library distributor / company string. Empty
+        default matches the documented API default; for non-system libraries
+        pass explicitly (e.g. ``"www.tcunit.org"`` for TcUnit,
+        ``"Beckhoff Automation GmbH"`` for Tc2/Tc3 libraries).
+    """
+    try:
+        result = _cfg.writer().add_library_placeholder(
+            consumer_plc_name,
+            placeholder_name,
+            default_library,
+            version=version,
+            distributor=distributor,
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
@@ -697,6 +740,7 @@ _TOOLS = (
     add_plc_project,
     save_plc_as_library,
     add_library_reference,
+    add_library_placeholder,
     add_pou,
     add_method,
     update_pou_item,

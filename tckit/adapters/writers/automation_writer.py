@@ -202,6 +202,28 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
+    def add_library_placeholder(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+        default_library: str,
+        *,
+        version: str = "*",
+        distributor: str = "",
+    ) -> Result:
+        return self._call(
+            "/add-library-placeholder",
+            self._with_project(
+                {
+                    "PlaceholderName": placeholder_name,
+                    "DefaultLibrary": default_library,
+                    "Version": version,
+                    "Distributor": distributor,
+                },
+                plc_name=consumer_plc_name,
+            ),
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

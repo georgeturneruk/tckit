@@ -169,3 +169,82 @@ def test_add_library_reference_failure_translated_to_result() -> None:
 
     assert result.success is False
     assert "not found" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# add_library_placeholder
+# ---------------------------------------------------------------------------
+
+
+def test_add_library_placeholder_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_library_placeholder(
+        "Tests", "TcUnit", "TcUnit", distributor="www.tcunit.org"
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/add-library-placeholder"
+    assert payload == {
+        "ProjectPath": "C:/work/B1.sln",
+        "PlcName": "Tests",
+        "PlaceholderName": "TcUnit",
+        "DefaultLibrary": "TcUnit",
+        "Version": "*",
+        "Distributor": "www.tcunit.org",
+    }
+
+
+def test_add_library_placeholder_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_library_placeholder("Tests", "Tc2_Standard", "Tc2_Standard")
+
+    _, payload = client.calls[0]
+    assert payload["Version"] == "*"
+    assert payload["Distributor"] == ""
+
+
+def test_add_library_placeholder_distinct_name_from_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Placeholder name may differ from the default library it points to
+    # (Beckhoff conventionally uses Placeholder_NC -> Tc2_NC).
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_library_placeholder(
+        "Tests",
+        "Placeholder_NC",
+        "Tc2_NC",
+        version="3.1.0.0",
+        distributor="Beckhoff Automation GmbH",
+    )
+
+    _, payload = client.calls[0]
+    assert payload["PlaceholderName"] == "Placeholder_NC"
+    assert payload["DefaultLibrary"] == "Tc2_NC"
+    assert payload["Version"] == "3.1.0.0"
+    assert payload["Distributor"] == "Beckhoff Automation GmbH"
+
+
+def test_add_library_placeholder_failure_translated_to_result() -> None:
+    client = FakeBridgeClient(
+        {"success": False, "error": "Placeholder 'TcUnit' default library not installed."}
+    )
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    result = writer.add_library_placeholder("Tests", "TcUnit", "TcUnit")
+
+    assert result.success is False
+    assert "TcUnit" in (result.error or "")

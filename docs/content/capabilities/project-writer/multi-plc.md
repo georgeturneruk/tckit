@@ -1,9 +1,9 @@
 # multi-PLC sln authoring + library tools
 
-**Port methods:** `add_plc_project`, `save_plc_as_library`, `add_library_reference`
-**MCP tools:** `mcp__tckit__add_plc_project`, `mcp__tckit__save_plc_as_library`, `mcp__tckit__add_library_reference`
-**Bridge harness:** `Add-TcPlcProject.ps1`, `Save-TcPlcAsLibrary.ps1`, `Add-TcLibraryReference.ps1`
-**Status:** Phase B of ADR-0009 — adapter + bridge wired; integration test exercises the end-to-end flow.
+**Port methods:** `add_plc_project`, `save_plc_as_library`, `add_library_reference`, `add_library_placeholder`
+**MCP tools:** `mcp__tckit__add_plc_project`, `mcp__tckit__save_plc_as_library`, `mcp__tckit__add_library_reference`, `mcp__tckit__add_library_placeholder`
+**Bridge harness:** `Add-TcPlcProject.ps1`, `Save-TcPlcAsLibrary.ps1`, `Add-TcLibraryReference.ps1`, `Add-TcLibraryPlaceholder.ps1`
+**Status:** Phase B of ADR-0009 — adapter + bridge wired; integration tests exercise both reference styles end-to-end.
 **Requires:** TwinCAT 4026+ (the documented automation interface entry points target the current major).
 
 ## What this is for
@@ -67,6 +67,24 @@ Out of scope (deliberate):
 
 `add_library_reference` defaults `distributor="Tc3 Project"`, which is the conventional company string for libraries produced from a PLC project via `SaveAsLibrary`. If a project's company info differs (or the library was published with a different distributor), pass the actual value explicitly. Watch for "library not found" errors after `add_library_reference` — these usually mean a distributor mismatch.
 
+## Hard reference vs placeholder
+
+Two reference styles, two tools. They produce different on-disk XML and resolve differently at build time.
+
+`add_library_reference` produces a `<LibraryReference>` element pinned to a specific library by name + version + distributor. Use this for libraries you produced in the same sln via `save_plc_as_library`.
+
+`add_library_placeholder` produces a `<PlaceholderReference>` element with a `<DefaultResolution>` that the IDE can re-point without editing the reference. Use this for libraries conventionally referenced via a placeholder — `TcUnit`, `Tc2_System`, `Tc2_Standard`, `Tc3_Module`, `Tc2_Utilities`. This is what the IDE writes when an operator picks "Add Library..." and chooses a placeholder-style library.
+
+```python
+# Placeholder reference to TcUnit (distributor matters — it's not the
+# Beckhoff one and there is no universally-correct default).
+writer.add_library_placeholder(
+    "Tests", "TcUnit", "TcUnit", distributor="www.tcunit.org"
+)
+```
+
+For project-derived libraries the choice is yours; the bench uses the hard reference because the Library PLC is part of the same sln and the version doesn't need to float. For external system libraries, always use the placeholder so the project matches what the IDE would have written.
+
 ## Why this design
 
-`ITcSmTreeItem.CreateChild`, `ITcPlcIECProject.SaveAsLibrary`, `ITcPlcLibraryManager.InstallLibrary`, and `ITcPlcLibraryManager.AddLibrary` are all documented entry points on the TwinCAT automation interface ([infosys: PLC projects](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html), [infosys: SaveAsLibrary](https://infosys.beckhoff.com/content/1031/tc3_automationinterface/242876683.html), [infosys: ITcPlcLibraryManager](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242879627.html)). The bridge harness drives them through PowerShell COM dispatch, in the same style as the rest of the writer surface. No `.plcproj` XML synthesis, no IDE-only workflows.
+`ITcSmTreeItem.CreateChild`, `ITcPlcIECProject.SaveAsLibrary`, `ITcPlcLibraryManager.InstallLibrary`, `ITcPlcLibraryManager.AddLibrary`, and `ITcPlcLibraryManager.AddPlaceholder` are all documented entry points on the TwinCAT automation interface ([infosys: PLC projects](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html), [infosys: SaveAsLibrary](https://infosys.beckhoff.com/content/1031/tc3_automationinterface/242876683.html), [infosys: ITcPlcLibraryManager](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242879627.html), [infosys: AddPlaceholder](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242882699.html)). The bridge harness drives them through PowerShell COM dispatch, in the same style as the rest of the writer surface. No `.plcproj` XML synthesis, no IDE-only workflows.
