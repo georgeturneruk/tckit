@@ -56,14 +56,21 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
 
-    # Defensive: close any solution the bridge attached to so Create starts
-    # from a clean DTE state. Solution.Close() is a no-op when nothing is loaded.
-    try { $dte.Solution.Close($false) | Out-Null } catch { }
-
     # Step 1: empty solution shell. COM methods on Solution emit objects
     # into the PowerShell output stream; suppress so the trailing hashtable
     # is the only value the harness returns.
-    $dte.Solution.Create($Path, $Name) | Out-Null
+    #
+    # On a fresh XAE attach the Solution object is in an "uninitialised"
+    # state where method calls fail with "null-valued expression". On a
+    # pre-loaded XAE Solution.Create throws because something's already
+    # there. We try Create directly first; if it fails, close any
+    # loaded sln and retry once.
+    try {
+        $dte.Solution.Create($Path, $Name) | Out-Null
+    } catch {
+        try { $dte.Solution.Close($false) | Out-Null } catch { }
+        $dte.Solution.Create($Path, $Name) | Out-Null
+    }
 
     # Step 2: TwinCAT project from template.
     $dte.Solution.AddFromTemplate($TemplatePath, $Path, $Name, $false) | Out-Null

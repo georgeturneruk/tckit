@@ -61,6 +61,10 @@ try {
     # References node is the library manager via COM dispatch.
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
     $libManager.AddLibrary($LibraryName, $Version, $Distributor) | Out-Null
+    # AddLibrary mutates only in-memory state; persist to .plcproj so the
+    # change survives a re-open / git-reset cycle. File.SaveAll is the
+    # IDE-side command for "save everything".
+    try { $dte.ExecuteCommand('File.SaveAll') | Out-Null } catch { }
 
     return @{
         success = $true

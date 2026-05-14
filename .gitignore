@@ -66,4 +66,5 @@ bench/results/
 
 # Local server logs from bench setup
 bridge.log
+bridge.err.log
 tckit-server.log
