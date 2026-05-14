@@ -281,3 +281,18 @@ unaffected.
   for iteration counting, noted the longer cold-start timeout, and
   clarified that the bridge is harness-side only (vanilla never
   sees it).
+- 2026-05-14: Phase C0 (B1 pilot-fixture authoring) kicked off.
+  Authoring script + fixture scaffolding (CLAUDE.md copy, TASK.md
+  prompt, .gitignore, README) landed; the script drove the bridge
+  end-to-end and surfaced two bridge bugs in the ADR-0009 surface
+  on the first live run — `New-TcProject.ps1` and
+  `Add-TcPlcProject.ps1` were not suppressing the COM-method return
+  values from `Solution.Create` / `AddFromTemplate` / `SaveAs`, so
+  the harness returned a JSON array instead of an object and
+  `to_result` raised `AttributeError: 'list' object has no
+  attribute 'get'`. Fixed both scripts to pipe the offending calls
+  to `Out-Null` and made `New-TcProject.ps1` defensively close any
+  attached solution before `Create`. The committed generated
+  fixture tree (`.sln`, `.plcproj`, `.TcPOU`) is gated on an
+  operator-driven bridge restart to pick up the new ADR-0009 routes
+  + the bug fixes; the script is ready to run once that happens.
