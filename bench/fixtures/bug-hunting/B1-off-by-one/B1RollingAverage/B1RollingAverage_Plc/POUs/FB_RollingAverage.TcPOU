@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_RollingAverage" Id="{2f8023c0-ee8c-463a-a471-48f6374d00b9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RollingAverage
+VAR
+    samples : ARRAY[0..15] OF INT;
+    sampleCount : INT := 8;
+    nextIndex : INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{2b4f86ad-9c92-468c-8888-ecdbe94a76b4}">
+      <Declaration><![CDATA[METHOD Step : INT
+VAR_INPUT
+    sample : INT;
+END_VAR
+VAR
+    sum : DINT;
+    i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[samples[nextIndex] := sample;
+nextIndex := (nextIndex + 1) MOD sampleCount;
+sum := 0;
+FOR i := 1 TO sampleCount DO
+    sum := sum + samples[i];
+END_FOR
+Step := DINT_TO_INT(sum / sampleCount);
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

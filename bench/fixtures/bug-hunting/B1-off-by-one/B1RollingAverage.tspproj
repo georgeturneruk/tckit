@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
-	<Project ProjectGUID="{B5BB2183-5D0D-4B11-9802-E9C79B1DB606}" Target64Bit="true" ShowHideConfigurations="#x6">
-		<Plc>
-			<Project GUID="{49E28BA4-55FF-4AF7-8DA1-43579E8B53A5}" Name="B1RollingAverage_Plc" PrjFilePath="B1RollingAverage_Plc\B1RollingAverage_Plc.plcproj" TmcFilePath="B1RollingAverage_Plc\B1RollingAverage_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
-			<Project GUID="{98D7F3B6-90BB-4736-806A-1DE030F8754E}" Name="RollingAverageTests" PrjFilePath="RollingAverageTests\RollingAverageTests.plcproj" TmcFilePath="RollingAverageTests\RollingAverageTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
-		</Plc>
-	</Project>
-</TcSmProject>

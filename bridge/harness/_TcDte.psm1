@@ -366,21 +366,30 @@ function Get-TcSysManager {
         [int]$MaxAttempts = 8,
         [int]$DelayMs = 250
     )
-    $managers = Get-TcSysManagers -Dte $Dte -MaxAttempts $MaxAttempts -DelayMs $DelayMs
     if (-not $PlcName) {
+        $managers = Get-TcSysManagers -Dte $Dte -MaxAttempts $MaxAttempts -DelayMs $DelayMs
         Write-Output $managers[0] -NoEnumerate
         return
     }
-    foreach ($sm in $managers) {
-        try {
-            $tipc = $sm.LookupTreeItem('TIPC')
-            for ($i = 1; $i -le $tipc.ChildCount; $i++) {
-                if ($tipc.Child($i).Name -eq $PlcName) {
-                    Write-Output $sm -NoEnumerate
-                    return
+    # When looking up by PLC name, retry the whole enumeration on each
+    # attempt. Get-TcSysManagers returns as soon as ANY sysmanager is
+    # exposed, so a snapshot mid-mutation can see only one of the two
+    # projects in a multi-tsproj sln and miss the PLC we want.
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $managers = @()
+        try { $managers = Get-TcSysManagers -Dte $Dte -MaxAttempts 1 -DelayMs 0 } catch { }
+        foreach ($sm in $managers) {
+            try {
+                $tipc = $sm.LookupTreeItem('TIPC')
+                for ($i = 1; $i -le $tipc.ChildCount; $i++) {
+                    if ($tipc.Child($i).Name -eq $PlcName) {
+                        Write-Output $sm -NoEnumerate
+                        return
+                    }
                 }
-            }
-        } catch { continue }
+            } catch { continue }
+        }
+        Start-Sleep -Milliseconds $DelayMs
     }
     throw "PLC project '$PlcName' not found in any TwinCAT project under the solution."
 }

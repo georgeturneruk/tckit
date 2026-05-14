@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_SchmittTrigger" Id="{3c6f174d-1b7a-423f-a76f-bb9e64b737de}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SchmittTrigger
+VAR_INPUT
+    fInput : REAL;
+    fLowThreshold : REAL := 0.3;
+    fHighThreshold : REAL := 0.7;
+END_VAR
+VAR_OUTPUT
+    bState : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{e85e30ba-ddae-4fe4-95a8-6fa34d5910ee}">
+      <Declaration><![CDATA[METHOD Step : BOOL
+;
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

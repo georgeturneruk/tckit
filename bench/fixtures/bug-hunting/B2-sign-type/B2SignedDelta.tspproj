@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
-	<Project ProjectGUID="{FB3D3F99-8786-48D9-813E-9F8AE32E2462}" Target64Bit="true" ShowHideConfigurations="#x6">
-		<Plc>
-			<Project GUID="{45D0EB50-6FD6-4BAE-BDC6-D4AAFF1AB2C3}" Name="B2SignedDelta_Plc" PrjFilePath="B2SignedDelta_Plc\B2SignedDelta_Plc.plcproj" TmcFilePath="B2SignedDelta_Plc\B2SignedDelta_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
-			<Project GUID="{FE55DE48-A233-48F6-AA23-387281DA5988}" Name="CounterTests" PrjFilePath="CounterTests\CounterTests.plcproj" TmcFilePath="CounterTests\CounterTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
-		</Plc>
-	</Project>
-</TcSmProject>

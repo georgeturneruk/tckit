@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_TrafficLightConsumer" Id="{b0252502-9298-47c3-b334-f340c0df2e0f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TrafficLightConsumer
+VAR
+    light : B3TrafficLight_Plc.FB_TrafficLight;
+    lastState : INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[lastState := light.Step();
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

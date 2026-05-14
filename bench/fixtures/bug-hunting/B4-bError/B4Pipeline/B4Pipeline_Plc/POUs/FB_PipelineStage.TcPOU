@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PipelineStage" Id="{1918ee7b-13f4-4bcd-8466-37cca1c6c7db}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PipelineStage
+VAR_INPUT
+    value : INT;
+END_VAR
+VAR_OUTPUT
+    bError : BOOL;
+END_VAR
+VAR
+    inner : FB_PipelineInner;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="Step" Id="{d0c937b3-f656-4aa9-8ca9-c22da5eef8c9}">
+      <Declaration><![CDATA[METHOD Step : INT
+inner(value := value);
+// MISSING: bError := inner.bError;
+Step := value;
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
