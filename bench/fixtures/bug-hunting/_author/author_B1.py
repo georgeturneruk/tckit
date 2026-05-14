@@ -44,9 +44,10 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_DIR = REPO_ROOT / "bench" / "fixtures" / "bug-hunting" / "B1-off-by-one"
 
 SLN_NAME = "B1RollingAverage"
-# `create_project` names the first PLC after the sln, so the library PLC
-# inherits SLN_NAME — both as its tree name and its library namespace.
-LIBRARY_PLC = SLN_NAME
+# `create_project` gives the first PLC a `_Plc` suffix to keep the sln,
+# the VS Project node, and the PLC project from sharing one name (which
+# crashes TcXaeShell on solution load).
+LIBRARY_PLC = f"{SLN_NAME}_Plc"
 TESTS_PLC = "RollingAverageTests"
 LIBRARY_FB = "FB_RollingAverage"
 CONSUMER_FB = "FB_RollingAverageConsumer"

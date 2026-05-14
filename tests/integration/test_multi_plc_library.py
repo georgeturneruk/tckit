@@ -26,7 +26,6 @@ from tckit.adapters.writers.automation_writer import AutomationWriter
 from tckit.ports.types import POUType
 from tckit.utils.bridge_client import BridgeClient
 
-LIBRARY_PLC_NAME = "MultiPlcLibrary"
 TESTS_PLC_NAME = "MultiPlcTests"
 LIBRARY_FB_NAME = "FB_MultiPlcLibAdder"
 TESTS_FB_NAME = "FB_MultiPlcLibConsumer"
@@ -68,7 +67,11 @@ def test_end_to_end_multi_plc_with_library_reference(
     client = _bridge_or_skip()
     sln_name = "MultiPlcRoundtrip"
     sln_path = sln_workdir / f"{sln_name}.sln"
-    library_path = sln_workdir / f"{LIBRARY_PLC_NAME}.library"
+    # create_project defaults the first PLC to "${sln_name}_Plc" to avoid
+    # the sln/project name collision that has crashed TcXaeShell on
+    # solution load.
+    library_first_plc = f"{sln_name}_Plc"
+    library_path = sln_workdir / f"{library_first_plc}.library"
 
     writer = AutomationWriter(client=client)
     builder = XaeComBuilder(client=client)
@@ -77,12 +80,10 @@ def test_end_to_end_multi_plc_with_library_reference(
     created = writer.create_project(sln_name, str(sln_workdir))
     assert created.success, f"create_project failed: {created.error}"
 
-    # The newly-created sln defaults the first PLC project to the sln name.
     # Subsequent calls scope to a specific PLC, so set the env path.
     monkeypatch.setenv("PLC_PROJECT_PATH", str(sln_path))
 
     # Add a tiny FB to the auto-created PLC project (so the library has content).
-    library_first_plc = sln_name  # auto-created first PLC matches sln name
     library_fb_decl = (
         f"FUNCTION_BLOCK {LIBRARY_FB_NAME}\n"
         "VAR_INPUT\na : INT; b : INT;\nEND_VAR\n"
@@ -161,7 +162,7 @@ def test_end_to_end_add_library_placeholder(
     assert created.success, f"create_project failed: {created.error}"
     monkeypatch.setenv("PLC_PROJECT_PATH", str(sln_path))
 
-    first_plc = sln_name  # auto-created first PLC matches sln name
+    first_plc = f"{sln_name}_Plc"  # see create_project naming default
     ph = writer.add_library_placeholder(
         first_plc,
         "Tc2_Utilities",
