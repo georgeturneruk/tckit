@@ -67,11 +67,15 @@ try {
     }
 
     # Mode transitions:
-    # * Run  — ITcSysManager.StartRestartTwinCAT() (pure COM, no ADS needed)
-    # * Config — no equivalent on ITcSysManager; the standard route is an
-    #   ADS WriteControl to the system service (port 10000) with
-    #   ADSSTATE_RECONFIG (=2) or ADSSTATE_CONFIG (=16). Requires
-    #   TwinCAT.Ads.dll to be installed.
+    # * Run    — ITcSysManager.StartRestartTwinCAT() (pure COM, no ADS needed).
+    # * Config — no equivalent on ITcSysManager (confirmed against infosys
+    #   https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242753675.html).
+    #   The standard route is an ADS WriteControl to the system service on
+    #   port 10000 with AdsState.Reconfig (= 16, "system should restart in
+    #   config mode"). Note: AdsState.Config (= 15) is the steady-state
+    #   value, NOT a command — sending that does nothing useful. See
+    #   https://infosys.beckhoff.com/content/1033/tcadsnetref/7313023115.html
+    #   for the enumeration. Requires TwinCAT.Ads.dll to be installed.
     try {
         switch ($Mode) {
             'Run' {
@@ -88,12 +92,12 @@ try {
                 try {
                     $configClient = New-Object 'TwinCAT.Ads.AdsClient'
                     $configClient.Connect($TargetAmsId, 10000)  # 10000 = system service
-                    # WriteControl(state, deviceState, data). State 16 = Config.
+                    # AdsState.Reconfig is the command "restart into config mode".
                     $configClient.WriteControl(
-                        [TwinCAT.Ads.StateInfo]::new([TwinCAT.Ads.AdsState]::Config, [uint16]0)
+                        [TwinCAT.Ads.StateInfo]::new([TwinCAT.Ads.AdsState]::Reconfig, [uint16]0)
                     )
                 } catch {
-                    return @{ success = $false; error = "ADS WriteControl(Config) failed: $($_.Exception.Message)" }
+                    return @{ success = $false; error = "ADS WriteControl(Reconfig) failed: $($_.Exception.Message)" }
                 } finally {
                     if ($null -ne $configClient) {
                         try { $configClient.Disconnect() } catch { }
