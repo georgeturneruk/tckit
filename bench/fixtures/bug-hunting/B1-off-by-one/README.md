@@ -12,16 +12,15 @@ B1-off-by-one/
 ├── TASK.md                          ← bench prompt for both arms
 ├── README.md                        ← this file
 ├── B1RollingAverage.sln
-└── B1RollingAverage/
-    ├── B1RollingAverage.tsproj
-    ├── B1RollingAverage/            ← Library PLC project (first plc; named after sln)
-    │   ├── B1RollingAverage.plcproj
-    │   └── POUs/
-    │       └── FB_RollingAverage.TcPOU
-    └── RollingAverageTests/         ← Tests PLC project (sibling, added via add_plc_project)
-        ├── RollingAverageTests.plcproj
-        └── POUs/
-            └── FB_RollingAverageConsumer.TcPOU
+├── B1RollingAverage.tspproj
+├── B1RollingAverage/                ← Library PLC project (first plc; named after sln)
+│   ├── B1RollingAverage.plcproj
+│   └── POUs/
+│       └── FB_RollingAverage.TcPOU
+└── RollingAverageTests/             ← Tests PLC project (sibling, added via add_plc_project)
+    ├── RollingAverageTests.plcproj
+    └── POUs/
+        └── FB_RollingAverageConsumer.TcPOU
 ```
 
 The `.library` artefact (`B1RollingAverage.library`) is gitignored
@@ -46,32 +45,30 @@ python bench/fixtures/bug-hunting/_author/author_B1.py [--force]
 this README) before re-authoring. Requires the bridge service at
 `$BRIDGE_URL` and a TwinCAT 4026 install.
 
-## What's validated vs. deferred
+## What's validated
 
-**Surfaced by Phase C0 authoring (2026-05-14):**
+Phase C0 authoring exercised the full ADR-0009 chain end-to-end on
+2026-05-14:
 
-- Two bridge bugs in the ADR-0009 surface — `New-TcProject.ps1` and
-  `Add-TcPlcProject.ps1` were not suppressing the return values from
-  `Solution.Create`, `Solution.AddFromTemplate`, and `Solution.SaveAs`,
-  so the bridge response shape was a JSON array instead of an object
-  and `to_result` blew up. Fixed in the same PR as this fixture lands.
-- ADR-0009 `create_project` produces an sln + first PLC against a
-  live 4026 install (after the bridge fix).
+- `create_project` → sln + first PLC.
+- `add_plc_project` → second PLC sibling.
+- `add_pou` + `add_method` in both PLC projects.
+- `save_plc_as_library` → `.library` produced and installed in the
+  System repo with Title=PlcName, Company="Tc3 Project", Version=1.0.0.0.
+- `add_library_reference` with the default distributor `Tc3 Project`
+  and `References` tree-item path — the reference lands in the
+  consumer's `.plcproj` on disk (`<LibraryReference Include="B1RollingAverage,newest,Tc3 Project">`).
+- `build` on the Tests PLC resolves the library reference against
+  the installed library and completes clean.
 
-**Gated on operator-driven live smoke** (bridge must be restarted to
-pick up the new ADR-0009 routes and the bug fixes above):
+That validates the two spike-by-implementation defaults documented
+in ADR-0009. Six bridge bugs were caught and fixed along the way
+(see PRs #73 and #74).
 
-- ADR-0009 `add_plc_project` adds a second PLC sibling to the created sln.
-- ADR-0009 `save_plc_as_library` produces a `.library` and installs it.
-- ADR-0009 `add_library_reference` resolves with the default
-  `distributor="Tc3 Project"` and the `TIPC^<plc>^<plc> Project^References`
-  tree path.
-- Consumer build against the installed library succeeds.
+## Deferred
 
-Run the authoring script after restarting the bridge to complete the
-above and commit the produced `.sln`/`.plcproj`/`.TcPOU` files.
-
-**Deferred** (separate follow-up before the bench is runnable):
+Outside Phase C0's scope; needs separate follow-up before the bench
+is fully runnable:
 
 - TcUnit library reference + `GVL_TcUnit.TcGVL` with
   `TcUnit_ResultExportXmlPath` constant. Placeholder-reference
