@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<TcSmProject xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.beckhoff.com/schemas/2012/07/TcSmProject" TcSmVersion="1.0" TcVersion="3.1.4026.22">
+	<Project ProjectGUID="{3AD69336-4ACB-4581-AF59-75EEDDABAF91}" Target64Bit="true" ShowHideConfigurations="#x6">
+		<Plc>
+			<Project GUID="{7B593EE0-557A-44CF-967A-6FA6F0C3867D}" Name="B3TrafficLight_Plc" PrjFilePath="B3TrafficLight_Plc\B3TrafficLight_Plc.plcproj" TmcFilePath="B3TrafficLight_Plc\B3TrafficLight_Plc.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e"/>
+			<Project GUID="{4A77E832-7BA2-4BB4-8587-2E0DE7DF2801}" Name="TrafficLightTests" PrjFilePath="TrafficLightTests\TrafficLightTests.plcproj" TmcFilePath="TrafficLightTests\TrafficLightTests.tmc" ReloadTmc="true" AmsPort="852" FileArchiveSettings="#x000e"/>
+		</Plc>
+	</Project>
+</TcSmProject>
