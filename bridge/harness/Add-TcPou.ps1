@@ -63,6 +63,7 @@ try {
     } elseif ($Code) {
         Set-TcItemSource -Item $newItem -Code $Code
     }
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

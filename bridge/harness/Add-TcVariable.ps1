@@ -190,6 +190,7 @@ try {
         -VariableLine $Declaration
 
     Set-TcItemSource -Item $item -Declaration $newDecl -Implementation $source.implementation
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true

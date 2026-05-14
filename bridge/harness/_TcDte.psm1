@@ -76,6 +76,44 @@ function Get-TcKind {
 }
 
 # ------------------------------------------------------------------
+# COM concurrency helpers
+# ------------------------------------------------------------------
+
+function Invoke-WithComRetry {
+    <#
+    .SYNOPSIS
+        Retry a COM call that fails with RPC_E_CALL_REJECTED (0x80010001)
+        or RPC_E_SERVERCALL_RETRYLATER (0x8001010A).
+
+    .DESCRIPTION
+        XAE's single-threaded apartment rejects re-entrant calls when it's
+        busy (build in progress, dialog open, UI thread blocked, etc.).
+        Microsoft's documented solution is to register an IMessageFilter
+        that retries; from PowerShell we can do the same thing with an
+        exponential-backoff retry around each COM call. Failures with any
+        other HRESULT propagate immediately. See
+        https://learn.microsoft.com/previous-versions/office/troubleshoot/office-developer/automation-operation-not-bypass-server
+    #>
+    param(
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
+        [int]$MaxAttempts = 6,
+        [int]$BaseDelayMs = 200
+    )
+    $rpcCallRejected = -2147418111   # 0x80010001
+    $rpcRetryLater   = -2147417846   # 0x8001010A
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            return & $ScriptBlock
+        } catch [System.Runtime.InteropServices.COMException] {
+            $hr = $_.Exception.HResult
+            if ($hr -ne $rpcCallRejected -and $hr -ne $rpcRetryLater) { throw }
+            if ($attempt -eq $MaxAttempts) { throw }
+            Start-Sleep -Milliseconds ($BaseDelayMs * [Math]::Pow(2, $attempt - 1))
+        }
+    }
+}
+
+# ------------------------------------------------------------------
 # DTE attach
 # ------------------------------------------------------------------
 
@@ -109,6 +147,43 @@ function Get-TcDte {
 # Solution / project navigation
 # ------------------------------------------------------------------
 
+function Remove-TcStaleLockFile {
+    <#
+    .SYNOPSIS
+        Delete a stale TcXaeShell .~u lock file next to a .sln, if its
+        recorded PID no longer exists.
+
+    .DESCRIPTION
+        TcXaeShell writes <SolutionName>.~u beside the .sln while a sln
+        is loaded, holding owner / hostname / PID / timestamp. The file
+        is supposed to be deleted on clean close, but a crashed XAE
+        leaves it behind. A subsequent Solution.Open against the same
+        sln then hangs or crashes the new XAE instance (reproduced
+        on B1 with PID 34460 long after that XAE died).
+
+        This helper reads the PID on line 3 and only deletes the lock
+        if no live process has that PID. Best-effort: silently swallows
+        all errors so it never blocks an Open.
+    #>
+    param([Parameter(Mandatory)][string]$SolutionPath)
+    try {
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($SolutionPath)
+        $dir  = [System.IO.Path]::GetDirectoryName($SolutionPath)
+        $lock = Join-Path $dir "$stem.~u"
+        if (-not (Test-Path -LiteralPath $lock)) { return }
+        $linesRaw = Get-Content -LiteralPath $lock -ErrorAction Stop
+        $lines = @($linesRaw)
+        $pidLine = if ($lines.Count -ge 3) { $lines[2] } else { '' }
+        $deadPid = 0
+        $isNumeric = [int]::TryParse($pidLine.Trim(), [ref]$deadPid)
+        if ($isNumeric -and $deadPid -gt 0) {
+            $proc = Get-Process -Id $deadPid -ErrorAction SilentlyContinue
+            if ($null -ne $proc) { return }  # genuinely held — leave it
+        }
+        Remove-Item -LiteralPath $lock -Force -ErrorAction Stop
+    } catch { }
+}
+
 function Open-TcSolution {
     param(
         [Parameter(Mandatory)]$Dte,
@@ -125,8 +200,99 @@ function Open-TcSolution {
     $resolved = (Resolve-Path $Path).Path
     $current = ''
     try { $current = $Dte.Solution.FullName } catch { }
-    if ($current -ne $resolved) { $Dte.Solution.Open($resolved) }
+    if ($current -ne $resolved) {
+        Remove-TcStaleLockFile -SolutionPath $resolved
+        Invoke-WithComRetry { $Dte.Solution.Open($resolved) } | Out-Null
+        # After opening an existing sln, PLC source trees can be
+        # lazy-loaded — the '<plc> Project' nodes don't appear under TIPC
+        # until something touches them, which makes downstream
+        # LookupTreeItem('TIPC^<plc>^<plc> Project^...') fail with
+        # 'Item not found'. Force-materialise them now.
+        try { Wait-TcPlcProjectsLoaded -Dte $Dte | Out-Null } catch { }
+    }
     return $Dte.Solution
+}
+
+function Save-TcSolution {
+    <#
+    .SYNOPSIS
+        Flush the active TcXaeShell solution to disk via File.SaveAll.
+
+    .DESCRIPTION
+        Bridge writes via COM mutate XAE's in-memory model and usually
+        get persisted on close. Without an explicit SaveAll, XAE also
+        writes its own copy asynchronously, which can race the
+        external-file-watcher and produce 'project file has been
+        modified outside of TcXaeShell' prompts — and, intermittently,
+        crash XAE on the next solution operation. Calling SaveAll after
+        each write step keeps the in-memory and on-disk views
+        synchronised.
+
+        Best-effort: silently ignores failures (e.g. ExecuteCommand
+        rejected during a build) so callers don't have to wrap.
+    #>
+    param([Parameter(Mandatory)]$Dte)
+    try {
+        Invoke-WithComRetry { $Dte.ExecuteCommand('File.SaveAll') } | Out-Null
+    } catch { }
+}
+
+function Wait-TcPlcProjectsLoaded {
+    <#
+    .SYNOPSIS
+        Force-materialise each PLC project's source tree under TIPC.
+
+    .DESCRIPTION
+        When TcXaeShell opens an existing .sln from disk, the .plcproj
+        source trees underneath each TIPC^<plc> node are lazy-loaded;
+        only the project instance (<plc> Instance) is exposed until
+        something specifically requests the source. This helper walks
+        each PLC project and polls LookupTreeItem("TIPC^<plc>^<plc>
+        Project") until it resolves, which is what causes XAE to load
+        the source. Without this, the first downstream automation
+        interface call against the source tree fails with 'Item not
+        found'.
+
+        Best-effort: returns silently if no Solution is loaded or no
+        ITcSysManager is found. Caller wraps in try/catch.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [int]$MaxAttempts = 12,
+        [int]$DelayMs = 250
+    )
+    if ($null -eq $Dte.Solution -or $Dte.Solution.Projects.Count -eq 0) { return }
+
+    $sm = $null
+    foreach ($proj in $Dte.Solution.Projects) {
+        $obj = $null
+        try { $obj = $proj.Object } catch { continue }
+        if ($null -eq $obj) { continue }
+        try {
+            $obj.LookupTreeItem('TIPC') | Out-Null
+            $sm = $obj
+            break
+        } catch { continue }
+    }
+    if ($null -eq $sm) { return }
+
+    $tipc = Invoke-WithComRetry { $sm.LookupTreeItem('TIPC') }
+    $plcNames = @()
+    for ($i = 1; $i -le $tipc.ChildCount; $i++) {
+        $plcNames += (Invoke-WithComRetry { $tipc.Child($i) }).Name
+    }
+    foreach ($plcName in $plcNames) {
+        $projectPath = "TIPC^$plcName^$plcName Project"
+        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+            try {
+                $node = Invoke-WithComRetry { $sm.LookupTreeItem($projectPath) }
+                if ($null -ne $node) { break }
+            } catch {
+                # Source not loaded yet — wait and retry.
+            }
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
 }
 
 function Get-TcSysManager {
@@ -411,4 +577,5 @@ Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, `
     Resolve-TcPlcName, Get-TcPlcProjectNode, Get-TcPousFolder, Find-TcChild, `
     Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
-    Invoke-TcDevenvBuild, Read-TcBuildLog
+    Invoke-TcDevenvBuild, Read-TcBuildLog, `
+    Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution

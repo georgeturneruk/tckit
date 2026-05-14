@@ -72,6 +72,7 @@ try {
     } else {
         Set-TcItemSource -Item $item -Code $Code
     }
+    Save-TcSolution -Dte $dte
 
     return @{ success = $true; details = @{ pou = $PouName; item = $ItemName; plc = $plcName } }
 }

@@ -72,9 +72,8 @@ try {
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
     $libManager.AddPlaceholder($PlaceholderName, $DefaultLibrary, $Version, $Distributor) | Out-Null
     # AddPlaceholder mutates only in-memory state; persist to .plcproj so the
-    # change survives a re-open / git-reset cycle. Same rule as AddLibrary —
-    # see Add-TcLibraryReference.ps1.
-    try { $dte.ExecuteCommand('File.SaveAll') | Out-Null } catch { }
+    # change survives a re-open / git-reset cycle. See Save-TcSolution.
+    Save-TcSolution -Dte $dte
 
     return @{
         success = $true
