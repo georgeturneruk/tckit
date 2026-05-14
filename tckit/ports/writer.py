@@ -1,6 +1,7 @@
 """ProjectWriter port — structural writes to TwinCAT project via automation interface."""
 
 from abc import ABC, abstractmethod
+from typing import Literal
 
 from tckit.ports.types import POUType, Result
 
@@ -145,5 +146,91 @@ class ProjectWriter(ABC):
             ``None`` (default) targets the FB declaration.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def add_plc_project(
+        self,
+        sln_path: str,
+        plc_name: str,
+        *,
+        project_type: Literal["standard", "library"] = "standard",
+    ) -> Result:
+        """Add a second (or further) PLC project to an existing TwinCAT solution.
+
+        Wraps the documented ``ITcSmTreeItem.CreateChild`` call on the
+        ``TIPC`` node so a single sln can hold a library + application or
+        library + test split. v1 implements only ``project_type="standard"``;
+        ``"library"`` is reserved and returns an explicit error.
+
+        :param sln_path: Absolute path to the existing .sln file. The
+            harness reopens the solution if it isn't already loaded.
+        :param plc_name: Name of the new PLC sub-project. Must not collide
+            with an existing PLC project name in the same sln.
+        :param project_type: ``"standard"`` (default) for a regular
+            application PLC project. ``"library"`` reserved; not yet
+            implemented.
+        """
+        ...
+
+    @abstractmethod
+    def save_plc_as_library(
+        self,
+        plc_name: str,
+        output_path: str,
+        *,
+        install: bool = True,
+        repository: str = "System",
+    ) -> Result:
+        """Save a PLC project as a .library file, optionally installing it.
+
+        Wraps ``ITcPlcIECProject.SaveAsLibrary(path, install)``. The IDE
+        equivalent is "PLC project → Save as library and install". When
+        ``install=True``, the library is registered with the named
+        repository in the same COM call so consumer PLC projects can
+        resolve a subsequent ``add_library_reference``.
+
+        Required before every consumer build whose source has changed,
+        because compiled-library references pull from the installed copy
+        rather than rebuilding the source on demand. See the
+        ``tc-build-test-loop`` skill for the orchestration rule.
+
+        :param plc_name: PLC project to save as a library.
+        :param output_path: Absolute path (directory or file) for the
+            generated ``.library`` artefact.
+        :param install: ``True`` (default) also installs into the named
+            repository in the same call.
+        :param repository: Library repository name. Defaults to ``"System"``
+            which is the standard TwinCAT installed-libraries repo.
+        """
+        ...
+
+    @abstractmethod
+    def add_library_reference(
+        self,
+        consumer_plc_name: str,
+        library_name: str,
+        *,
+        version: str = "*",
+        distributor: str = "Tc3 Project",
+    ) -> Result:
+        """Add a library reference to a consumer PLC project.
+
+        Wraps ``ITcPlcLibraryManager.AddLibrary(name, version, distributor)``
+        on the consumer PLC's library manager (the ``References`` tree node
+        under the PLC project). The referenced library must already be
+        installed in the resolved repository — use ``save_plc_as_library``
+        with ``install=True`` first for libraries produced from an in-sln
+        PLC project.
+
+        :param consumer_plc_name: PLC project receiving the reference.
+        :param library_name: Library name as installed (typically matches
+            the source PLC project's name).
+        :param version: ``"*"`` (default) means latest available.
+        :param distributor: Library distributor / company string.
+            Defaults to ``"Tc3 Project"``, the conventional value for
+            libraries produced from a PLC project via ``SaveAsLibrary``;
+            override if the project's company info differs.
         """
         ...

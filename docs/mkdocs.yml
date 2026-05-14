@@ -39,6 +39,7 @@ nav:
     - ProjectWriter:
       - Overview: capabilities/project-writer/overview.md
       - automation_writer: capabilities/project-writer/automation-writer.md
+      - "Multi-PLC + library tools": capabilities/project-writer/multi-plc.md
     - BuildRunner:
       - Overview: capabilities/build-runner/overview.md
       - xae_com_builder: capabilities/build-runner/xae-com-builder.md
