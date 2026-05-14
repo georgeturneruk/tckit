@@ -70,17 +70,18 @@ in ADR-0009. Six bridge bugs were caught and fixed along the way
 Outside Phase C0's scope; needs separate follow-up before the bench
 is fully runnable:
 
-- TcUnit library reference + `GVL_TcUnit.TcGVL` with
-  `TcUnit_ResultExportXmlPath` constant. Placeholder-reference
-  authoring (`AddPlaceholder`) is not yet in the writer port; for the
-  bench, this can be filled in by hand in XAE once and committed, or
-  a `bench/post_session.py` step can wire it.
 - The `FB_RollingAverageTests` `FB_TestSuite` descendant referenced
-  by TASK.md — depends on the TcUnit reference above. The currently
-  authored `FB_RollingAverageConsumer` is a build-smoke consumer, not
-  a TcUnit suite.
+  by TASK.md. The currently authored `FB_RollingAverageConsumer` is
+  a build-smoke consumer, not a TcUnit suite. The TcUnit placeholder
+  reference and `GVL_TcUnit` constant land here once the suite is
+  authored — `mcp__tckit__add_library_placeholder` (added under
+  ADR-0009 extension, PR #76) is the tool for the reference.
 - Runtime smoke (`deploy` → `start_runtime` → `run_tests` → `get_test_results`)
   — requires a TwinCAT runtime + `TARGET_AMS_ID` env var.
+
+The bench machine also needs the [TcUnit library](https://github.com/tcunit/TcUnit)
+installed in the system library repository (distributor
+`www.tcunit.org`); see `bench/README.md` Prerequisites.
 
 ## Reset between bench runs
 

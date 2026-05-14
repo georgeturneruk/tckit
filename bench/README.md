@@ -56,6 +56,12 @@ run. See `tasks/_parked/README.md` for the parking rationale.
   `uvx tckit`).
 - TcUnit checkout available locally. Pass the path via `--tcunit-path`
   (default `C:/TcUnit`).
+- The [TcUnit library](https://github.com/tcunit/TcUnit) installed in
+  the system library repository (distributor `www.tcunit.org`). The
+  bug-hunting fixtures all reference TcUnit as a placeholder; without
+  it installed the consumer PLC builds fail to resolve. Install via
+  XAE's "Library Repository → Install..." against the `.library` from
+  a TcUnit release.
 
 ## Run
 
