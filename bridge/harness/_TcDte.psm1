@@ -115,6 +115,13 @@ function Open-TcSolution {
         [Parameter(Mandatory)][string]$Path
     )
     if (-not (Test-Path $Path)) { throw "Solution path not found: $Path" }
+    if ($null -eq $Dte.Solution) {
+        # TcXaeShell can land in a state where DTE attaches but its
+        # Solution property is null — observed after long-idle / repeated
+        # build cycles. The fix is operator-side (restart XAE); raise a
+        # clear error instead of the cryptic 'cannot call method on null'.
+        throw 'TcXaeShell DTE has no Solution object (attached but uninitialised). Restart TcXaeShell and retry.'
+    }
     $resolved = (Resolve-Path $Path).Path
     $current = ''
     try { $current = $Dte.Solution.FullName } catch { }

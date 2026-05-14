@@ -61,15 +61,20 @@ try {
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
 
+    if ($null -eq $dte.Solution) {
+        return @{
+            success = $false
+            error   = 'TcXaeShell DTE has no Solution object (attached but uninitialised). Restart TcXaeShell and retry.'
+        }
+    }
+
     # Step 1: empty solution shell. COM methods on Solution emit objects
     # into the PowerShell output stream; suppress so the trailing hashtable
     # is the only value the harness returns.
     #
-    # On a fresh XAE attach the Solution object is in an "uninitialised"
-    # state where method calls fail with "null-valued expression". On a
-    # pre-loaded XAE Solution.Create throws because something's already
-    # there. We try Create directly first; if it fails, close any
-    # loaded sln and retry once.
+    # On a pre-loaded XAE Solution.Create throws because something's
+    # already there. We try Create directly first; if it fails, close
+    # any loaded sln and retry once.
     try {
         $dte.Solution.Create($Path, $Name) | Out-Null
     } catch {
