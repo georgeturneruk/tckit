@@ -40,17 +40,31 @@ writer.add_pou("FB_TestAdder", POUType.FUNCTION_BLOCK, "...", plc_name="Tests")
 builder.build(sln_path, plc_name="Tests")
 ```
 
-## Why the first PLC isn't named after the sln
+## On-disk layout
 
-A TwinCAT solution holds, at minimum, three named tree items that the IDE keeps separate:
+Each PLC lives in its own TwinCAT project; one `.tsproj` per PLC, multiple TwinCAT projects per sln. This matches the layout TcXaeShell's New Project wizard produces and round-trips cleanly through `Solution.Open` from disk. The recipe above produces:
 
-- the `.sln` itself,
-- the VS Project node that wraps the `.tspproj` (the "TwinCAT project"),
-- the PLC project under TIPC.
+```
+C:/work/
+├── MyProj.sln
+├── MyProj/                       ← TwinCAT project (matches sln name)
+│   ├── MyProj.tsproj
+│   └── MyProj_Plc/               ← PLC subdir
+│       └── MyProj_Plc.plcproj
+└── Tests_Tc/                     ← second TwinCAT project (PlcName + "_Tc")
+    ├── Tests_Tc.tsproj
+    └── Tests/                    ← PLC subdir (caller-supplied PLC name)
+        └── Tests.plcproj
+```
 
-If the second and third share a name, TcXaeShell has been observed to crash on solution load — the COM call comes back with `RPC_E_CALL_REJECTED` or `MK_E_UNAVAILABLE` and the process dies. To avoid this, `create_project(name, path)` defaults the first PLC project to `${name}_Plc`. Pass an explicit name to the harness if you need a different value.
+The `_Tc` suffix on the second TwinCAT project is generated automatically. Earlier versions of these tools stacked multiple PLCs under one PLC-only `.tspproj` (one `<Plc>` element with multiple `<Project>` children); that layout authored cleanly in-memory but the on-disk `.tspproj` was missing the `<System Manager><Instance>` blocks, and `TcXaeShell.exe` segfaulted in `IVsParentProject.OpenChildren` on every reload. See [ADR-0009 status notes](https://github.com/georgeturneruk/tckit/blob/main/adrs/0009-multi-plc-authoring-and-library-tools.md#status-notes) for the rethink ([PR #81](https://github.com/georgeturneruk/tckit/pull/81)).
 
-`add_plc_project` is unaffected — it already requires an explicit PLC name, so the collision can't arise there.
+## Why each level has a distinct name
+
+A TwinCAT solution holds several named tree items that the IDE keeps separate. Same-name objects at different levels have crashed TcXaeShell on save / load (`RPC_E_CALL_REJECTED`, `MK_E_UNAVAILABLE`, or `AccessViolation` depending on which pair collides). The tools generate distinct defaults:
+
+- `create_project(name, path)` defaults the first PLC to `${name}_Plc`. Pass an explicit `plc_name` to the harness if you need a different value.
+- `add_plc_project(sln_path, plc_name)` wraps the new PLC in a TwinCAT project named `${plc_name}_Tc`. The PLC keeps the name you asked for; the suffix is on the wrapper.
 
 ## Build orchestration: save+install before consumer build
 

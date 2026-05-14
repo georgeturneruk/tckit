@@ -297,3 +297,52 @@ unaffected.
   in `Get-TcSysManager` for the .Object null race, Create-first then
   fall-back-and-retry pattern in `New-TcProject`). Generated tree
   committed under `bench/fixtures/bug-hunting/B1-off-by-one/`.
+- 2026-05-14: Phase C0 redone after a deeper bug surfaced.
+  The original layout (one PLC-only `.tspproj`, two PLCs stacked
+  under one `<Plc>`) authored and built cleanly in memory but
+  segfaulted `TcXaeShell.exe` on every `Solution.Open` from disk
+  (`AccessViolationException` in `TwinCAT System Manager.x64.dll`
+  during `IVsParentProject.OpenChildren()`). Root cause was that
+  the PLC-only template doesn't persist the System Manager
+  `<Instance>` block for the second PLC; the on-disk `.tspproj`
+  ended up as a 4-line skeleton. The bench needs to load fixtures
+  from disk on every run, so this was a hard blocker. Fix
+  ([#81](https://github.com/georgeturneruk/tckit/pull/81)): one
+  full `.tsproj` per PLC, multiple TwinCAT projects per sln,
+  `File.SaveAll` after every structural write. Wrapping TwinCAT
+  project gets a `_Tc` suffix so its name doesn't collide with the
+  PLC's. Details in
+  [ADR-0009 status notes](0009-multi-plc-authoring-and-library-tools.md).
+  Two more PRs around the same change:
+  [#80](https://github.com/georgeturneruk/tckit/pull/80) hardens
+  the bridge (COM retries, lazy-load source trees, stale `.~u`
+  cleanup); [#82](https://github.com/georgeturneruk/tckit/pull/82)
+  inserts empty `VAR/END_VAR` into B3-B5 Step methods to work
+  around an `Add-TcMethod` parser gap
+  ([#84](https://github.com/georgeturneruk/tckit/issues/84)). All
+  six fixtures (B1-T1) re-authored on disk in the new layout and
+  build clean against a fresh XAE, verified at the end of the
+  session.
+- 2026-05-14: **What still needs doing for Phase C0:** the TcUnit
+  suite POUs (`FB_*Tests EXTENDS TcUnit.FB_TestSuite` plus a MAIN
+  that instantiates the suite and calls TcUnit's run macro) are
+  not authored yet. The fixture trees have `FB_<Subject>` (the
+  buggy code), `FB_<Subject>Consumer` (forces the library reference
+  to actually compile), `GVL_TcUnit` (the
+  `TcUnit_ResultExportXmlPath` constant), `MAIN` (template
+  placeholder), and the TcUnit placeholder reference. The MAIN
+  bodies need replacing with a suite instantiation + run, and a
+  suite FB needs adding per fixture. Once that lands, `/tcunit-run`
+  has something to exercise and the runtime smoke can produce the
+  expected `failures >= 1` on each buggy fixture.
+- 2026-05-14: Known harness issues found while doing this work,
+  filed for follow-up but not blocking Phase C0 completion:
+  - [#84](https://github.com/georgeturneruk/tckit/issues/84):
+    `Split-TcCode` silently treats a method body as declaration when
+    there's no `END_VAR`. Current workaround is empty `VAR/END_VAR`
+    in author scripts; proper fix is to detect a `METHOD`/`FUNCTION`
+    signature line and split there.
+  - [#85](https://github.com/georgeturneruk/tckit/issues/85):
+    Authoring chain intermittently flakes mid-run with
+    `DTE.Solution null` or `StubSyncLock`. Manual retry clears it;
+    bench/run.py for Phase C1 should be robust against it.
