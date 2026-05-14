@@ -147,6 +147,43 @@ function Get-TcDte {
 # Solution / project navigation
 # ------------------------------------------------------------------
 
+function Remove-TcStaleLockFile {
+    <#
+    .SYNOPSIS
+        Delete a stale TcXaeShell .~u lock file next to a .sln, if its
+        recorded PID no longer exists.
+
+    .DESCRIPTION
+        TcXaeShell writes <SolutionName>.~u beside the .sln while a sln
+        is loaded, holding owner / hostname / PID / timestamp. The file
+        is supposed to be deleted on clean close, but a crashed XAE
+        leaves it behind. A subsequent Solution.Open against the same
+        sln then hangs or crashes the new XAE instance (reproduced
+        on B1 with PID 34460 long after that XAE died).
+
+        This helper reads the PID on line 3 and only deletes the lock
+        if no live process has that PID. Best-effort: silently swallows
+        all errors so it never blocks an Open.
+    #>
+    param([Parameter(Mandatory)][string]$SolutionPath)
+    try {
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($SolutionPath)
+        $dir  = [System.IO.Path]::GetDirectoryName($SolutionPath)
+        $lock = Join-Path $dir "$stem.~u"
+        if (-not (Test-Path -LiteralPath $lock)) { return }
+        $linesRaw = Get-Content -LiteralPath $lock -ErrorAction Stop
+        $lines = @($linesRaw)
+        $pidLine = if ($lines.Count -ge 3) { $lines[2] } else { '' }
+        $deadPid = 0
+        $isNumeric = [int]::TryParse($pidLine.Trim(), [ref]$deadPid)
+        if ($isNumeric -and $deadPid -gt 0) {
+            $proc = Get-Process -Id $deadPid -ErrorAction SilentlyContinue
+            if ($null -ne $proc) { return }  # genuinely held — leave it
+        }
+        Remove-Item -LiteralPath $lock -Force -ErrorAction Stop
+    } catch { }
+}
+
 function Open-TcSolution {
     param(
         [Parameter(Mandatory)]$Dte,
@@ -164,6 +201,7 @@ function Open-TcSolution {
     $current = ''
     try { $current = $Dte.Solution.FullName } catch { }
     if ($current -ne $resolved) {
+        Remove-TcStaleLockFile -SolutionPath $resolved
         Invoke-WithComRetry { $Dte.Solution.Open($resolved) } | Out-Null
         # After opening an existing sln, PLC source trees can be
         # lazy-loaded — the '<plc> Project' nodes don't appear under TIPC
