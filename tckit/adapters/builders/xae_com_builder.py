@@ -65,8 +65,13 @@ class XaeComBuilder(BuildRunner):
         return _to_result(resp)
 
     def start_runtime(self, target_ams_id: str) -> Result:
+        payload = {
+            "TargetAmsId": target_ams_id,
+            "Mode": "Run",
+            "Wait": True,
+        }
         try:
-            resp = self._client.post("/runtime", {"TargetAmsId": target_ams_id})
+            resp = self._client.post("/runtime", payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
