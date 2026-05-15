@@ -19,8 +19,7 @@ B2-sign-type/
 └── CounterTests/                    ← Tests PLC project (sibling, added via add_plc_project)
     ├── CounterTests.plcproj
     └── POUs/
-        ├── FB_CounterConsumer.TcPOU
-        └── GVL_TcUnit.TcGVL
+        └── FB_CounterConsumer.TcPOU
 ```
 
 The `.library` artefact (`B2SignedDelta_Plc.library`) is gitignored

@@ -4,13 +4,12 @@ Drives the ADR-0009 multi-PLC + library chain end-to-end:
 
     create_project (Library PLC, named ${SlnName}_Plc)
         -> add_plc_project (Tests PLC, sibling)
+        -> add_library_placeholder (Tests -> TcUnit, xUnitEnablePublish=TRUE)
         -> add_pou (FB_RollingAverage in Library, with the seeded bug)
         -> add_method (Step in FB_RollingAverage, with the off-by-one)
         -> add_pou (FB_RollingAverageConsumer in Tests, calls FB_RollingAverage)
         -> save_plc_as_library (Library, install=True)
         -> add_library_reference (Tests -> Library)
-        -> add_library_placeholder (Tests -> TcUnit)
-        -> add_pou (GVL_TcUnit in Tests, with TcUnit_ResultExportXmlPath)
         -> build (Tests)
 
 Bench runs reset the fixture from git; this script exists to

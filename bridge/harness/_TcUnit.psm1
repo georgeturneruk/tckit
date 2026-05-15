@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    TcUnit-specific helpers: the TcUnit_ResultExportXmlPath constant lookup,
-    a session-based symbol-equality poll, and file-freshness polling.
+    TcUnit-specific helpers: a session-based symbol-equality poll, the xUnit
+    publisher's default output path, and file-freshness polling.
 
 .DESCRIPTION
     Sibling module to _TcDte.psm1. _TcDte owns DTE / project-tree navigation;
@@ -12,13 +12,12 @@
     New-TcSession from TcXaeMgmt and pass it to Wait-TcSymbolEquals here.
 
     Exported functions:
-      Wait-TcSymbolEquals    — poll a PLC symbol on a TcSession until it
-                                equals a value or times out
-      Get-TcUnitXmlPath      — resolve the TcUnit_ResultExportXmlPath
-                                constant from the test project's GVL
-                                declarations (falls back to default)
-      Wait-TcFileFresh       — wait for a file to appear with mtime > a
-                                given epoch
+      Wait-TcSymbolEquals       — poll a PLC symbol on a TcSession until it
+                                   equals a value or times out
+      Get-TcUnitDefaultXmlPath  — return the xUnit publisher's default
+                                   output path for a given PLC port
+      Wait-TcFileFresh          — wait for a file to appear with mtime > a
+                                   given epoch
 #>
 
 Set-StrictMode -Version Latest
@@ -27,7 +26,14 @@ Set-StrictMode -Version Latest
 # Defaults
 # ------------------------------------------------------------------
 
-$script:TcUnitDefaultXmlPath = 'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml'
+# TcUnit's xUnit publisher writes to %TC_BOOTPRJPATH%<file>; for a PLC at the
+# standard runtime port that resolves to C:\TwinCAT\3.1\Boot\Plc\Port_<port>\.
+# The publisher's filename default lives on GVL_Param_TcUnit.xUnitFilePath
+# (see https://github.com/tcunit/TcUnit). The previous convention of
+# greping a project-defined `TcUnit_ResultExportXmlPath` GVL constant
+# was a TcKit-side fiction — TcUnit never read that name. See ADR-0010.
+$script:TcUnitDefaultXmlFileName = 'tcunit_xunit_testresults.xml'
+$script:TcUnitDefaultPlcPort     = 851
 
 # ------------------------------------------------------------------
 # Symbol polling
@@ -83,52 +89,27 @@ function Wait-TcSymbolEquals {
 }
 
 # ------------------------------------------------------------------
-# TcUnit project convention
+# xUnit publisher default output path
 # ------------------------------------------------------------------
 
-function Get-TcUnitXmlPath {
+function Get-TcUnitDefaultXmlPath {
     <#
     .SYNOPSIS
-        Resolve the absolute path to TcUnitResults.xml from the test PLC
-        project's GVL declarations.
+        Absolute path that TcUnit's xUnit publisher writes to by default
+        for a PLC running at the given runtime port.
 
     .DESCRIPTION
-        Walks the PLC project tree for a GVL whose declaration text
-        contains ``TcUnit_ResultExportXmlPath : T_MaxString := '<path>'``.
-        Returns the string literal between the single quotes if found,
-        otherwise returns the canonical default
-        ``C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml``.
+        Mirrors GVL_Param_TcUnit.xUnitFilePath, whose default is
+        '%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml'. TwinCAT expands
+        TC_BOOTPRJPATH per running PLC instance to
+        C:\TwinCAT\3.1\Boot\Plc\Port_<port>\.
 
-        Compile-time constant text, not a runtime symbol read — robust
-        across pre-Run / Run / Config states.
-
-    .PARAMETER PlcNode
-        The PLC project tree item (TIPC^<plc>^<plc> Project). Get one via
-        Get-TcPlcProjectNode from _TcDte.psm1.
+        Callers that override xUnitFilePath via library parameters must
+        pass the resolved path to /tcunit-run / /results explicitly; the
+        bridge does not read xUnitFilePath off the running runtime today.
     #>
-    param([Parameter(Mandatory)]$PlcNode)
-
-    $pattern = '(?im)^\s*TcUnit_ResultExportXmlPath\s*:\s*T_MaxString\s*:=\s*''([^'']+)''\s*;'
-
-    $stack = New-Object System.Collections.Stack
-    $stack.Push($PlcNode)
-    while ($stack.Count -gt 0) {
-        $node = $stack.Pop()
-        try {
-            if ($node.ChildCount -lt 1) { continue }
-        } catch { continue }
-        for ($i = 1; $i -le $node.ChildCount; $i++) {
-            $child = $node.Child($i)
-            $decl = ''
-            try { $decl = [string]$child.DeclarationText } catch { $decl = '' }
-            if ($decl) {
-                $m = [regex]::Match($decl, $pattern)
-                if ($m.Success) { return $m.Groups[1].Value }
-            }
-            $stack.Push($child)
-        }
-    }
-    return $script:TcUnitDefaultXmlPath
+    param([int]$Port = $script:TcUnitDefaultPlcPort)
+    return "C:\TwinCAT\3.1\Boot\Plc\Port_$Port\$script:TcUnitDefaultXmlFileName"
 }
 
 # ------------------------------------------------------------------
@@ -172,5 +153,5 @@ function Wait-TcFileFresh {
 
 Export-ModuleMember -Function `
     Wait-TcSymbolEquals, `
-    Get-TcUnitXmlPath, `
+    Get-TcUnitDefaultXmlPath, `
     Wait-TcFileFresh

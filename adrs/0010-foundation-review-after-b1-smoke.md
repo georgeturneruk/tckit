@@ -1,7 +1,7 @@
 ---
 adr: 0010
 title: Foundation review — writer port and bridge surface after the B1 smoke
-status: Exploring
+status: Proposed
 created: 2026-05-15
 issue:
 pr:
@@ -214,3 +214,24 @@ any point and the partial state is still better than today.
   into deleting the fictional path constant from C.3 and D.1) and
   propose a concrete shape. Promote this ADR to `Proposed` once a
   rebuild ordering is agreed.
+- 2026-05-15: Rebuild ordering agreed; bundled into five PRs
+  along natural cohesion lines rather than one PR per item, since
+  CI runs slowly and several items overlap on `_common.py` and
+  `tckit/ports/writer.py`. Sequence:
+    1. **Housekeeping** (Track E + A.4 — debris cleanup + Split-TcCode
+       header-only handling).
+    2. **xUnit cascade** (A.2 + C.2 + C.3 + D.1 — library-parameter
+       primitive, flip `xUnitEnablePublish`, retire
+       `TcUnit_ResultExportXmlPath` chain).
+    3. **Bridge surface polish** (B.1 + B.2 + B.3 + B.4 — central
+       route timeouts, `_TcDte` tree-path helpers, explicit
+       `BootAutostart`, `Probes` repro + fix).
+    4. **New writer + builder primitives** (A.1 + A.5 + C.1 —
+       `add_gvl`, `save_plc_as_library(overwrite=)`, `read_symbols`).
+    5. **Split `update_pou_item`** (A.3 — three explicit methods +
+       matching patch variants, full bench / skill / template
+       migration).
+  PR 5 lands solo on top of a quiet base because it rewrites the
+  writer port surface every other PR extends. PR 1 + PR 2 + PR 3 +
+  PR 4 are mutually independent and can run in flight in parallel.
+  ADR promoted to `Proposed` alongside this note.

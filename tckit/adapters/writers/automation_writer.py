@@ -210,18 +210,19 @@ class AutomationWriter(ProjectWriter):
         *,
         version: str = "*",
         distributor: str = "",
+        parameters: dict[str, str] | None = None,
     ) -> Result:
+        payload: dict[str, Any] = {
+            "PlaceholderName": placeholder_name,
+            "DefaultLibrary": default_library,
+            "Version": version,
+            "Distributor": distributor,
+        }
+        if parameters:
+            payload["Parameters"] = dict(parameters)
         return self._call(
             "/add-library-placeholder",
-            self._with_project(
-                {
-                    "PlaceholderName": placeholder_name,
-                    "DefaultLibrary": default_library,
-                    "Version": version,
-                    "Distributor": distributor,
-                },
-                plc_name=consumer_plc_name,
-            ),
+            self._with_project(payload, plc_name=consumer_plc_name),
         )
 
     # ------------------------------------------------------------------

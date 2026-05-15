@@ -244,6 +244,7 @@ class ProjectWriter(ABC):
         *,
         version: str = "*",
         distributor: str = "",
+        parameters: dict[str, str] | None = None,
     ) -> Result:
         """Add a library placeholder reference to a consumer PLC project.
 
@@ -273,5 +274,12 @@ class ProjectWriter(ABC):
             libraries (e.g. ``"www.tcunit.org"`` for TcUnit,
             ``"Beckhoff Automation GmbH"`` for Tc2/Tc3 libraries) pass the
             distributor explicitly so the placeholder resolves correctly.
+        :param parameters: Optional library parameter overrides serialised
+            into the ``<PlaceholderReference>`` block, equivalent to the
+            IDE's "Library Parameters" dialog. Maps parameter name → value
+            string; values are written verbatim, so TwinCAT booleans need
+            ``"TRUE"`` / ``"FALSE"`` (not Python ``True``/``False``). Use
+            this to override defaults like
+            ``parameters={"xUnitEnablePublish": "TRUE"}`` on TcUnit.
         """
         ...

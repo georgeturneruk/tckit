@@ -2,10 +2,11 @@
 
 Each `author_<id>.py` drives the bridge through the standard
 multi-PLC + library + TcUnit chain. The boilerplate (sln + Tests
-sibling + save/install + reference + TcUnit placeholder + GVL_TcUnit
-+ build) is identical across fixtures; only the bugged FB content
-and the consumer FB differ. This module owns the boilerplate; each
-author script owns the FB authoring calls.
+sibling + TcUnit placeholder with xUnitEnablePublish=TRUE
++ save/install + reference + build) is identical across fixtures;
+only the bugged FB content and the consumer FB differ. This module
+owns the boilerplate; each author script owns the FB authoring
+calls.
 
 See ADR-0007 §"Fixture layout" and `author_B1.py` for the reference
 shape.
@@ -31,12 +32,6 @@ from tckit.utils.bridge_client import BridgeClient  # noqa: E402
 
 
 TCUNIT_DISTRIBUTOR = "www.tcunit.org"
-GVL_TCUNIT_CODE = """\
-VAR_GLOBAL CONSTANT
-    TcUnit_ResultExportXmlPath : T_MaxString :=
-        'C:\\TwinCAT\\3.1\\Boot\\Plc\\TcUnitResults.xml';
-END_VAR
-"""
 
 
 @dataclass
@@ -69,8 +64,9 @@ def _add_gvl(
     """Add a GVL via the bridge `/pou` route directly.
 
     Mirrors the AutomationWriter.add_pou shape but with ``PouType=gvl``,
-    which the writer port doesn't currently expose. See the comment at
-    the call site in ``finalise_fixture``.
+    which the writer port doesn't currently expose. Will move to a
+    first-class ``add_gvl`` writer method in a follow-up; until then,
+    this is the only direct ``/pou`` punch-through left in the bench.
     """
     payload = {
         "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
@@ -158,6 +154,12 @@ def scaffold_fixture(
     # finalise_fixture because it depends on the .library produced by
     # save_plc_as_library, which can only happen after the library's POUs
     # have been added.
+    #
+    # xUnitEnablePublish flips on the publisher that writes the per-test
+    # JUnit-style XML at %TC_BOOTPRJPATH%tcunit_xunit_testresults.xml; it
+    # defaults FALSE on the library, so without this override the suite
+    # finishes correctly but no XML lands and /tcunit-run can only return
+    # live counters or whatever symbol Probes the caller asked for.
     _check(
         f"add_library_placeholder({tests_plc} -> TcUnit)",
         writer.add_library_placeholder(
@@ -165,6 +167,7 @@ def scaffold_fixture(
             "TcUnit",
             "TcUnit",
             distributor=TCUNIT_DISTRIBUTOR,
+            parameters={"xUnitEnablePublish": "TRUE"},
         ),
     )
 
@@ -180,8 +183,8 @@ def scaffold_fixture(
 
 
 def finalise_fixture(scaffold: FixtureScaffold) -> None:
-    """Save the library, add reference + TcUnit placeholder + GVL_TcUnit,
-    then build the Tests PLC. Fails the script on any non-success step.
+    """Save the library, add the library reference, then build the Tests
+    PLC. Fails the script on any non-success step.
 
     Run this after the script has added every library/tests FB it needs.
     """
@@ -205,15 +208,6 @@ def finalise_fixture(scaffold: FixtureScaffold) -> None:
     _check(
         f"add_library_reference({scaffold.tests_plc} -> {scaffold.library_plc})",
         writer.add_library_reference(scaffold.tests_plc, scaffold.library_plc),
-    )
-
-    # GVLs aren't POUs — POUType deliberately scopes to function blocks,
-    # functions, programs and interfaces. The bridge `/pou` route accepts
-    # `PouType: gvl` via the harness's Get-TcKind, so we call it directly
-    # here until a proper `add_gvl` lands on the writer port.
-    _check(
-        "add_pou(GVL_TcUnit)",
-        _add_gvl(writer, "GVL_TcUnit", GVL_TCUNIT_CODE, plc_name=scaffold.tests_plc),
     )
 
     build_result = scaffold.builder.build(

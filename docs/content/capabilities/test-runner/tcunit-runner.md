@@ -22,23 +22,33 @@ shared environment along with the rest of TcKit. The optional
 timeout on the `/tcunit-run` call when the test suites take a long
 time to complete.
 
-## TcUnit_ResultExportXmlPath convention
+## xUnit publisher output
 
-The test project must declare a `VAR_GLOBAL CONSTANT` for the path
-TcUnit writes its XML output to. The runner resolves this path from
-the GVL declaration text at run time:
+TcUnit ships an xUnit publisher gated on `GVL_Param_TcUnit.xUnitEnablePublish`
+(a library parameter on the TcUnit placeholder). When TRUE, the publisher
+writes JUnit-style XML to the path on `GVL_Param_TcUnit.xUnitFilePath`,
+which defaults to `%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml` —
+i.e. `C:\TwinCAT\3.1\Boot\Plc\Port_851\tcunit_xunit_testresults.xml`
+for a PLC running at the standard runtime port.
 
-```pascal
-VAR_GLOBAL CONSTANT
-    TcUnit_ResultExportXmlPath : T_MaxString :=
-        'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml';
-END_VAR
+Override the publisher flag through the writer port:
+
+```python
+writer.add_library_placeholder(
+    "TestsPlc", "TcUnit", "TcUnit",
+    distributor="www.tcunit.org",
+    parameters={"xUnitEnablePublish": "TRUE"},
+)
 ```
 
-This is a compile-time constant read, not a runtime symbol — robust
-across pre-Run / Run / Config states. The canonical path is
-`C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml`; teams can override it
-project-wide by changing the literal in this declaration.
+Without the override, suites still run and the runner state machine
+completes correctly, but no XML lands and `/results` has nothing to
+parse. The bridge's `/tcunit-run` reports `xml_published=false` in
+that case so callers can tell why the file isn't there.
+
+If the consumer also overrides `xUnitFilePath`, pass the resolved
+path back to `/results` explicitly via `XmlPath` — the bridge does
+not introspect the runtime to discover overrides today.
 
 ## Bridge routes
 
@@ -109,6 +119,6 @@ patterns. If a particular assertion's body doesn't match, the
 | Symptom | Likely cause |
 |---------|--------------|
 | `Tests did not finish within Ns` | The suites are slower than `TimeoutSeconds`; raise via `TCKIT_TEST_RUN_TIMEOUT` (HTTP side) and re-deploy with a higher `-TimeoutSeconds` if necessary. |
-| `TcUnit results XML not found at <path>` | The `TcUnit_ResultExportXmlPath` constant points somewhere unwritable, or the boot project hasn't activated yet — re-`deploy` then re-`run_tests`. |
+| `TcUnit results XML not found at <path>` | Either `xUnitEnablePublish` wasn't set TRUE on the TcUnit placeholder (publisher off; no XML ever written), or the boot project hasn't activated yet — re-`deploy` then re-`run_tests`. |
 | `XML not refreshed within 5s of suites finishing` | TcUnit emitted nothing despite the suites-finished flag flipping; usually means a path permission issue or the file was locked by another reader. |
 | `TcXaeMgmt module not found` | The bridge depends on Beckhoff's `TcXaeMgmt` PowerShell module for ADS operations. Easiest fix: run `tckit doctor` and accept the install prompt. Manual: `Install-Module -Name TcXaeMgmt -Scope CurrentUser -Force`. See [bridge setup](../../getting-started/bridge-setup.md#tcxaemgmt-powershell-module) for offline / TwinCAT-bundled alternatives. |
