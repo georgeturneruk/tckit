@@ -99,7 +99,10 @@ def test_deploy_posts_to_deploy_endpoint() -> None:
     assert result.success is True
     path, payload, _ = client.calls[0]
     assert path == "/deploy"
-    assert payload == {"TargetAmsId": "1.2.3.4.1.1"}
+    # ProjectPath comes from PLC_PROJECT_PATH env (empty in this unit test);
+    # the bridge handler falls back to its own env when the payload value is
+    # empty. Mirrors TcUnitRunner._with_target_and_plc.
+    assert payload == {"TargetAmsId": "1.2.3.4.1.1", "ProjectPath": ""}
 
 
 def test_start_runtime_posts_to_runtime_endpoint() -> None:
@@ -111,6 +114,7 @@ def test_start_runtime_posts_to_runtime_endpoint() -> None:
     path, payload, _ = client.calls[0]
     assert path == "/runtime"
     assert payload == {
+        "ProjectPath": "",
         "TargetAmsId": "1.2.3.4.1.1",
         "Mode": "Run",
         "Wait": True,

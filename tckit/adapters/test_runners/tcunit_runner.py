@@ -45,9 +45,25 @@ class TcUnitRunner(TestRunner):
     # ------------------------------------------------------------------
 
     def run_tests(
-        self, target_ams_id: str, *, plc_name: str | None = None
+        self,
+        target_ams_id: str,
+        *,
+        plc_name: str | None = None,
+        probes: list[str] | None = None,
     ) -> Result:
-        payload = self._with_target_and_plc({}, target_ams_id, plc_name)
+        extra: dict[str, Any] = {}
+        if probes:
+            # The bridge's Invoke-TcUnitRun reads each instance path via
+            # ADS after AllTestSuitesFinished flips, returning their
+            # values under `details.probes`. Useful when the xUnit XML
+            # publisher is off (its default) and the caller wants
+            # pass/fail straight from the runtime. Joined with newlines
+            # because the bridge's request decoder collapses nested
+            # string arrays unhelpfully on PowerShell 5.1; named
+            # ReadSymbols rather than Probes because PowerShell's
+            # parameter binding garbles a key literally named "Probes".
+            extra["ReadSymbols"] = "\n".join(probes)
+        payload = self._with_target_and_plc(extra, target_ams_id, plc_name)
         try:
             resp = self._client.post(
                 "/tcunit-run",

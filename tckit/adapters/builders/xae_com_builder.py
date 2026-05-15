@@ -56,22 +56,30 @@ class XaeComBuilder(BuildRunner):
     def deploy(
         self, target_ams_id: str, *, plc_name: str | None = None
     ) -> Result:
-        payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
+        payload: dict[str, Any] = {
+            "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
+            "TargetAmsId": target_ams_id,
+        }
         _attach_plc(payload, plc_name)
         try:
-            resp = self._client.post("/deploy", payload)
+            # ActivateConfiguration on a cold target plus the BootProject
+            # regeneration the deploy handler does is in the same latency
+            # class as a full build; reuse build_timeout so the HTTP
+            # client doesn't give up before the bridge does.
+            resp = self._client.post("/deploy", payload, timeout=build_timeout())
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
 
     def start_runtime(self, target_ams_id: str) -> Result:
         payload = {
+            "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
             "TargetAmsId": target_ams_id,
             "Mode": "Run",
             "Wait": True,
         }
         try:
-            resp = self._client.post("/runtime", payload)
+            resp = self._client.post("/runtime", payload, timeout=build_timeout())
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
