@@ -14,6 +14,45 @@ import httpx
 DEFAULT_BRIDGE_URL = "http://localhost:8765"
 DEFAULT_TIMEOUT = 60.0
 
+# Per-route HTTP-timeout defaults for bridge calls. Each value is the
+# ceiling we expect a route to need against a cold target on a typical
+# bench machine; routes not listed here fall back to ``DEFAULT_TIMEOUT``.
+# Some routes also honour an env var override (see ``ROUTE_TIMEOUT_ENV``)
+# so operators can extend the ceiling without a code change.
+ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
+    "/build": 600.0,
+    "/deploy": 300.0,
+    "/runtime": 180.0,
+    "/tcunit-run": 600.0,
+    "/results": 60.0,
+    "/save-as-library": 180.0,
+    "/install-dependency": 120.0,
+}
+
+ROUTE_TIMEOUT_ENV: dict[str, str] = {
+    "/build": "TCKIT_BUILD_TIMEOUT",
+    "/tcunit-run": "TCKIT_TEST_RUN_TIMEOUT",
+}
+
+
+def route_timeout(path: str) -> float:
+    """Resolve the HTTP timeout for a bridge ``path``.
+
+    Env var overrides win over the static defaults. Routes that aren't
+    in either map fall back to ``DEFAULT_TIMEOUT``.
+    """
+    if not path.startswith("/"):
+        path = "/" + path
+    env_var = ROUTE_TIMEOUT_ENV.get(path)
+    if env_var:
+        raw = os.getenv(env_var)
+        if raw:
+            try:
+                return float(raw)
+            except ValueError:
+                pass
+    return float(ROUTE_TIMEOUT_DEFAULTS.get(path, DEFAULT_TIMEOUT))
+
 
 class BridgeError(Exception):
     """Base class for bridge-client errors."""
@@ -26,9 +65,11 @@ class BridgeUnavailableError(BridgeError):
 class BridgeClient:
     """Thin wrapper around httpx for talking to the Windows bridge service.
 
-    Reads ``BRIDGE_URL`` from the environment (falling back to localhost:8765).
-    Reads ``TCKIT_BUILD_TIMEOUT`` for the build endpoint specifically — builds
-    can take many minutes and need a longer ceiling than the default 60s.
+    Reads ``BRIDGE_URL`` from the environment (falling back to
+    ``localhost:8765``). HTTP timeouts are resolved per-route via
+    :func:`route_timeout`; callers don't need to pass a ``timeout=``
+    unless they're talking to an unmapped route or want to override
+    the per-route default.
     """
 
     def __init__(
@@ -68,7 +109,8 @@ class BridgeClient:
 
         On HTTP 5xx, the response body (if JSON) is still returned so the
         caller can read its ``error`` field. On connection errors,
-        :class:`BridgeUnavailableError` is raised.
+        :class:`BridgeUnavailableError` is raised. ``timeout=None``
+        defaults to the per-route value from :func:`route_timeout`.
         """
         return self._request("POST", path, json=payload or {}, timeout=timeout)
 
@@ -98,16 +140,17 @@ class BridgeClient:
         if not path.startswith("/"):
             path = "/" + path
 
+        effective_timeout = timeout if timeout is not None else route_timeout(path)
+
         try:
-            response = client.request(method, path, json=json, timeout=timeout or self._timeout)
+            response = client.request(method, path, json=json, timeout=effective_timeout)
         except httpx.ConnectError as exc:
             raise BridgeUnavailableError(
                 f"Bridge not reachable at {self._base_url} ({exc})"
             ) from exc
         except httpx.TimeoutException as exc:
-            effective = timeout or self._timeout
             raise BridgeError(
-                f"Bridge timed out after {effective}s on {path}"
+                f"Bridge timed out after {effective_timeout}s on {path}"
             ) from exc
 
         # Always try to parse JSON. PowerShell harness returns JSON even on errors.
@@ -122,11 +165,9 @@ class BridgeClient:
 
 
 def build_timeout() -> float:
-    """Resolve the timeout for /build calls from env (default 600s)."""
-    raw = os.getenv("TCKIT_BUILD_TIMEOUT")
-    if not raw:
-        return 600.0
-    try:
-        return float(raw)
-    except ValueError:
-        return 600.0
+    """Resolve the timeout for /build calls. Thin wrapper over
+    :func:`route_timeout` for backwards compatibility — new callers
+    should not need to invoke this directly because ``BridgeClient.post``
+    already routes ``/build`` through the per-route map.
+    """
+    return route_timeout("/build")

@@ -4,11 +4,12 @@
 
 .DESCRIPTION
     Sets the target NetId on the chosen TwinCAT project's system manager,
-    enables BootProjectAutostart + GenerateBootProject on the PLC tree
-    item, then calls ActivateConfiguration(). In a multi-tsproj sln (one
-    .tsproj per PLC, as produced by Add-TcPlcProject) you must pass
-    -PlcName so the right TwinCAT project is targeted; in a single-tsproj
-    sln the PlcName is optional.
+    optionally enables BootProjectAutostart + GenerateBootProject on the
+    PLC tree item (controlled by -BootAutostart, default $true), then
+    calls ActivateConfiguration(). In a multi-tsproj sln (one .tsproj per
+    PLC, as produced by Add-TcPlcProject) you must pass -PlcName so the
+    right TwinCAT project is targeted; in a single-tsproj sln PlcName is
+    optional.
 
     Without the autostart step, ActivateConfiguration only puts TwinCAT
     into Run mode and downloads the bootapp — the PLC application stays
@@ -32,6 +33,14 @@
     Optional; falls back to PLC_PROJECT_NAME env var, then to the only
     PLC in the solution if there's exactly one.
 
+.PARAMETER BootAutostart
+    When $true (default) enable BootProjectAutostart and regenerate the
+    boot project before activating. The bench needs this so a freshly-
+    deployed PLC actually runs (otherwise it stays loaded-but-stopped
+    and doesn't serve ADS symbols). Pass $false to ship the boot
+    artefacts but leave autostart off — useful for consumers that want
+    to control PLC start manually.
+
 .PARAMETER ComVersion
     DTE COM version. Default 17.0.
 
@@ -39,11 +48,12 @@
     'attach' (default) or 'headless'.
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
-    [string]$TargetAmsId = $env:TARGET_AMS_ID,
-    [string]$PlcName     = $env:PLC_PROJECT_NAME,
-    [string]$ComVersion  = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
-    [string]$XaeMode     = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
+    [string]$ProjectPath  = $env:PLC_PROJECT_PATH,
+    [string]$TargetAmsId  = $env:TARGET_AMS_ID,
+    [string]$PlcName      = $env:PLC_PROJECT_NAME,
+    [bool]$BootAutostart  = $true,
+    [string]$ComVersion   = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
+    [string]$XaeMode      = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
 
 Set-StrictMode -Version Latest
@@ -74,19 +84,19 @@ try {
     # mode. GenerateBootProject(true) writes the boot artefacts the
     # runtime picks up on startup.
     #
-    # ITcPlcProject (which exposes BootProjectAutostart) lives at the
-    # SM-level PLC instance — TIPC^<plc> — NOT at the IDE-level PLC
-    # project node TIPC^<plc>^<plc> Project (that one exposes
-    # ITcPlcIECProject for source authoring). See infosys
-    # "Accessing, creating and handling PLC projects".
-    try {
-        $plcSmNode = $sm.LookupTreeItem("TIPC^$resolvedPlc")
-        $plcSmNode.BootProjectAutostart = $true
-        $plcSmNode.GenerateBootProject($true)
-    } catch {
-        return @{
-            success = $false
-            error   = "Enabling autostart on '$resolvedPlc' failed: $($_.Exception.Message)"
+    # The autostart properties live on ITcPlcProject — exposed by the
+    # system-level PLC node, not the IDE-level project node. See the
+    # doc-block on Get-TcPlcSysNode in _TcDte.psm1 for the distinction.
+    if ($BootAutostart) {
+        try {
+            $plcSmNode = Get-TcPlcSysNode -SysManager $sm -PlcName $resolvedPlc
+            $plcSmNode.BootProjectAutostart = $true
+            $plcSmNode.GenerateBootProject($true)
+        } catch {
+            return @{
+                success = $false
+                error   = "Enabling autostart on '$resolvedPlc' failed: $($_.Exception.Message)"
+            }
         }
     }
 
@@ -96,7 +106,10 @@ try {
         return @{ success = $false; error = "ActivateConfiguration failed: $($_.Exception.Message)" }
     }
 
-    return @{ success = $true; details = @{ target = $TargetAmsId; plc = $resolvedPlc; autostart = $true } }
+    return @{
+        success = $true
+        details = @{ target = $TargetAmsId; plc = $resolvedPlc; autostart = [bool]$BootAutostart }
+    }
 }
 catch {
     return @{ success = $false; error = $_.Exception.Message }

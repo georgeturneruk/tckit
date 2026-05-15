@@ -59,7 +59,9 @@ def test_run_tests_posts_to_tcunit_run_with_target_and_plc(
         "TargetAmsId": "1.2.3.4.1.1",
         "PlcName": "TestPlc",
     }
-    assert timeout is not None and timeout > 60.0
+    # Timeouts now resolve in BridgeClient.post via the central
+    # route_timeout map; the adapter no longer overrides per-call.
+    assert timeout is None
     # Bridge extras flow through as Result.details.
     assert result.details["duration_seconds"] == 12.5
     assert result.details["summary"]["failures"] == 1
@@ -102,14 +104,13 @@ def test_run_tests_bridge_unreachable_yields_failure_result() -> None:
 def test_run_tests_timeout_respects_env_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The adapter no longer threads the timeout itself; the central
+    # route_timeout map in bridge_client honours TCKIT_TEST_RUN_TIMEOUT
+    # and is consulted at the bottom of BridgeClient.post.
+    from tckit.utils.bridge_client import route_timeout
+
     monkeypatch.setenv("TCKIT_TEST_RUN_TIMEOUT", "300")
-    client = FakeBridgeClient({"success": True})
-    runner = TcUnitRunner(client=client)  # type: ignore[arg-type]
-
-    runner.run_tests("1.2.3.4.1.1")
-
-    _, _, timeout = client.calls[0]
-    assert timeout == 300.0
+    assert route_timeout("/tcunit-run") == 300.0
 
 
 def test_get_results_parses_full_structured_shape() -> None:

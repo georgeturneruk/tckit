@@ -9,10 +9,12 @@ import pytest
 
 from tckit.utils.bridge_client import (
     DEFAULT_BRIDGE_URL,
+    DEFAULT_TIMEOUT,
     BridgeClient,
     BridgeError,
     BridgeUnavailableError,
     build_timeout,
+    route_timeout,
 )
 
 
@@ -132,3 +134,51 @@ def test_build_timeout_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_build_timeout_invalid_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TCKIT_BUILD_TIMEOUT", "not-a-number")
     assert build_timeout() == 600.0
+
+
+def test_route_timeout_known_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TCKIT_BUILD_TIMEOUT", raising=False)
+    monkeypatch.delenv("TCKIT_TEST_RUN_TIMEOUT", raising=False)
+    assert route_timeout("/build") == 600.0
+    assert route_timeout("/deploy") == 300.0
+    assert route_timeout("/runtime") == 180.0
+    assert route_timeout("/tcunit-run") == 600.0
+    assert route_timeout("/results") == 60.0
+
+
+def test_route_timeout_unknown_route_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TCKIT_BUILD_TIMEOUT", raising=False)
+    assert route_timeout("/something-bespoke") == DEFAULT_TIMEOUT
+
+
+def test_route_timeout_path_normalised() -> None:
+    # The leading slash is optional — callers shouldn't have to think
+    # about it because BridgeClient.post accepts both.
+    assert route_timeout("build") == route_timeout("/build")
+
+
+def test_route_timeout_env_override_for_tcunit_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TCKIT_TEST_RUN_TIMEOUT", "240")
+    assert route_timeout("/tcunit-run") == 240.0
+
+
+def test_post_uses_route_timeout_when_caller_omits_timeout() -> None:
+    # The httpx MockTransport doesn't honour timeout itself, but we can
+    # verify that BridgeClient passes a non-None timeout to the underlying
+    # httpx call — the bug we want to prevent is the per-route default
+    # being silently ignored.
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, json={"success": True})
+
+    client = _client_with_handler(handler)
+    client.post("/deploy", {})
+    # httpx's timeout extension carries (connect, read, write, pool); the
+    # read entry should reflect the /deploy default of 300s rather than
+    # the BridgeClient instance default (60s).
+    timeout_obj = captured["timeout"]
+    assert timeout_obj is not None
+    # The shape is a dict like {"connect": 300.0, "read": 300.0, ...}
+    assert timeout_obj.get("read") == 300.0

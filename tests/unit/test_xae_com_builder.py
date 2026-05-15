@@ -48,7 +48,9 @@ def test_build_success_parsed_into_build_result() -> None:
     path, payload, timeout = client.calls[0]
     assert path == "/build"
     assert payload == {"ProjectPath": "C:/proj.sln"}
-    assert timeout is not None and timeout > 0
+    # Timeouts now resolve in BridgeClient.post via the central
+    # route_timeout map; the adapter no longer overrides per-call.
+    assert timeout is None
 
 
 def test_build_errors_parsed_with_severity() -> None:
@@ -102,7 +104,21 @@ def test_deploy_posts_to_deploy_endpoint() -> None:
     # ProjectPath comes from PLC_PROJECT_PATH env (empty in this unit test);
     # the bridge handler falls back to its own env when the payload value is
     # empty. Mirrors TcUnitRunner._with_target_and_plc.
-    assert payload == {"TargetAmsId": "1.2.3.4.1.1", "ProjectPath": ""}
+    assert payload == {
+        "TargetAmsId": "1.2.3.4.1.1",
+        "ProjectPath": "",
+        "BootAutostart": True,
+    }
+
+
+def test_deploy_passes_boot_autostart_false() -> None:
+    client = FakeBridgeClient({"success": True})
+    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
+
+    builder.deploy("1.2.3.4.1.1", boot_autostart=False)
+
+    _, payload, _ = client.calls[0]
+    assert payload["BootAutostart"] is False
 
 
 def test_start_runtime_posts_to_runtime_endpoint() -> None:

@@ -32,13 +32,24 @@ class BuildRunner(ABC):
 
     @abstractmethod
     def deploy(
-        self, target_ams_id: str, *, plc_name: str | None = None
+        self,
+        target_ams_id: str,
+        *,
+        plc_name: str | None = None,
+        boot_autostart: bool = True,
     ) -> Result:
         """Deploy the built configuration to a target runtime.
 
         :param target_ams_id: AMS Net ID of the target (e.g. ``192.168.1.100.1.1``).
         :param plc_name: PLC project to deploy; ``None`` follows the standard
             resolution order.
+        :param boot_autostart: When ``True`` (default), the bridge enables
+            ``BootProjectAutostart`` and regenerates the boot project so
+            the PLC application runs as soon as the runtime reaches Run
+            mode. Without this the PLC sits loaded-but-stopped and serves
+            no ADS symbols, so subsequent ``run_tests`` polls will time
+            out. Set ``False`` only if the consumer wants to control
+            autostart explicitly.
         """
         ...
 

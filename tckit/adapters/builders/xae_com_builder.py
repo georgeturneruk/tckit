@@ -16,7 +16,7 @@ from typing import Any
 
 from tckit.ports.builder import BuildRunner
 from tckit.ports.types import BuildError, BuildResult, BuildStatus, Result
-from tckit.utils.bridge_client import BridgeClient, BridgeError, build_timeout
+from tckit.utils.bridge_client import BridgeClient, BridgeError
 
 
 class XaeComBuilder(BuildRunner):
@@ -37,11 +37,7 @@ class XaeComBuilder(BuildRunner):
         payload: dict[str, Any] = {"ProjectPath": project_path}
         _attach_plc(payload, plc_name)
         try:
-            resp = self._client.post(
-                "/build",
-                payload,
-                timeout=build_timeout(),
-            )
+            resp = self._client.post("/build", payload)
         except BridgeError as exc:
             self._last_status = BuildStatus.ERROR
             return BuildResult(
@@ -54,19 +50,20 @@ class XaeComBuilder(BuildRunner):
         return result
 
     def deploy(
-        self, target_ams_id: str, *, plc_name: str | None = None
+        self,
+        target_ams_id: str,
+        *,
+        plc_name: str | None = None,
+        boot_autostart: bool = True,
     ) -> Result:
         payload: dict[str, Any] = {
             "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
             "TargetAmsId": target_ams_id,
+            "BootAutostart": bool(boot_autostart),
         }
         _attach_plc(payload, plc_name)
         try:
-            # ActivateConfiguration on a cold target plus the BootProject
-            # regeneration the deploy handler does is in the same latency
-            # class as a full build; reuse build_timeout so the HTTP
-            # client doesn't give up before the bridge does.
-            resp = self._client.post("/deploy", payload, timeout=build_timeout())
+            resp = self._client.post("/deploy", payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
@@ -79,7 +76,7 @@ class XaeComBuilder(BuildRunner):
             "Wait": True,
         }
         try:
-            resp = self._client.post("/runtime", payload, timeout=build_timeout())
+            resp = self._client.post("/runtime", payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)

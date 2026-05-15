@@ -27,12 +27,6 @@ from tckit.ports.types import (
 from tckit.utils.bridge_client import BridgeClient, BridgeError
 from tckit.utils.results import to_result
 
-# /tcunit-run can block server-side for as long as the suites take to run.
-# The bridge's own ``TimeoutSeconds`` default is 120s; allow headroom on the
-# HTTP call so the bridge's structured timeout response wins over an httpx
-# read-timeout exception.
-_DEFAULT_RUN_TIMEOUT_SECONDS = 180.0
-
 
 class TcUnitRunner(TestRunner):
     """Runs TcUnit tests and parses XML results into structured TestResults."""
@@ -65,11 +59,7 @@ class TcUnitRunner(TestRunner):
             extra["ReadSymbols"] = "\n".join(probes)
         payload = self._with_target_and_plc(extra, target_ams_id, plc_name)
         try:
-            resp = self._client.post(
-                "/tcunit-run",
-                payload,
-                timeout=_run_timeout(),
-            )
+            resp = self._client.post("/tcunit-run", payload)
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return to_result(resp)
@@ -114,17 +104,6 @@ class TcUnitRunner(TestRunner):
 # ---------------------------------------------------------------------------
 # Response → dataclass mappers
 # ---------------------------------------------------------------------------
-
-
-def _run_timeout() -> float:
-    """Resolve the HTTP timeout for ``/tcunit-run`` from the env (default 180s)."""
-    raw = os.getenv("TCKIT_TEST_RUN_TIMEOUT")
-    if not raw:
-        return _DEFAULT_RUN_TIMEOUT_SECONDS
-    try:
-        return float(raw)
-    except ValueError:
-        return _DEFAULT_RUN_TIMEOUT_SECONDS
 
 
 def _parse_test_results(resp: dict[str, Any]) -> TestResults:
