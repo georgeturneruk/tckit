@@ -454,51 +454,155 @@ def add_method(
         return _err(str(exc))
 
 
-def update_pou_item(
-    pou_name: str, item_name: str, code: str, plc_name: str = ""
-) -> str:
-    """Update the body of an existing method, action, or property.
+def update_pou_declaration(pou_name: str, code: str, plc_name: str = "") -> str:
+    """Replace the POU-level declaration block (VAR sections, signature).
 
-    :param pou_name: Name of the containing POU.
-    :param item_name: Name of the method, action, or property.
-    :param code: New ST source text.
+    Targets the ``DeclarationText`` of the POU itself. Methods, actions and
+    properties hanging off the POU are left untouched, as is the cyclic
+    body — use ``update_pou_implementation`` for that and
+    ``update_method_body`` for a named method/action/property.
+
+    :param pou_name: Name of the POU.
+    :param code: New declaration source — typically the
+        ``FUNCTION_BLOCK Foo`` / ``PROGRAM Foo`` header through the last
+        ``END_VAR``.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.writer().update_pou_item(
-            pou_name, item_name, code, plc_name=_plc(plc_name)
+        result = _cfg.writer().update_pou_declaration(
+            pou_name, code, plc_name=_plc(plc_name)
         )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
-def update_pou_item_patch(
+def update_pou_implementation(pou_name: str, code: str, plc_name: str = "") -> str:
+    """Replace the POU-level implementation block (cyclic body for FBs / PRGs).
+
+    Targets the ``ImplementationText`` of the POU itself. The declaration
+    block and any methods/actions/properties are left untouched.
+
+    :param pou_name: Name of the POU.
+    :param code: New implementation source. ST statements only — no
+        ``FUNCTION_BLOCK`` header, no ``VAR``/``END_VAR``.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().update_pou_implementation(
+            pou_name, code, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def update_method_body(
+    pou_name: str, method_name: str, code: str, plc_name: str = ""
+) -> str:
+    """Replace the full body of a method, action, or property.
+
+    ``code`` is the combined declaration + implementation for the named
+    item; the bridge splits at the last ``END_VAR`` (or the last method
+    header line when no ``VAR`` block is present) and writes
+    ``DeclarationText`` and ``ImplementationText`` separately.
+
+    :param pou_name: Name of the containing POU.
+    :param method_name: Name of the method, action, or property.
+    :param code: Full ST source for the item including header and any
+        ``VAR`` blocks.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().update_method_body(
+            pou_name, method_name, code, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def update_pou_declaration_patch(
     pou_name: str,
-    item_name: str,
     old_string: str,
     new_string: str,
     plc_name: str = "",
 ) -> str:
-    """Edit-style anchored replacement on an existing POU item.
+    """Edit-style anchored replacement on the POU declaration block.
 
-    Replace one unique occurrence of ``old_string`` with ``new_string`` in
-    the item's combined declaration + implementation. Fails when the anchor
-    is missing or non-unique; mirror of Claude Code's own Edit semantics.
-    Use this instead of Edit/Write on .TcPOU files. Pass ``item_name`` equal
-    to ``pou_name`` to target the FB-level declaration + cyclic body.
+    Replaces one unique occurrence of ``old_string`` with ``new_string``
+    inside the POU's ``DeclarationText``. Fails when the anchor is missing
+    or non-unique; mirror of Claude Code's own Edit semantics.
 
-    :param pou_name: Name of the containing POU.
-    :param item_name: Method/action/property name, or ``pou_name`` for the FB item.
-    :param old_string: Text to match. Must be unique in the item.
+    :param pou_name: Name of the POU.
+    :param old_string: Text to match. Must be unique in the declaration.
     :param new_string: Replacement text.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.writer().update_pou_item_patch(
-            pou_name, item_name, old_string, new_string, plc_name=_plc(plc_name)
+        result = _cfg.writer().update_pou_declaration_patch(
+            pou_name, old_string, new_string, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def update_pou_implementation_patch(
+    pou_name: str,
+    old_string: str,
+    new_string: str,
+    plc_name: str = "",
+) -> str:
+    """Edit-style anchored replacement on the POU implementation block.
+
+    Replaces one unique occurrence of ``old_string`` with ``new_string``
+    inside the POU's ``ImplementationText``. Fails when the anchor is
+    missing or non-unique; mirror of Claude Code's own Edit semantics.
+
+    :param pou_name: Name of the POU.
+    :param old_string: Text to match. Must be unique in the implementation.
+    :param new_string: Replacement text.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().update_pou_implementation_patch(
+            pou_name, old_string, new_string, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def update_method_body_patch(
+    pou_name: str,
+    method_name: str,
+    old_string: str,
+    new_string: str,
+    plc_name: str = "",
+) -> str:
+    """Edit-style anchored replacement on a method's combined source.
+
+    Reads the method's combined declaration + implementation, replaces one
+    unique occurrence of ``old_string`` with ``new_string``, and writes
+    the split result back. Fails when the anchor is missing or non-unique;
+    mirror of Claude Code's own Edit semantics.
+
+    :param pou_name: Name of the containing POU.
+    :param method_name: Name of the method, action, or property.
+    :param old_string: Text to match. Must be unique in the combined source.
+    :param new_string: Replacement text.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().update_method_body_patch(
+            pou_name, method_name, old_string, new_string, plc_name=_plc(plc_name)
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -517,7 +621,7 @@ def add_variable(
     Targets the FB-level declaration by default; pass ``item_name`` to add a
     method's local variable instead. Creates the scope block if it does not
     already exist on the target item. Use this instead of rewriting the full
-    declaration via update_pou_item.
+    declaration via update_pou_declaration.
 
     :param pou_name: Name of the containing POU.
     :param scope: One of VAR_INPUT, VAR_OUTPUT, VAR_IN_OUT, VAR,
@@ -813,8 +917,12 @@ _TOOLS = (
     add_pou,
     add_gvl,
     add_method,
-    update_pou_item,
-    update_pou_item_patch,
+    update_pou_declaration,
+    update_pou_implementation,
+    update_method_body,
+    update_pou_declaration_patch,
+    update_pou_implementation_patch,
+    update_method_body_patch,
     add_variable,
     build,
     deploy,

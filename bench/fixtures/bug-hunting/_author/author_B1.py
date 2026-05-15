@@ -73,10 +73,11 @@ Step := DINT_TO_INT(sum / sampleCount);
 """
 
 
-# TcUnit suite FB. The body call lands in the FB's own implementation block
-# (split by Update-TcPouItem at END_VAR). EXTENDS TcUnit.FB_TestSuite needs
-# the TcUnit placeholder to already be on the consumer PLC at add time —
-# _common.py installs it inside scaffold_fixture for exactly this reason.
+# TcUnit suite FB. add_pou splits combined source at the last END_VAR so
+# the body call lands in the FB's own implementation block. EXTENDS
+# TcUnit.FB_TestSuite needs the TcUnit placeholder to already be on the
+# consumer PLC at add time — _common.py installs it inside
+# scaffold_fixture for exactly this reason.
 SUITE_FB_CODE = """\
 FUNCTION_BLOCK FB_RollingAverageTests EXTENDS TcUnit.FB_TestSuite
 VAR
@@ -105,11 +106,13 @@ TEST_FINISHED();
 # Cyclic driver: the suite FB instance ticks each cycle (which runs the
 # test methods), then TcUnit.RUN() advances the runner state machine. The
 # runner stops when every suite reports finished.
-MAIN_CODE = """\
+MAIN_DECL = """\
 PROGRAM MAIN
 VAR
     suite : FB_RollingAverageTests;
 END_VAR
+"""
+MAIN_BODY = """\
 suite();
 TcUnit.RUN();
 """
@@ -154,8 +157,12 @@ def main() -> int:
         w.add_method(SUITE_FB, TEST_METHOD, TEST_METHOD_CODE, plc_name=scaffold.tests_plc),
     )
     check(
-        "update_pou_item(MAIN)",
-        w.update_pou_item("MAIN", "MAIN", MAIN_CODE, plc_name=scaffold.tests_plc),
+        "update_pou_declaration(MAIN)",
+        w.update_pou_declaration("MAIN", MAIN_DECL, plc_name=scaffold.tests_plc),
+    )
+    check(
+        "update_pou_implementation(MAIN)",
+        w.update_pou_implementation("MAIN", MAIN_BODY, plc_name=scaffold.tests_plc),
     )
 
     finalise_fixture(scaffold)

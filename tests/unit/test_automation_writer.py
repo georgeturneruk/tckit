@@ -103,47 +103,128 @@ def test_add_method_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
-def test_update_pou_item_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_pou_declaration_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
     writer = AutomationWriter(client=client)  # type: ignore[arg-type]
 
-    writer.update_pou_item("FB_X", "Execute", "BODY")
+    writer.update_pou_declaration("FB_X", "FUNCTION_BLOCK FB_X\nVAR\nEND_VAR\n")
 
     path, payload = client.calls[0]
-    assert path == "/item"
-    assert payload["PouName"] == "FB_X"
-    assert payload["ItemName"] == "Execute"
-    assert payload["Code"] == "BODY"
-
-
-def test_update_pou_item_patch_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
-    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
-    client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
-
-    writer.update_pou_item_patch("FB_X", "Execute", "OLD", "NEW")
-
-    path, payload = client.calls[0]
-    assert path == "/item-patch"
+    assert path == "/pou-declaration"
     assert payload == {
         "ProjectPath": "C:/proj/foo.sln",
         "PouName": "FB_X",
-        "ItemName": "Execute",
+        "Code": "FUNCTION_BLOCK FB_X\nVAR\nEND_VAR\n",
+    }
+
+
+def test_update_pou_implementation_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_pou_implementation("FB_X", "x := 1;\n")
+
+    path, payload = client.calls[0]
+    assert path == "/pou-implementation"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "Code": "x := 1;\n",
+    }
+
+
+def test_update_method_body_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_method_body("FB_X", "Execute", "METHOD Execute : BOOL\nbDone := TRUE;\n")
+
+    path, payload = client.calls[0]
+    assert path == "/method-body"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "MethodName": "Execute",
+        "Code": "METHOD Execute : BOOL\nbDone := TRUE;\n",
+    }
+
+
+def test_update_pou_declaration_patch_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_pou_declaration_patch("FB_X", "OLD", "NEW")
+
+    path, payload = client.calls[0]
+    assert path == "/pou-declaration-patch"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
         "OldString": "OLD",
         "NewString": "NEW",
     }
 
 
-def test_update_pou_item_patch_failure_translated_to_result() -> None:
+def test_update_pou_implementation_patch_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_pou_implementation_patch("FB_X", "OLD", "NEW")
+
+    path, payload = client.calls[0]
+    assert path == "/pou-implementation-patch"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "OldString": "OLD",
+        "NewString": "NEW",
+    }
+
+
+def test_update_method_body_patch_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.update_method_body_patch("FB_X", "Execute", "OLD", "NEW")
+
+    path, payload = client.calls[0]
+    assert path == "/method-body-patch"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_X",
+        "MethodName": "Execute",
+        "OldString": "OLD",
+        "NewString": "NEW",
+    }
+
+
+def test_update_method_body_patch_failure_translated_to_result() -> None:
     client = FakeBridgeClient(
         {"success": False, "error": "OldString appears 2 times; anchor must be unique."}
     )
     writer = AutomationWriter(client=client)  # type: ignore[arg-type]
 
-    result = writer.update_pou_item_patch("FB_X", "Execute", "x", "y")
+    result = writer.update_method_body_patch("FB_X", "Execute", "x", "y")
     assert result.success is False
     assert "unique" in (result.error or "")
 
@@ -185,7 +266,7 @@ def test_failure_response_translated_to_result() -> None:
     client = FakeBridgeClient({"success": False, "error": "POU not found"})
     writer = AutomationWriter(client=client)  # type: ignore[arg-type]
 
-    result = writer.update_pou_item("Missing", "X", "code")
+    result = writer.update_method_body("Missing", "X", "code")
     assert result.success is False
     assert result.error == "POU not found"
 

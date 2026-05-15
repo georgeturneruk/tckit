@@ -94,41 +94,111 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
-    def update_pou_item(
+    def update_pou_declaration(
         self,
         pou_name: str,
-        item_name: str,
         code: str,
         *,
         plc_name: str | None = None,
     ) -> Result:
         return self._call(
-            "/item",
+            "/pou-declaration",
+            self._with_project(
+                {"PouName": pou_name, "Code": code},
+                plc_name=plc_name,
+            ),
+        )
+
+    def update_pou_implementation(
+        self,
+        pou_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/pou-implementation",
+            self._with_project(
+                {"PouName": pou_name, "Code": code},
+                plc_name=plc_name,
+            ),
+        )
+
+    def update_method_body(
+        self,
+        pou_name: str,
+        method_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/method-body",
             self._with_project(
                 {
                     "PouName": pou_name,
-                    "ItemName": item_name,
+                    "MethodName": method_name,
                     "Code": code,
                 },
                 plc_name=plc_name,
             ),
         )
 
-    def update_pou_item_patch(
+    def update_pou_declaration_patch(
         self,
         pou_name: str,
-        item_name: str,
         old_string: str,
         new_string: str,
         *,
         plc_name: str | None = None,
     ) -> Result:
         return self._call(
-            "/item-patch",
+            "/pou-declaration-patch",
             self._with_project(
                 {
                     "PouName": pou_name,
-                    "ItemName": item_name,
+                    "OldString": old_string,
+                    "NewString": new_string,
+                },
+                plc_name=plc_name,
+            ),
+        )
+
+    def update_pou_implementation_patch(
+        self,
+        pou_name: str,
+        old_string: str,
+        new_string: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/pou-implementation-patch",
+            self._with_project(
+                {
+                    "PouName": pou_name,
+                    "OldString": old_string,
+                    "NewString": new_string,
+                },
+                plc_name=plc_name,
+            ),
+        )
+
+    def update_method_body_patch(
+        self,
+        pou_name: str,
+        method_name: str,
+        old_string: str,
+        new_string: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/method-body-patch",
+            self._with_project(
+                {
+                    "PouName": pou_name,
+                    "MethodName": method_name,
                     "OldString": old_string,
                     "NewString": new_string,
                 },

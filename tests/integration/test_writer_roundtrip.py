@@ -70,5 +70,5 @@ def test_add_pou_then_method_then_update(writer: AutomationWriter) -> None:
         "METHOD DoNothing : BOOL\nVAR_INPUT\nEND_VAR\n"
         "DoNothing := FALSE;\n"
     )
-    update = writer.update_pou_item(TEST_FB_NAME, TEST_METHOD_NAME, updated)
-    assert update.success, f"update_pou_item failed: {update.error}"
+    update = writer.update_method_body(TEST_FB_NAME, TEST_METHOD_NAME, updated)
+    assert update.success, f"update_method_body failed: {update.error}"

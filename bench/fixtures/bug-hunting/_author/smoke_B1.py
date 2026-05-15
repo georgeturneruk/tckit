@@ -8,7 +8,8 @@ install + reachable TARGET_AMS_ID:
         -> deploy + start_runtime
         -> run_tests + get_results
         -> assert RED (the seeded off-by-one fails AverageOfConstantStream)
-        -> update_pou_item_patch on FB_RollingAverage.Step (FOR i := 1 -> FOR i := 0)
+        -> update_method_body_patch on FB_RollingAverage.Step
+           (FOR i := 1 -> FOR i := 0)
         -> save_plc_as_library again
         -> build + deploy + start_runtime + run_tests + get_results
         -> assert GREEN (failures == 0)
@@ -187,8 +188,8 @@ def main() -> int:
     print(f"[red] OK — {SUITE_TEST} failed as expected.\n")
 
     # -------- patch via the writer, then re-run
-    print(f"[patch] update_pou_item_patch({LIBRARY_FB}.Step)...", flush=True)
-    patch = writer.update_pou_item_patch(
+    print(f"[patch] update_method_body_patch({LIBRARY_FB}.Step)...", flush=True)
+    patch = writer.update_method_body_patch(
         LIBRARY_FB,
         "Step",
         BUGGY_LINE,
@@ -196,7 +197,7 @@ def main() -> int:
         plc_name=LIBRARY_PLC,
     )
     if not patch.success:
-        _fail(f"update_pou_item_patch failed: {patch.error}")
+        _fail(f"update_method_body_patch failed: {patch.error}")
     print("[patch] OK\n")
 
     # -------- green pass: patched code should make TestIsFailed = FALSE
@@ -211,7 +212,7 @@ def main() -> int:
     if green_failed:
         _fail(
             f"green pass: {SUITE_TEST} still failed after the patch. "
-            "Investigate the writer patch (update_pou_item_patch) or the "
+            "Investigate the writer patch (update_method_body_patch) or the "
             "seeded fix."
         )
     print(f"[green] OK — {SUITE_TEST} passed after patch.\n")

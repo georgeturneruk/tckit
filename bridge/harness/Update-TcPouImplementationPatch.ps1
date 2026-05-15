@@ -1,15 +1,12 @@
 <#
 .SYNOPSIS
-    Replace one occurrence of a string in a POU item's combined source.
+    Replace one occurrence of a string in a POU's implementation block.
 
 .DESCRIPTION
-    Edit-style anchored replacement. Reads the item's combined declaration +
-    implementation, counts occurrences of $OldString, fails on 0 or >1, then
-    writes the replacement back via Set-TcItemSource. Mirror of Claude Code's
-    own Edit semantics. See ADR-0003.
-
-    Passing the POU name as $ItemName (or omitting $ItemName) targets the
-    FB-level declaration + cyclic body, matching Update-TcPouItem.ps1.
+    Edit-style anchored replacement. Reads the POU's ImplementationText,
+    counts occurrences of $OldString, fails on 0 or >1, then writes the
+    patched implementation back. Mirror of Claude Code's own Edit
+    semantics. See ADR-0003.
 
 .PARAMETER ProjectPath
     Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
@@ -19,14 +16,10 @@
     to PLC_PROJECT_NAME env var.
 
 .PARAMETER PouName
-    Name of the parent POU.
-
-.PARAMETER ItemName
-    Name of the method / action / property to patch. Defaults to PouName
-    (FB-level item).
+    Name of the POU whose implementation should be patched.
 
 .PARAMETER OldString
-    Text to match. Must appear exactly once in the combined source.
+    Text to match. Must appear exactly once in the implementation.
 
 .PARAMETER NewString
     Replacement text.
@@ -35,7 +28,6 @@ param(
     [string]$ProjectPath = $env:PLC_PROJECT_PATH,
     [string]$PlcName     = $env:PLC_PROJECT_NAME,
     [string]$PouName,
-    [string]$ItemName    = '',
     [string]$OldString   = '',
     [string]$NewString   = '',
     [string]$ComVersion  = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
@@ -61,34 +53,26 @@ try {
     $pou = Find-TcChild -Root $plcProj -Name $PouName
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
-    $item = $pou
-    if ($ItemName -and $ItemName -ne $PouName) {
-        $item = Find-TcChild -Root $pou -Name $ItemName
-        if ($null -eq $item) {
-            return @{ success = $false; error = "Item '$ItemName' not found on POU '$PouName'." }
-        }
-    }
+    $implementation = ''
+    try { $implementation = [string]$pou.ImplementationText } catch { $implementation = '' }
 
-    $source = Get-TcItemSource -Item $item
-    $combined = $source.code
-
-    $count = ([regex]::Matches($combined, [regex]::Escape($OldString))).Count
+    $count = ([regex]::Matches($implementation, [regex]::Escape($OldString))).Count
     if ($count -eq 0) {
-        return @{ success = $false; error = "OldString not found in '$PouName.$ItemName'." }
+        return @{ success = $false; error = "OldString not found in '$PouName' implementation." }
     }
     if ($count -gt 1) {
-        return @{ success = $false; error = "OldString appears $count times in '$PouName.$ItemName'; anchor must be unique. Extend OldString with more surrounding context." }
+        return @{ success = $false; error = "OldString appears $count times in '$PouName' implementation; anchor must be unique. Extend OldString with more surrounding context." }
     }
 
-    $idx = $combined.IndexOf($OldString)
-    $patched = $combined.Substring(0, $idx) + $NewString + $combined.Substring($idx + $OldString.Length)
+    $idx = $implementation.IndexOf($OldString)
+    $patched = $implementation.Substring(0, $idx) + $NewString + $implementation.Substring($idx + $OldString.Length)
 
-    Set-TcItemSource -Item $item -Code $patched
+    Invoke-WithComRetry { $pou.ImplementationText = $patched } | Out-Null
     Save-TcSolution -Dte $dte
 
     return @{
         success = $true
-        details = @{ pou = $PouName; item = $ItemName; plc = $plcName; replacements = 1 }
+        details = @{ pou = $PouName; plc = $plcName; target = 'implementation'; replacements = 1 }
     }
 }
 catch {
