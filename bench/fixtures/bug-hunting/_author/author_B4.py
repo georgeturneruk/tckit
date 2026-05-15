@@ -59,8 +59,6 @@ END_VAR
 # when inner is reporting an error.
 STEP_METHOD = """\
 METHOD Step : INT
-VAR
-END_VAR
 inner(value := value);
 // MISSING: bError := inner.bError;
 Step := value;

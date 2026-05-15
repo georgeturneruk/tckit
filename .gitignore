@@ -64,6 +64,11 @@ CLAUDE.local.md
 # Benchmark results (one file per run; don't commit individuals)
 bench/results/
 
+# Default-name XAE projects (debris from accidentally opening XAE in the
+# bench tree without naming the project — real fixtures use named dirs).
+bench/fixtures/bug-hunting/TwinCAT Project*/
+bench/fixtures/bug-hunting/Untitled*/
+
 # Local server logs from bench setup
 bridge.log
 bridge.err.log

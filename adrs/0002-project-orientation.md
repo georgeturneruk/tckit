@@ -180,6 +180,10 @@ without breaking the contract.
   Task A token spend dropped from a 24-call / 8.5k-token vanilla
   baseline to 5 calls / 4.0k tokens on TcKit, 6 calls / 4.9k tokens
   on vanilla. TcKit is 1.24× more efficient than vanilla on this
-  N=1 run; the remaining gap to the 1.5× target is held back by
+  N=1 run; the remaining gap to the 1.5× target was held back by
   issue #42 (XmlReader file_index not persisted across MCP
   requests).
+- 2026-05-15: Issue #42 closed (2026-05-11). The reader cache is
+  now persisted across MCP requests, so the bench-validation gap
+  noted above no longer applies; a fresh measurement should be
+  worth taking next time the orientation flow gets a benching pass.
