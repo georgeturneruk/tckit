@@ -426,11 +426,43 @@ function Resolve-TcPlcName {
     return $names[0]
 }
 
+function Get-TcPlcSysNode {
+    <#
+    .SYNOPSIS
+        Return the system-level PLC tree item at TIPC^<plc>. This node
+        exposes ITcPlcProject — boot-project / activate operations
+        (BootProjectAutostart, GenerateBootProject) live here.
+
+    .DESCRIPTION
+        Distinct from Get-TcPlcProjectNode, which returns the IDE-level
+        node at TIPC^<plc>^<plc> Project (ITcPlcIECProject) for
+        source-tree authoring.
+
+        Mistaking these two will quietly fail because the interfaces
+        don't overlap: ITcPlcIECProject doesn't expose
+        BootProjectAutostart, and ITcPlcProject has no POUs folder. Use
+        Get-TcPlcSysNode for runtime/boot ops, Get-TcPlcProjectNode for
+        source ops.
+    #>
+    param(
+        [Parameter(Mandatory)]$SysManager,
+        [Parameter(Mandatory)][string]$PlcName
+    )
+    $node = $SysManager.LookupTreeItem("TIPC^$PlcName")
+    Write-Output $node -NoEnumerate
+}
+
 function Get-TcPlcProjectNode {
     <#
     .SYNOPSIS
-        Return the PLC project tree item at TIPC^<plc>^<plc> Project. This
-        node is where source items (POUs, GVLs, DUTs) live underneath.
+        Return the IDE-level PLC project tree item at
+        TIPC^<plc>^<plc> Project. This node exposes ITcPlcIECProject —
+        source items (POUs, GVLs, DUTs) live underneath.
+
+    .DESCRIPTION
+        Distinct from Get-TcPlcSysNode, which returns the system-level
+        node at TIPC^<plc> (ITcPlcProject) for boot/activate ops. See
+        the doc-block on Get-TcPlcSysNode for the distinction.
     #>
     param(
         [Parameter(Mandatory)]$SysManager,
@@ -666,7 +698,7 @@ function Read-TcBuildLog {
 
 Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
-    Resolve-TcPlcName, Get-TcPlcProjectNode, Get-TcPousFolder, Find-TcChild, `
-    Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
+    Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
+    Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution

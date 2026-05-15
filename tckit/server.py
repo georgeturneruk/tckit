@@ -545,7 +545,12 @@ def build(project_path: str, plc_name: str = "") -> str:
         return _err(str(exc))
 
 
-def deploy(target_ams_id: str, confirmed: bool = False, plc_name: str = "") -> str:
+def deploy(
+    target_ams_id: str,
+    confirmed: bool = False,
+    plc_name: str = "",
+    boot_autostart: bool = True,
+) -> str:
     """Deploy the built configuration to a target runtime.
 
     ⚠️  This operation writes to a live PLC. By default it requires
@@ -562,12 +567,20 @@ def deploy(target_ams_id: str, confirmed: bool = False, plc_name: str = "") -> s
     :param confirmed: Set to True after verifying the target is correct and not production.
     :param plc_name: PLC project to deploy. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    :param boot_autostart: When True (default), enable BootProjectAutostart
+        and regenerate the boot project so the PLC actually runs once the
+        runtime reaches Run mode. Set False if the consumer wants to control
+        autostart explicitly (e.g. loaded-but-stopped for manual login).
     """
     gate = _safety_check("deploy", target_ams_id, confirmed)
     if gate is not None:
         return gate
     try:
-        result = _cfg.builder().deploy(target_ams_id, plc_name=_plc(plc_name))
+        result = _cfg.builder().deploy(
+            target_ams_id,
+            plc_name=_plc(plc_name),
+            boot_autostart=boot_autostart,
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
