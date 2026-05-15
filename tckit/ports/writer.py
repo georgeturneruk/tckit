@@ -57,6 +57,29 @@ class ProjectWriter(ABC):
         ...
 
     @abstractmethod
+    def add_gvl(
+        self,
+        name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Add a new Global Variable List (GVL) to the project.
+
+        GVLs hold ``VAR_GLOBAL`` declarations and are tree items in their own
+        right — distinct from POUs, which is why this gets a dedicated method
+        rather than being routed through :meth:`add_pou`.
+
+        :param name: Name of the new GVL (e.g. ``GVL_Settings``).
+        :param code: Full ST source text including ``VAR_GLOBAL`` /
+            ``END_VAR`` blocks. GVLs only carry a declaration block; there
+            is no implementation body.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
     def add_method(
         self,
         pou_name: str,
@@ -182,6 +205,7 @@ class ProjectWriter(ABC):
         *,
         install: bool = True,
         repository: str = "System",
+        overwrite: bool = False,
     ) -> Result:
         """Save a PLC project as a .library file, optionally installing it.
 
@@ -203,6 +227,10 @@ class ProjectWriter(ABC):
             repository in the same call.
         :param repository: Library repository name. Defaults to ``"System"``
             which is the standard TwinCAT installed-libraries repo.
+        :param overwrite: When ``True``, delete an existing ``.library`` at
+            ``output_path`` before saving. ``False`` (default) preserves
+            the underlying COM call's "refuse to overwrite" behaviour so
+            an accidental clobber stays caught.
         """
         ...
 

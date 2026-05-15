@@ -42,6 +42,11 @@
 
 .PARAMETER LibraryVersion
     Library Version metadata. Defaults to '1.0.0.0'.
+
+.PARAMETER Overwrite
+    When $true, delete an existing .library at OutputPath before
+    SaveAsLibrary runs. Default $false preserves the underlying COM
+    call's "refuse to overwrite" behaviour.
 #>
 param(
     [string]$ProjectPath    = $env:PLC_PROJECT_PATH,
@@ -52,6 +57,7 @@ param(
     [string]$Title          = '',
     [string]$Company        = 'Tc3 Project',
     [string]$LibraryVersion = '1.0.0.0',
+    [bool]  $Overwrite      = $false,
     [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode        = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
 )
@@ -80,6 +86,20 @@ try {
     $outDir = Split-Path -Parent $OutputPath
     if ($outDir -and -not (Test-Path $outDir)) {
         New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+    }
+
+    # SaveAsLibrary refuses to overwrite an existing artefact; honour
+    # -Overwrite by removing the file first so re-runs of an author
+    # script don't need a manual cleanup step.
+    if ($Overwrite -and (Test-Path -LiteralPath $OutputPath)) {
+        try {
+            Remove-Item -LiteralPath $OutputPath -Force -ErrorAction Stop
+        } catch {
+            return @{
+                success = $false
+                error   = "Could not remove existing .library at $($OutputPath): $($_.Exception.Message)"
+            }
+        }
     }
 
     $plcProject = Get-TcPlcProjectNode -SysManager $sm -PlcName $plc

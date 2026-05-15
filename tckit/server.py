@@ -279,6 +279,7 @@ def save_plc_as_library(
     output_path: str,
     install: bool = True,
     repository: str = "System",
+    overwrite: bool = False,
 ) -> str:
     """Save a PLC project as a .library file, optionally installing it.
 
@@ -295,10 +296,17 @@ def save_plc_as_library(
         repository in the same call.
     :param repository: Library repository name. Defaults to ``"System"``
         which is the standard TwinCAT installed-libraries repo.
+    :param overwrite: When ``True``, delete an existing ``.library`` at
+        ``output_path`` before saving. ``False`` (default) keeps the
+        underlying COM call's "refuse to overwrite" guard.
     """
     try:
         result = _cfg.writer().save_plc_as_library(
-            plc_name, output_path, install=install, repository=repository
+            plc_name,
+            output_path,
+            install=install,
+            repository=repository,
+            overwrite=overwrite,
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -391,6 +399,8 @@ def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
 
     :param name: Name of the new POU (follow naming conventions: FB_, PRG_, etc.).
     :param pou_type: One of: function_block, function, program, interface.
+        For GVLs use ``add_gvl`` instead — the bridge no longer accepts
+        ``"gvl"`` as a POU type.
     :param code: Full ST source text including VAR blocks.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
@@ -400,6 +410,25 @@ def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     try:
         pt = POUType(pou_type)
         result = _cfg.writer().add_pou(name, pt, code, plc_name=_plc(plc_name))
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def add_gvl(name: str, code: str, plc_name: str = "") -> str:
+    """Add a new Global Variable List (GVL) to the project.
+
+    GVLs aren't POUs in the TwinCAT tree; this is the dedicated path for
+    creating one with a ``VAR_GLOBAL`` declaration block. There's no
+    implementation body — GVLs are declaration-only.
+
+    :param name: Name of the new GVL (e.g. ``GVL_Settings``).
+    :param code: Full ST source text including ``VAR_GLOBAL`` / ``END_VAR``.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().add_gvl(name, code, plc_name=_plc(plc_name))
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
@@ -610,6 +639,27 @@ def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
         return _err(str(exc))
 
 
+def read_symbols(target_ams_id: str, paths: list[str]) -> str:
+    """Read PLC symbols by instance path on a running runtime.
+
+    Read-only ADS query: useful for inspecting the live state of a few
+    specific symbols without spinning up TcUnit. The target must be in
+    Run mode (deploy + start_runtime first).
+
+    :param target_ams_id: AMS Net ID of the target.
+    :param paths: Symbol instance paths (e.g.
+        ``["MAIN.suite.Tests[1].TestIsFailed"]``). Empty list returns
+        an empty mapping.
+    :returns: JSON envelope; ``values`` carries path -> string, with
+        ``None`` for any path that couldn't be resolved (not an error).
+    """
+    try:
+        values = _cfg.builder().read_symbols(target_ams_id, list(paths or []))
+        return _ok({"success": True, "values": values})
+    except Exception as exc:
+        return _err(str(exc))
+
+
 # ---------------------------------------------------------------------------
 # TestRunner tools
 # ---------------------------------------------------------------------------
@@ -761,6 +811,7 @@ _TOOLS = (
     add_library_reference,
     add_library_placeholder,
     add_pou,
+    add_gvl,
     add_method,
     update_pou_item,
     update_pou_item_patch,
@@ -768,6 +819,7 @@ _TOOLS = (
     build,
     deploy,
     start_runtime,
+    read_symbols,
     run_tests,
     get_test_results,
     find_fb,

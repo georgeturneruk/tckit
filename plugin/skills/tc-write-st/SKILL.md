@@ -1,7 +1,7 @@
 ---
 name: tc-write-st
-description: Use when writing or modifying Structured Text (ST) code in a TwinCAT 3 project. Triggers on requests like "add a method to FB_Motor", "create FB_PumpControl", "tweak the Execute body", "rename X to Y inside Execute", "add a VAR_INPUT to FB_PumpControl", "change one line in this method", or any other ST edit. Uses TcKit's writer MCP tools (open_project, create_project, add_pou, add_method, update_pou_item, update_pou_item_patch, add_variable). Use these tools INSTEAD of Edit/Write on .TcPOU or .plcproj files; the MCP tools route through XAE so GUIDs and project cross-references stay consistent. Enforces comment style, naming conventions, the bError propagation pattern, the rename guard, and the safety-critical naming guard. If the code uses an unfamiliar Beckhoff library FB, hand off to tc-beckhoff-docs first. Do NOT use for read-only inspection or for build/test orchestration.
-allowed-tools: mcp__tckit__open_project, mcp__tckit__create_project, mcp__tckit__add_pou, mcp__tckit__add_method, mcp__tckit__update_pou_item, mcp__tckit__update_pou_item_patch, mcp__tckit__add_variable, mcp__tckit__get_pou_interface, mcp__tckit__get_pou_declaration, mcp__tckit__get_pou_item, Read
+description: Use when writing or modifying Structured Text (ST) code in a TwinCAT 3 project. Triggers on requests like "add a method to FB_Motor", "create FB_PumpControl", "tweak the Execute body", "rename X to Y inside Execute", "add a VAR_INPUT to FB_PumpControl", "change one line in this method", or any other ST edit. Uses TcKit's writer MCP tools (open_project, create_project, add_pou, add_gvl, add_method, update_pou_item, update_pou_item_patch, add_variable). Use these tools INSTEAD of Edit/Write on .TcPOU or .plcproj files; the MCP tools route through XAE so GUIDs and project cross-references stay consistent. Enforces comment style, naming conventions, the bError propagation pattern, the rename guard, and the safety-critical naming guard. If the code uses an unfamiliar Beckhoff library FB, hand off to tc-beckhoff-docs first. Do NOT use for read-only inspection or for build/test orchestration.
+allowed-tools: mcp__tckit__open_project, mcp__tckit__create_project, mcp__tckit__add_pou, mcp__tckit__add_gvl, mcp__tckit__add_method, mcp__tckit__update_pou_item, mcp__tckit__update_pou_item_patch, mcp__tckit__add_variable, mcp__tckit__get_pou_interface, mcp__tckit__get_pou_declaration, mcp__tckit__get_pou_item, Read
 ---
 
 # Writing ST through TcKit
@@ -18,7 +18,8 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 | Add one variable to a `VAR_INPUT` / `VAR_OUTPUT` / `VAR` etc. scope        | `add_variable(pou, scope, declaration, item?)`      |
 | Rewrite an entire method/action/property body                              | `update_pou_item(pou, item, code)`                  |
 | Add a brand-new method to an existing POU                                  | `add_method(pou, method_name, code)`                |
-| Add a brand-new POU                                                        | `add_pou(name, pou_type, code)`                     |
+| Add a brand-new POU (FB / function / program / interface)                  | `add_pou(name, pou_type, code)`                     |
+| Add a brand-new GVL (`VAR_GLOBAL` declarations)                            | `add_gvl(name, code)`                               |
 | Create a brand-new PLC project                                             | `create_project(name, path)`                        |
 | Open / re-open a TwinCAT solution in XAE                                   | `open_project(solution_path)`                       |
 | Read the current item body before deciding on a patch anchor               | `get_pou_item(pou, item)` (reader)                  |

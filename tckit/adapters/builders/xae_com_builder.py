@@ -81,6 +81,32 @@ class XaeComBuilder(BuildRunner):
             return Result(success=False, error=str(exc))
         return _to_result(resp)
 
+    def read_symbols(
+        self, target_ams_id: str, paths: list[str]
+    ) -> dict[str, str | None]:
+        if not paths:
+            return {}
+        payload = {
+            "TargetAmsId": target_ams_id,
+            # Newline-separated rather than a JSON array because the
+            # bridge's request decoder collapses nested string arrays
+            # unhelpfully on PowerShell 5.1; same shape /tcunit-run uses
+            # for its ReadSymbols convenience parameter.
+            "Paths": "\n".join(paths),
+        }
+        try:
+            resp = self._client.post("/symbols", payload)
+        except BridgeError:
+            return {p: None for p in paths}
+        values = resp.get("values") if isinstance(resp, dict) else None
+        if not isinstance(values, dict):
+            return {p: None for p in paths}
+        out: dict[str, str | None] = {}
+        for path in paths:
+            raw = values.get(path)
+            out[path] = str(raw) if raw is not None else None
+        return out
+
     def get_status(self) -> BuildStatus:
         return self._last_status
 
