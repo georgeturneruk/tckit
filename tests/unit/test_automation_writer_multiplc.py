@@ -97,7 +97,44 @@ def test_save_plc_as_library_payload_shape(monkeypatch: pytest.MonkeyPatch) -> N
         "OutputPath": "C:/out/Library.library",
         "Install": True,
         "Repository": "System",
+        "Overwrite": False,
     }
+
+
+def test_save_plc_as_library_overwrite_passes_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.save_plc_as_library(
+        "Library", "C:/out/Library.library", overwrite=True
+    )
+
+    _, payload = client.calls[0]
+    assert payload["Overwrite"] is True
+
+
+def test_add_gvl_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_gvl(
+        "GVL_Settings",
+        "VAR_GLOBAL CONSTANT\n    cMaxSpeed : INT := 100;\nEND_VAR\n",
+        plc_name="Tests",
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/gvl"
+    assert payload["Name"] == "GVL_Settings"
+    assert payload["PlcName"] == "Tests"
+    assert "VAR_GLOBAL" in payload["Code"]
+    # The /gvl route is dedicated; PouType is no longer threaded
+    # through the way the legacy /pou punch-through used to.
+    assert "PouType" not in payload
 
 
 def test_save_plc_as_library_install_false_passes_through(

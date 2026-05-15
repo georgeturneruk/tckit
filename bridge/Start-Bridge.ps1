@@ -19,10 +19,12 @@
       POST /add-library-reference -> harness\Add-TcLibraryReference.ps1
       POST /add-library-placeholder -> harness\Add-TcLibraryPlaceholder.ps1
       POST /pou                   -> harness\Add-TcPou.ps1
+      POST /gvl                   -> harness\Add-TcGvl.ps1
       POST /method                -> harness\Add-TcMethod.ps1
       POST /item                  -> harness\Update-TcPouItem.ps1
       POST /item-patch            -> harness\Update-TcPouItemPatch.ps1
       POST /add-variable          -> harness\Add-TcVariable.ps1
+      POST /symbols               -> harness\Read-TcSymbol.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
       POST /install-dependency    -> Install-Module (allow-listed modules only)
       GET  /health                -> {"status": "ok", "dependencies": {...}}
@@ -326,7 +328,29 @@ try {
                 }
                 'POST /pou' {
                     $body   = Read-RequestBody -Request $req
-                    $result = Invoke-Harness -Script 'Add-TcPou.ps1' -Params $body
+                    # The /pou route used to accept PouType="gvl" as a
+                    # punch-through; the writer port now exposes a
+                    # first-class add_gvl, so reject the legacy shape and
+                    # point callers at the dedicated route.
+                    $pouType = if ($body.ContainsKey('PouType')) { [string]$body['PouType'] } else { '' }
+                    if ($pouType -and $pouType.ToLowerInvariant() -eq 'gvl') {
+                        Send-JsonResponse -Response $res -Body @{
+                            success = $false
+                            error   = "PouType 'gvl' is no longer accepted on /pou; call /gvl (writer.add_gvl) instead."
+                        } -StatusCode 400
+                    } else {
+                        $result = Invoke-Harness -Script 'Add-TcPou.ps1' -Params $body
+                        Send-JsonResponse -Response $res -Body $result
+                    }
+                }
+                'POST /gvl' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcGvl.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /symbols' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Read-TcSymbol.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /method' {

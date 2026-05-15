@@ -59,6 +59,21 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
+    def add_gvl(
+        self,
+        name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/gvl",
+            self._with_project(
+                {"Name": name, "Code": code},
+                plc_name=plc_name,
+            ),
+        )
+
     def add_method(
         self,
         pou_name: str,
@@ -169,6 +184,7 @@ class AutomationWriter(ProjectWriter):
         *,
         install: bool = True,
         repository: str = "System",
+        overwrite: bool = False,
     ) -> Result:
         return self._call(
             "/save-as-library",
@@ -177,6 +193,7 @@ class AutomationWriter(ProjectWriter):
                     "OutputPath": output_path,
                     "Install": install,
                     "Repository": repository,
+                    "Overwrite": overwrite,
                 },
                 plc_name=plc_name,
             ),
