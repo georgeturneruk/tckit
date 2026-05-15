@@ -58,29 +58,6 @@ def check(label: str, result: Result) -> None:
 _check = check
 
 
-def _add_gvl(
-    writer: AutomationWriter, name: str, code: str, *, plc_name: str
-) -> Result:
-    """Add a GVL via the bridge `/pou` route directly.
-
-    Mirrors the AutomationWriter.add_pou shape but with ``PouType=gvl``,
-    which the writer port doesn't currently expose. Will move to a
-    first-class ``add_gvl`` writer method in a follow-up; until then,
-    this is the only direct ``/pou`` punch-through left in the bench.
-    """
-    payload = {
-        "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
-        "PlcName": plc_name,
-        "Name": name,
-        "PouType": "gvl",
-        "Code": code,
-    }
-    from tckit.utils.results import to_result
-
-    resp = writer._client.post("/pou", payload)
-    return to_result(resp)
-
-
 def _wipe_fixture(fixture_dir: Path, force: bool) -> None:
     """Clear generated content, keep static support files (CLAUDE.md, etc.)."""
     if not fixture_dir.exists():

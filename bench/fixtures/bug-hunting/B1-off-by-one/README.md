@@ -74,7 +74,7 @@ instantiates the suite and calls `TcUnit.RUN()` cyclically. A live
 runtime smoke driver lives at
 [`_author/smoke_B1.py`](../_author/smoke_B1.py); it chains
 `save_plc_as_library` → `build` → `deploy` → `start_runtime` →
-`run_tests` → patch via `update_pou_item_patch` → re-run and asserts
+`run_tests` → patch via `update_method_body_patch` → re-run and asserts
 red → green. With the bridge running and `TARGET_AMS_ID` set:
 
 ```powershell

@@ -99,49 +99,128 @@ class ProjectWriter(ABC):
         ...
 
     @abstractmethod
-    def update_pou_item(
+    def update_pou_declaration(
         self,
         pou_name: str,
-        item_name: str,
         code: str,
         *,
         plc_name: str | None = None,
     ) -> Result:
-        """Update the body of an existing method, action, or property.
+        """Replace the POU-level declaration block (``VAR`` sections, signature).
 
-        :param pou_name: Name of the containing POU.
-        :param item_name: Name of the method, action, or property.
-        :param code: New ST source text.
+        Targets only ``DeclarationText`` on the POU item; the implementation
+        body and any methods/actions/properties underneath are untouched.
+        Use :meth:`update_pou_implementation` for the cyclic body and
+        :meth:`update_method_body` for a named method/action/property.
+
+        :param pou_name: Name of the POU.
+        :param code: New declaration source — typically the
+            ``FUNCTION_BLOCK Foo`` / ``PROGRAM Foo`` header through the last
+            ``END_VAR``.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
         """
         ...
 
     @abstractmethod
-    def update_pou_item_patch(
+    def update_pou_implementation(
         self,
         pou_name: str,
-        item_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Replace the POU-level implementation block (cyclic body for FBs / PRGs).
+
+        Targets only ``ImplementationText`` on the POU item; the declaration
+        and any methods/actions/properties underneath are untouched.
+
+        :param pou_name: Name of the POU.
+        :param code: New implementation source. ST statements only — no
+            ``FUNCTION_BLOCK`` header, no ``VAR``/``END_VAR``.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def update_method_body(
+        self,
+        pou_name: str,
+        method_name: str,
+        code: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Replace the full body of a method, action, or property.
+
+        ``code`` is the combined declaration + implementation for the named
+        item; the bridge splits at the last ``END_VAR`` (or at the last
+        method header line when there is no ``VAR`` block) and writes
+        ``DeclarationText`` and ``ImplementationText`` separately.
+
+        :param pou_name: Name of the containing POU.
+        :param method_name: Name of the method, action, or property.
+        :param code: Full ST source text for the item, including the
+            ``METHOD``/``ACTION``/``PROPERTY`` header and any ``VAR``
+            blocks.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def update_pou_declaration_patch(
+        self,
+        pou_name: str,
         old_string: str,
         new_string: str,
         *,
         plc_name: str | None = None,
     ) -> Result:
-        """Replace one occurrence of ``old_string`` with ``new_string`` in a POU item.
+        """Edit-style anchored replacement on the POU declaration block.
 
-        Edit-style anchored replacement on an existing method, action, or
-        property item, or (when ``item_name`` equals ``pou_name``) the FB-level
-        declaration + cyclic body. Fails when ``old_string`` is not found, or
-        appears more than once: mirror of Claude Code's own Edit semantics.
-        See ADR-0003.
+        Reads ``DeclarationText`` on the POU item, replaces exactly one
+        occurrence of ``old_string`` with ``new_string``, and writes the
+        result back. Fails when the anchor is missing or non-unique. Mirror
+        of Claude Code's own Edit semantics; see ADR-0003.
+        """
+        ...
 
-        :param pou_name: Name of the containing POU.
-        :param item_name: Name of the method, action, or property
-            (or ``pou_name`` itself to target the FB-level item).
-        :param old_string: Text to match. Must appear exactly once in the item.
-        :param new_string: Replacement text.
-        :param plc_name: PLC project to write to; ``None`` follows the
-            standard resolution order.
+    @abstractmethod
+    def update_pou_implementation_patch(
+        self,
+        pou_name: str,
+        old_string: str,
+        new_string: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Edit-style anchored replacement on the POU implementation block.
+
+        Reads ``ImplementationText`` on the POU item, replaces exactly one
+        occurrence of ``old_string`` with ``new_string``, and writes the
+        result back. Fails when the anchor is missing or non-unique. Mirror
+        of Claude Code's own Edit semantics; see ADR-0003.
+        """
+        ...
+
+    @abstractmethod
+    def update_method_body_patch(
+        self,
+        pou_name: str,
+        method_name: str,
+        old_string: str,
+        new_string: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Edit-style anchored replacement on a method's combined source.
+
+        Reads the method's combined declaration + implementation, replaces
+        exactly one occurrence of ``old_string`` with ``new_string``, and
+        writes the split result back. Fails when the anchor is missing or
+        non-unique. Mirror of Claude Code's own Edit semantics; see ADR-0003.
         """
         ...
 

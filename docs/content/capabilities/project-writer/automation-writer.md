@@ -26,11 +26,17 @@ For each MCP write operation, the adapter posts to a bridge endpoint:
 
 | MCP tool | Bridge route | Harness script |
 |----------|--------------|----------------|
-| `open_project`     | `POST /open`   | `Open-TcProject.ps1` |
-| `create_project`   | `POST /create` | `New-TcProject.ps1` |
-| `add_pou`          | `POST /pou`    | `Add-TcPou.ps1` |
-| `add_method`       | `POST /method` | `Add-TcMethod.ps1` |
-| `update_pou_item`  | `POST /item`   | `Update-TcPouItem.ps1` |
+| `open_project`                     | `POST /open`                       | `Open-TcProject.ps1` |
+| `create_project`                   | `POST /create`                     | `New-TcProject.ps1` |
+| `add_pou`                          | `POST /pou`                        | `Add-TcPou.ps1` |
+| `add_gvl`                          | `POST /gvl`                        | `Add-TcGvl.ps1` |
+| `add_method`                       | `POST /method`                     | `Add-TcMethod.ps1` |
+| `update_pou_declaration`           | `POST /pou-declaration`            | `Update-TcPouDeclaration.ps1` |
+| `update_pou_implementation`        | `POST /pou-implementation`         | `Update-TcPouImplementation.ps1` |
+| `update_method_body`               | `POST /method-body`                | `Update-TcMethodBody.ps1` |
+| `update_pou_declaration_patch`     | `POST /pou-declaration-patch`      | `Update-TcPouDeclarationPatch.ps1` |
+| `update_pou_implementation_patch`  | `POST /pou-implementation-patch`   | `Update-TcPouImplementationPatch.ps1` |
+| `update_method_body_patch`         | `POST /method-body-patch`          | `Update-TcMethodBodyPatch.ps1` |
 
 The harness scripts navigate to the source items via the system manager tree (`TIPC^<plc>^<plc> Project^POUs^...`), call `ITcSmTreeItem.CreateChild` for new POUs / methods, then write source via the `DeclarationText` and `ImplementationText` properties (from `ITcPlcDeclaration` / `ITcPlcImplementation`). PowerShell's COM dispatch resolves these properties without explicit interface casts. GUIDs are assigned by XAE — never generated manually.
 

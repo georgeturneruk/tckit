@@ -1,7 +1,7 @@
 ---
 name: tc-build-test-loop
 description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (build, deploy, start_runtime, run_tests, get_test_results). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, the awaiting_confirmation handshake for deploy and start_runtime, and the save+install rule for multi-PLC solutions with library references. Do NOT use for the initial code write itself (that is tc-write-st).
-allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime, mcp__tckit__run_tests, mcp__tckit__get_test_results, mcp__tckit__update_pou_item, mcp__tckit__get_pou_item, mcp__tckit__get_pou_interface, mcp__tckit__save_plc_as_library
+allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime, mcp__tckit__run_tests, mcp__tckit__get_test_results, mcp__tckit__update_method_body, mcp__tckit__update_method_body_patch, mcp__tckit__update_pou_implementation, mcp__tckit__update_pou_implementation_patch, mcp__tckit__get_pou_item, mcp__tckit__get_pou_interface, mcp__tckit__save_plc_as_library
 ---
 
 # Build / deploy / test loop

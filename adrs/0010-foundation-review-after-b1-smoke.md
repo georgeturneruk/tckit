@@ -1,10 +1,10 @@
 ---
 adr: 0010
 title: Foundation review — writer port and bridge surface after the B1 smoke
-status: Proposed
+status: Implemented
 created: 2026-05-15
 issue:
-pr:
+pr: 89, 90, 91, 92
 ---
 
 ## Context
@@ -235,3 +235,25 @@ any point and the partial state is still better than today.
   writer port surface every other PR extends. PR 1 + PR 2 + PR 3 +
   PR 4 are mutually independent and can run in flight in parallel.
   ADR promoted to `Proposed` alongside this note.
+- 2026-05-15: Wave 1 landed —
+  [#89](https://github.com/georgeturneruk/tckit/pull/89) (housekeeping
+  + Split-TcCode header-only fix),
+  [#90](https://github.com/georgeturneruk/tckit/pull/90) (xUnit
+  cascade — promoted this ADR to `Proposed`),
+  [#91](https://github.com/georgeturneruk/tckit/pull/91) (bridge
+  surface polish), and
+  [#92](https://github.com/georgeturneruk/tckit/pull/92) (new writer
+  + builder primitives). End-state acceptance defers to PR 5.
+- 2026-05-15: PR 5 landed — `update_pou_item` /
+  `update_pou_item_patch` split into
+  `update_pou_declaration` / `update_pou_implementation` /
+  `update_method_body` (+ matching patch variants). New routes:
+  `/pou-declaration`, `/pou-implementation`, `/method-body` and the
+  three `-patch` siblings. `Update-TcPouItem.ps1` and
+  `Update-TcPouItemPatch.ps1` deleted; `_add_gvl` helper retired
+  from `_common.py`. Bench `author_B1.py` now splits the MAIN
+  declaration / body across two calls, and `smoke_B1.py` patches
+  through `update_method_body_patch`. Skill, template, fixture
+  TASK.md prompts and writer docs all updated. Closes
+  [#40](https://github.com/georgeturneruk/tckit/issues/40) by
+  construction. ADR promoted to `Implemented`.

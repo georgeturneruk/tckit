@@ -42,8 +42,8 @@ the test suite passes. The Schmitt-trigger behaviour is:
 - Do not change anything under `SchmittTriggerTests/`. Test files are
   read-only for grading.
 - Do not edit `.plcproj` or `.TcPOU` XML directly. Use the TwinCAT
-  automation interface (e.g. TcKit's `update_pou_item` /
-  `update_pou_item_patch`) for any change.
+  automation interface (e.g. TcKit's `update_method_body` /
+  `update_method_body_patch`) for any change.
 - After editing the library, the consumer build resolves against the
   *installed* library, not the source — so the bench harness re-runs
   `save_plc_as_library` on `T1SchmittTrigger_Plc` before each build.

@@ -21,8 +21,12 @@
       POST /pou                   -> harness\Add-TcPou.ps1
       POST /gvl                   -> harness\Add-TcGvl.ps1
       POST /method                -> harness\Add-TcMethod.ps1
-      POST /item                  -> harness\Update-TcPouItem.ps1
-      POST /item-patch            -> harness\Update-TcPouItemPatch.ps1
+      POST /pou-declaration       -> harness\Update-TcPouDeclaration.ps1
+      POST /pou-implementation    -> harness\Update-TcPouImplementation.ps1
+      POST /method-body           -> harness\Update-TcMethodBody.ps1
+      POST /pou-declaration-patch -> harness\Update-TcPouDeclarationPatch.ps1
+      POST /pou-implementation-patch -> harness\Update-TcPouImplementationPatch.ps1
+      POST /method-body-patch     -> harness\Update-TcMethodBodyPatch.ps1
       POST /add-variable          -> harness\Add-TcVariable.ps1
       POST /symbols               -> harness\Read-TcSymbol.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
@@ -358,14 +362,34 @@ try {
                     $result = Invoke-Harness -Script 'Add-TcMethod.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
-                'POST /item' {
+                'POST /pou-declaration' {
                     $body   = Read-RequestBody -Request $req
-                    $result = Invoke-Harness -Script 'Update-TcPouItem.ps1' -Params $body
+                    $result = Invoke-Harness -Script 'Update-TcPouDeclaration.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
-                'POST /item-patch' {
+                'POST /pou-implementation' {
                     $body   = Read-RequestBody -Request $req
-                    $result = Invoke-Harness -Script 'Update-TcPouItemPatch.ps1' -Params $body
+                    $result = Invoke-Harness -Script 'Update-TcPouImplementation.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /method-body' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcMethodBody.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /pou-declaration-patch' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcPouDeclarationPatch.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /pou-implementation-patch' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcPouImplementationPatch.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /method-body-patch' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Update-TcMethodBodyPatch.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /add-variable' {
