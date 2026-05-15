@@ -248,3 +248,38 @@ def test_add_library_placeholder_failure_translated_to_result() -> None:
 
     assert result.success is False
     assert "TcUnit" in (result.error or "")
+
+
+def test_add_library_placeholder_parameters_passed_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_library_placeholder(
+        "Tests",
+        "TcUnit",
+        "TcUnit",
+        distributor="www.tcunit.org",
+        parameters={"xUnitEnablePublish": "TRUE"},
+    )
+
+    _, payload = client.calls[0]
+    assert payload["Parameters"] == {"xUnitEnablePublish": "TRUE"}
+
+
+def test_add_library_placeholder_parameters_omitted_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # When no parameters are passed the bridge payload should not carry a
+    # `Parameters` key at all, so the harness's existing default behaviour
+    # is unchanged for callers that don't care about overrides.
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_library_placeholder("Tests", "TcUnit", "TcUnit")
+
+    _, payload = client.calls[0]
+    assert "Parameters" not in payload

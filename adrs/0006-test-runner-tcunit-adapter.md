@@ -277,3 +277,15 @@ invoking the run, then waits for it to reappear.
   docs + template, [#68](https://github.com/georgeturneruk/tckit/pull/68)
   TcXaeMgmt refactor, [#69](https://github.com/georgeturneruk/tckit/pull/69)
   Python adapter.
+- 2026-05-15: The ``TcUnit-ResultExportXmlPath`` GVL convention
+  documented above turned out to be a TcKit-side fiction — TcUnit
+  never read that name. The actual publisher is gated on
+  ``GVL_Param_TcUnit.xUnitEnablePublish`` (off by default) and
+  writes to ``GVL_Param_TcUnit.xUnitFilePath``, defaulting to
+  ``%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml``. Per ADR-0010
+  §C, the bridge's ``Get-TcUnitXmlPath`` greper has been retired,
+  the GVL constant has been removed from the template / fixtures /
+  skill, and the bench's ``add_library_placeholder`` call now
+  passes ``parameters={"xUnitEnablePublish": "TRUE"}`` to flip the
+  publisher on. The route now defaults the XML path to the
+  publisher's own default for a PLC at runtime port 851.

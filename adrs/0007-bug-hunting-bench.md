@@ -415,3 +415,15 @@ unaffected.
   PASS RATE + ITERATIONS columns); enabling the xUnit XML publisher
   via library-parameter overrides so `/results` can serve full per-
   test summaries instead of just the probed booleans.
+- 2026-05-15: xUnit publisher enablement landed (ADR-0010 §A.2 +
+  §C.2): `_common.py:scaffold_fixture` now passes
+  `parameters={"xUnitEnablePublish": "TRUE"}` to
+  `add_library_placeholder` for TcUnit, so the publisher actually
+  writes per-test XML to its default path. The fictional
+  `TcUnit_ResultExportXmlPath` GVL convention has been retired
+  across template / fixtures / docs / harness; six committed
+  `GVL_TcUnit.TcGVL` files removed. Existing fixture trees may need
+  a re-author on the bench machine before the next bench run to
+  pick up the `<ParameterValues>` block on the TcUnit
+  `<PlaceholderReference>`. B2-T1 suite + MAIN authoring and the
+  harness changes remain on the deferred list.

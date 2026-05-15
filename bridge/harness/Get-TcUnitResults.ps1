@@ -3,9 +3,9 @@
     Parse a TcUnit XML results file into the structured TestResults shape.
 
 .DESCRIPTION
-    Reads the XML at -XmlPath (defaulting to whatever
-    Get-TcUnitXmlPath resolves from the test project's GVL declarations)
-    and returns a hashtable matching the Python TestResults dataclass.
+    Reads the XML at -XmlPath (defaulting to the xUnit publisher's
+    standard output path for a PLC at runtime port 851) and returns a
+    hashtable matching the Python TestResults dataclass.
 
     TcUnit emits JUnit-compatible XML:
 
@@ -24,17 +24,19 @@
     failure message verbatim.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Required if XmlPath isn't given (so
-    the script can resolve TcUnit_ResultExportXmlPath from the GVL).
+    Currently unused; accepted for symmetry with the other harness scripts
+    and so callers can keep posting the same payload shape.
 
 .PARAMETER PlcName
-    PLC project hosting the TcUnit suites. Optional on single-project sln.
+    Currently unused; accepted for symmetry with the other harness scripts.
 
 .PARAMETER TargetAmsId
     Currently unused; accepted for symmetry with the other harness scripts.
 
 .PARAMETER XmlPath
-    Override the XML path; skips the GVL lookup entirely.
+    Override the XML path. Defaults to the xUnit publisher's standard
+    output for a PLC at runtime port 851; pass explicitly if the
+    project overrides GVL_Param_TcUnit.xUnitFilePath.
 
 .PARAMETER ComVersion
     DTE COM version. Default 17.0.
@@ -182,18 +184,12 @@ function Get-DoubleAttribute {
 
 try {
     # ----------------------------------------------------------------
-    # Resolve XML path
+    # Resolve XML path — default to the xUnit publisher's standard
+    # output. Callers that override GVL_Param_TcUnit.xUnitFilePath via
+    # library parameters must pass -XmlPath explicitly.
     # ----------------------------------------------------------------
     if (-not $XmlPath) {
-        if (-not $ProjectPath) {
-            return @{ success = $false; error = 'ProjectPath required to resolve TcUnit XML path (or pass -XmlPath).' }
-        }
-        $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-        Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-        $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
-        $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
-        $plcNode = Get-TcPlcProjectNode -SysManager $sm -PlcName $resolvedPlc
-        $XmlPath = Get-TcUnitXmlPath -PlcNode $plcNode
+        $XmlPath = Get-TcUnitDefaultXmlPath
     }
 
     if (-not (Test-Path -LiteralPath $XmlPath)) {

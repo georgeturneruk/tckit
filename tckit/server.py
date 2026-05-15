@@ -343,6 +343,7 @@ def add_library_placeholder(
     default_library: str,
     version: str = "*",
     distributor: str = "",
+    parameters: dict[str, str] | None = None,
 ) -> str:
     """Add a library placeholder reference to a consumer PLC project.
 
@@ -366,6 +367,10 @@ def add_library_placeholder(
         default matches the documented API default; for non-system libraries
         pass explicitly (e.g. ``"www.tcunit.org"`` for TcUnit,
         ``"Beckhoff Automation GmbH"`` for Tc2/Tc3 libraries).
+    :param parameters: Optional library-parameter overrides (mapping of
+        name to string value). Equivalent to the IDE's "Library
+        Parameters" dialog. Values are written verbatim, so TwinCAT
+        booleans need ``"TRUE"`` / ``"FALSE"``.
     """
     try:
         result = _cfg.writer().add_library_placeholder(
@@ -374,6 +379,7 @@ def add_library_placeholder(
             default_library,
             version=version,
             distributor=distributor,
+            parameters=parameters,
         )
         return _ok(asdict(result))
     except Exception as exc:

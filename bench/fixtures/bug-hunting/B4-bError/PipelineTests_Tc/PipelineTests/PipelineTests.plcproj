@@ -24,9 +24,6 @@
     <Compile Include="POUs\FB_PipelineConsumer.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="POUs\GVL_TcUnit.TcGVL">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="POUs\MAIN.TcPOU">
       <SubType>Code</SubType>
     </Compile>

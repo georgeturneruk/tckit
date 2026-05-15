@@ -41,6 +41,13 @@
     documented API default; pass explicitly for non-system libraries (e.g.
     'www.tcunit.org' for TcUnit, 'Beckhoff Automation GmbH' for Tc2/Tc3
     libraries).
+
+.PARAMETER Parameters
+    Optional hashtable of library parameter overrides (Name -> Value
+    strings). Equivalent to the IDE's "Library Parameters" dialog. Values
+    serialise verbatim, so TwinCAT booleans need 'TRUE' / 'FALSE'. Applied
+    via ConsumeXml on the placeholder tree item after AddPlaceholder lands;
+    see https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242733963.html
 #>
 param(
     [string]$ProjectPath     = $env:PLC_PROJECT_PATH,
@@ -49,6 +56,7 @@ param(
     [string]$DefaultLibrary,
     [string]$Version         = '*',
     [string]$Distributor     = '',
+    [hashtable]$Parameters   = @{},
     [string]$ComVersion      = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode         = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
 )
@@ -71,8 +79,39 @@ try {
     # References node is the library manager via COM dispatch.
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
     $libManager.AddPlaceholder($PlaceholderName, $DefaultLibrary, $Version, $Distributor) | Out-Null
-    # AddPlaceholder mutates only in-memory state; persist to .plcproj so the
-    # change survives a re-open / git-reset cycle. See Save-TcSolution.
+
+    # Apply parameter overrides via ConsumeXml on the placeholder tree item.
+    # AddPlaceholder leaves the placeholder with default parameter values;
+    # to override (e.g. xUnitEnablePublish on TcUnit) we round-trip the
+    # placeholder's XML, splice in <ParameterValues>/<Parameter> children,
+    # and feed it back. ConsumeXml is the same call the IDE uses behind the
+    # "Library Parameters" dialog.
+    if ($Parameters.Count -gt 0) {
+        $placeholderItem = $libManager.LookupChild($PlaceholderName)
+        if ($null -eq $placeholderItem) {
+            return @{ success = $false; error = "Placeholder '$PlaceholderName' not found under References after AddPlaceholder." }
+        }
+        $existingXml = [string]$placeholderItem.ProduceXml($false)
+        $doc = [xml]$existingXml
+        $root = $doc.DocumentElement
+        $paramsNode = $root.SelectSingleNode('ParameterValues')
+        if ($null -eq $paramsNode) {
+            $paramsNode = $doc.CreateElement('ParameterValues')
+            [void]$root.AppendChild($paramsNode)
+        }
+        foreach ($entry in $Parameters.GetEnumerator()) {
+            $existing = $paramsNode.SelectSingleNode("Parameter[@Name='$($entry.Key)']")
+            if ($null -ne $existing) { [void]$paramsNode.RemoveChild($existing) }
+            $node = $doc.CreateElement('Parameter')
+            $node.SetAttribute('Name', [string]$entry.Key)
+            $node.InnerText = [string]$entry.Value
+            [void]$paramsNode.AppendChild($node)
+        }
+        $placeholderItem.ConsumeXml($doc.OuterXml) | Out-Null
+    }
+
+    # AddPlaceholder + ConsumeXml mutate in-memory state; persist to .plcproj
+    # so the change survives a re-open / git-reset cycle. See Save-TcSolution.
     Save-TcSolution -Dte $dte
 
     return @{
@@ -83,6 +122,7 @@ try {
             default_library  = $DefaultLibrary
             version          = $Version
             distributor      = $Distributor
+            parameters       = $Parameters
         }
     }
 }

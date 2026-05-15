@@ -6,13 +6,15 @@
 .DESCRIPTION
     Per ADR-0006: orchestrates a full TcUnit run end-to-end. Sequence:
 
-      1. Resolve the PLC project name (auto on single-project sln).
-      2. Resolve the TcUnit-ResultExportXmlPath from the project's GVL
-         declarations (falls back to the canonical default).
-      3. Delete the existing XML file so we can detect the new write.
-      4. Capture the start epoch.
-      5. Ensure the target runtime is in Run mode (Invoke-TcRuntime -Wait).
-      6. Open a TcSession on the PLC runtime port (851) and poll
+      1. Resolve the xUnit publisher's default output path
+         (C:\TwinCAT\3.1\Boot\Plc\Port_851\tcunit_xunit_testresults.xml).
+         Callers that override GVL_Param_TcUnit.xUnitFilePath via library
+         parameters must pass the resolved path back through /results
+         explicitly — the bridge does not introspect it off the runtime.
+      2. Delete the existing XML file so we can detect the new write.
+      3. Capture the start epoch.
+      4. Ensure the target runtime is in Run mode (Invoke-TcRuntime -Wait).
+      5. Open a TcSession on the PLC runtime port (851) and poll
          GVL_TcUnit.TcUnitRunner.AllTestSuitesFinished until true or
          -TimeoutSeconds expires. (The runner FB lives at
          `GVL_TcUnit.TcUnitRunner`; the "finished" flag is named
@@ -21,8 +23,8 @@
          does NOT prefix library symbols with the placeholder name
          (no `TcUnit.` prefix), even though source code references
          `TcUnit.GVL_TcUnit`.)
-      7. Wait for the XML file to land with mtime > start epoch.
-      8. Read live summary counters via Read-TcValue and return them
+      6. Wait for the XML file to land with mtime > start epoch.
+      7. Read live summary counters via Read-TcValue and return them
          alongside the XML path (the full structured shape comes from
          /results).
 
@@ -78,14 +80,10 @@ try {
     if (-not $TargetAmsId) { return @{ success = $false; error = 'TargetAmsId required.' } }
 
     # ----------------------------------------------------------------
-    # Attach DTE, resolve PLC project + XML path (compile-time concerns)
+    # Resolve the xUnit publisher's default output path. No DTE attach
+    # needed — the path is a known function of the PLC runtime port.
     # ----------------------------------------------------------------
-    $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
-    $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
-    $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
-    $plcNode = Get-TcPlcProjectNode -SysManager $sm -PlcName $resolvedPlc
-    $xmlPath = Get-TcUnitXmlPath -PlcNode $plcNode
+    $xmlPath = Get-TcUnitDefaultXmlPath
 
     # ----------------------------------------------------------------
     # Stale-XML mitigation: delete + record start epoch

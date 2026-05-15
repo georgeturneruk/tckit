@@ -35,19 +35,6 @@ If a TwinCAT automation interface (such as TcKit) is available, use it for any s
 
 If this solution contains two or more PLC projects where one references another as a compiled library, the consumer build resolves against the *installed* library. After editing the library project's source, save+install the library (via TcKit's `save_plc_as_library` or the IDE's "PLC project → Save as library and install") before rebuilding the consumer; otherwise the consumer picks up stale code.
 
-## TcUnit test projects
-
-If this project hosts TcUnit suites that TcKit's runner will execute, declare the XML output path as a `VAR_GLOBAL CONSTANT` so the runner can resolve it without env config:
-
-```pascal
-VAR_GLOBAL CONSTANT
-    TcUnit_ResultExportXmlPath : T_MaxString :=
-        'C:\TwinCAT\3.1\Boot\Plc\TcUnitResults.xml';
-END_VAR
-```
-
-The path is read from the declaration text at run time (compile-time constant lookup), so it's robust across runtime states. The canonical path above works for most setups; override the literal if you need somewhere else.
-
 ## Project notes
 
 <!-- Replace with project-specific guidance. -->
