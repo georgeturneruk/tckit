@@ -38,6 +38,8 @@ SLN_NAME = "B1RollingAverage"
 TESTS_PLC = "RollingAverageTests"
 LIBRARY_FB = "FB_RollingAverage"
 CONSUMER_FB = "FB_RollingAverageConsumer"
+SUITE_FB = "FB_RollingAverageTests"
+TEST_METHOD = "AverageOfConstantStream"
 
 
 LIBRARY_FB_DECL = """\
@@ -72,6 +74,52 @@ Step := DINT_TO_INT(sum / sampleCount);
 """
 
 
+# TcUnit suite FB. The body call lands in the FB's own implementation block
+# (split by Update-TcPouItem at END_VAR). EXTENDS TcUnit.FB_TestSuite needs
+# the TcUnit placeholder to already be on the consumer PLC at add time —
+# _common.py installs it inside scaffold_fixture for exactly this reason.
+SUITE_FB_CODE = """\
+FUNCTION_BLOCK FB_RollingAverageTests EXTENDS TcUnit.FB_TestSuite
+VAR
+    averager : B1RollingAverage_Plc.FB_RollingAverage;
+    result : INT;
+    i : INT;
+END_VAR
+AverageOfConstantStream();
+"""
+
+
+# Empty VAR/END_VAR included as the issue-#84 workaround so Add-TcMethod's
+# splitter sees a clear declaration/implementation boundary.
+TEST_METHOD_CODE = """\
+METHOD PRIVATE AverageOfConstantStream
+VAR
+END_VAR
+TEST('AverageOfConstantStream');
+FOR i := 1 TO 8 DO
+    result := averager.Step(sample := 10);
+END_FOR
+AssertEquals_INT(
+    Expected := 10,
+    Actual := result,
+    Message := 'Average of eight 10s should be 10');
+TEST_FINISHED();
+"""
+
+
+# Cyclic driver: the suite FB instance ticks each cycle (which runs the
+# test methods), then TcUnit.RUN() advances the runner state machine. The
+# runner stops when every suite reports finished.
+MAIN_CODE = """\
+PROGRAM MAIN
+VAR
+    suite : FB_RollingAverageTests;
+END_VAR
+suite();
+TcUnit.RUN();
+"""
+
+
 def main() -> int:
     args = parse_args(__doc__ or "")
     scaffold = scaffold_fixture(
@@ -101,6 +149,18 @@ def main() -> int:
     check(
         f"add_pou({CONSUMER_FB})",
         w.add_pou(CONSUMER_FB, POUType.FUNCTION_BLOCK, consumer_code, plc_name=scaffold.tests_plc),
+    )
+    check(
+        f"add_pou({SUITE_FB})",
+        w.add_pou(SUITE_FB, POUType.FUNCTION_BLOCK, SUITE_FB_CODE, plc_name=scaffold.tests_plc),
+    )
+    check(
+        f"add_method({TEST_METHOD})",
+        w.add_method(SUITE_FB, TEST_METHOD, TEST_METHOD_CODE, plc_name=scaffold.tests_plc),
+    )
+    check(
+        "update_pou_item(MAIN)",
+        w.update_pou_item("MAIN", "MAIN", MAIN_CODE, plc_name=scaffold.tests_plc),
     )
 
     finalise_fixture(scaffold)

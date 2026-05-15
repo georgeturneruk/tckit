@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_RollingAverageTests" Id="{660586c5-6f40-4ccf-8174-e92c245fc536}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RollingAverageTests EXTENDS TcUnit.FB_TestSuite
+VAR
+    averager : B1RollingAverage_Plc.FB_RollingAverage;
+    result : INT;
+    i : INT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[AverageOfConstantStream();
+]]></ST>
+    </Implementation>
+    <Method Name="AverageOfConstantStream" Id="{0e815a9b-93d9-4877-b7ca-32dbc6d2aa25}">
+      <Declaration><![CDATA[METHOD PRIVATE AverageOfConstantStream
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('AverageOfConstantStream');
+FOR i := 1 TO 8 DO
+    result := averager.Step(sample := 10);
+END_FOR
+AssertEquals_INT(
+    Expected := 10,
+    Actual := result,
+    Message := 'Average of eight 10s should be 10');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -13,8 +13,14 @@
       4. Capture the start epoch.
       5. Ensure the target runtime is in Run mode (Invoke-TcRuntime -Wait).
       6. Open a TcSession on the PLC runtime port (851) and poll
-         TcUnit.G_TestRunner.bTestSuitesFinished until true or
-         -TimeoutSeconds expires.
+         GVL_TcUnit.TcUnitRunner.AllTestSuitesFinished until true or
+         -TimeoutSeconds expires. (The runner FB lives at
+         `GVL_TcUnit.TcUnitRunner`; the "finished" flag is named
+         `AllTestSuitesFinished` in current TcUnit releases — see
+         tcunit/TcUnit FB_TcUnitRunner.TcPOU. The ADS symbol tree
+         does NOT prefix library symbols with the placeholder name
+         (no `TcUnit.` prefix), even though source code references
+         `TcUnit.GVL_TcUnit`.)
       7. Wait for the XML file to land with mtime > start epoch.
       8. Read live summary counters via Read-TcValue and return them
          alongside the XML path (the full structured shape comes from
@@ -47,6 +53,15 @@ param(
     [string]$PlcName        = $env:PLC_PROJECT_NAME,
     [int]   $TimeoutSeconds = 120,
     [int]   $PollIntervalMs = 500,
+    # Newline-separated list of symbol instance paths to read once
+    # AllTestSuitesFinished flips. Newline-separated rather than a
+    # `[string[]]` because the bridge's ConvertTo-HashtableDeep collapses
+    # nested string arrays in unhelpful ways on PowerShell 5.1. The
+    # parameter is also deliberately NOT named `Probes` — PowerShell's
+    # advanced-function machinery interferes with that specific name and
+    # the splatted value arrives as an empty Hashtable instead of the
+    # caller's string.
+    [string]$ReadSymbols    = '',
     [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode        = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
 )
@@ -109,29 +124,30 @@ try {
         $session = New-TcSession -NetId $TargetAmsId -Port 851
         $finished = Wait-TcSymbolEquals `
             -Session $session `
-            -Path 'TcUnit.G_TestRunner.bTestSuitesFinished' `
+            -Path 'GVL_TcUnit.TcUnitRunner.AllTestSuitesFinished' `
             -Expected $true `
             -TimeoutMs ($TimeoutSeconds * 1000) `
             -PollIntervalMs $PollIntervalMs
         if (-not $finished.success) {
             return @{
                 success = $false
-                error   = "Tests did not finish within ${TimeoutSeconds}s (bTestSuitesFinished still false)."
+                error   = "Tests did not finish within ${TimeoutSeconds}s (AllTestSuitesFinished still false)."
                 details = @{ xml_path = $xmlPath; elapsed_ms = $finished.elapsed_ms }
             }
         }
 
         # ------------------------------------------------------------
-        # Wait for the XML write to land + read live counters
+        # Wait for the XML write to land + read live counters. The XML
+        # publisher only writes when `GVL_Param_TcUnit.xUnitEnablePublish`
+        # is overridden to TRUE on the consumer PLC (defaults to FALSE).
+        # Without that override, the suite finishes and the runner state
+        # machine completes correctly but no XML is ever emitted. Tolerate
+        # that: report success with `xml_published=false` so /results can
+        # tell the caller why there's nothing to parse. Callers needing
+        # the XML for CI must enable the publisher.
         # ------------------------------------------------------------
         $fresh = Wait-TcFileFresh -Path $xmlPath -After $startEpoch -TimeoutMs 5000
-        if (-not $fresh.success) {
-            return @{
-                success = $false
-                error   = "TcUnit XML at $xmlPath not refreshed within 5s of suites finishing."
-                details = @{ xml_path = $xmlPath; suites_finished_ms = $finished.elapsed_ms }
-            }
-        }
+        $xmlPublished = $fresh.success
 
         $summary = @{
             suites           = 0
@@ -143,12 +159,12 @@ try {
         }
         # Live counter symbols. Best-effort: if a symbol is missing on a
         # particular TcUnit version, leave that field at its default.
+        # TcUnit exposes the suite count as a global on GVL_TcUnit, but
+        # tests / asserts / failures / errors are tracked per-suite, not
+        # aggregated as globals — those land via Get-TcUnitResults reading
+        # the xUnit XML the publisher writes on completion.
         $counterMap = @{
-            suites   = 'TcUnit.G_TestRunner.nNumberOfTestSuites'
-            tests    = 'TcUnit.G_TestRunner.nNumberOfTestCases'
-            asserts  = 'TcUnit.G_TestRunner.nNumberOfAsserts'
-            failures = 'TcUnit.G_TestRunner.nNumberOfFailedTests'
-            errors   = 'TcUnit.G_TestRunner.nNumberOfTestCaseErrors'
+            suites = 'GVL_TcUnit.NumberOfInitializedTestSuites'
         }
         foreach ($key in $counterMap.Keys) {
             try {
@@ -158,12 +174,35 @@ try {
             }
         }
 
+        # Optional ad-hoc probes: caller passes a newline-separated list
+        # of symbol instance paths and the response includes their current
+        # values. Lets the bench smoke read pass/fail (e.g.
+        # MAIN.suite.Tests[1].TestIsFailed) without needing the xUnit XML
+        # publisher enabled. Best-effort: unreadable symbols land in
+        # `probes_errors` rather than failing the run.
+        $probes = @{}
+        $probesErrors = @{}
+        if ($ReadSymbols) {
+            foreach ($raw in ($ReadSymbols -split "`n")) {
+                $path = $raw.Trim()
+                if (-not $path) { continue }
+                try {
+                    $probes[$path] = [string](Read-TcValue -Session $session -Path $path)
+                } catch {
+                    $probesErrors[$path] = $_.Exception.Message
+                }
+            }
+        }
+
         $sw.Stop()
         return @{
             success          = $true
             duration_seconds = $sw.Elapsed.TotalSeconds
             summary          = $summary
             xml_path         = $xmlPath
+            xml_published    = $xmlPublished
+            probes           = $probes
+            probes_errors    = $probesErrors
         }
     }
     finally {

@@ -346,3 +346,72 @@ unaffected.
     Authoring chain intermittently flakes mid-run with
     `DTE.Solution null` or `StubSyncLock`. Manual retry clears it;
     bench/run.py for Phase C1 should be robust against it.
+- 2026-05-14: **B1 closed-loop smoke now passes end-to-end** on a
+  live TwinCAT 4026 install (UmRT_Default runtime, `TARGET_AMS_ID =
+  127.0.0.1.1.1`). `author_B1.py` authors
+  `FB_RollingAverageTests EXTENDS TcUnit.FB_TestSuite` with the
+  failing `AverageOfConstantStream` test plus a Tests-PLC `MAIN`
+  body that instantiates the suite and calls `TcUnit.RUN()`.
+  `_common.py` moves the TcUnit placeholder install into
+  `scaffold_fixture` so it lands before any user POU references the
+  namespace. The live smoke driver
+  `bench/fixtures/bug-hunting/_author/smoke_B1.py` chains
+  `save_plc_as_library` → `build` → `deploy` → `start_runtime` →
+  `run_tests` → patch via `update_pou_item_patch` → re-run and
+  asserts red → green by reading `MAIN.suite.Tests[1].TestIsFailed`
+  directly from PLC symbols. Getting there exposed five real bugs
+  that have all been fixed in the same change set:
+  - **Bridge symbol path.** `Invoke-TcUnitRun.ps1` was polling
+    `TcUnit.G_TestRunner.bTestSuitesFinished` and a matching counter
+    block (`G_TestRunner.nNumberOfTestCases` etc). None of those
+    symbols exist in any current TcUnit release. The runner FB lives
+    at `GVL_TcUnit.TcUnitRunner` and the finished flag is named
+    `AllTestSuitesFinished`; the ADS symbol tree does **not** prefix
+    library symbols with the placeholder name even though source code
+    references them as `TcUnit.GVL_TcUnit`. Symbol path corrected;
+    counters collapsed to the one TcUnit exposes globally
+    (`NumberOfInitializedTestSuites`). The test-runner adapter has
+    never actually completed a real `/tcunit-run` since ADR-0006
+    landed; only the `/results` XML parser worked, and the XML it
+    parsed was always written by something else.
+  - **PLC autostart on deploy.** `ActivateConfiguration()` puts the
+    TwinCAT system into Run mode and downloads the bootapp, but
+    leaves the PLC application *loaded but stopped* until a manual
+    Login + Start. A stopped PLC doesn't serve its symbol table on
+    port 851 (every read returns "Target doesn't provide symbolic
+    information"). `Invoke-TcDeploy.ps1` now calls
+    `BootProjectAutostart = $true` + `GenerateBootProject($true)` on
+    `TIPC^<plc>` before `ActivateConfiguration`, matching what the
+    IDE's "Autostart boot project" tick does in the activate dialog.
+    See [infosys: Accessing, creating and handling PLC projects](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html).
+  - **Adapter `ProjectPath`.** `XaeComBuilder.deploy` and
+    `start_runtime` weren't sending `ProjectPath` in their payloads,
+    so the bridge's deploy handler returned `ProjectPath required.`
+    on every call. `TcUnitRunner.run_tests` always sent it via
+    `_with_target_and_plc`; the builder methods now do the same via
+    `os.getenv("PLC_PROJECT_PATH", "")`.
+  - **Adapter timeouts.** `deploy` and `start_runtime` were using the
+    default 60s HTTP timeout, but ActivateConfiguration + bootapp
+    regen on a cold target is firmly in build-class latency. Both
+    now use `build_timeout()` (default 600s, env-overridable).
+  - **xUnit XML publisher off by default.** TcUnit's
+    `GVL_Param_TcUnit.xUnitEnablePublish` defaults to `FALSE`, so
+    the publisher never writes an XML file. The bridge used to fail
+    `/tcunit-run` after suites finished if the XML wasn't fresh.
+    `/tcunit-run` now reports `xml_published = false` instead of
+    failing, and accepts a `ReadSymbols` parameter (newline-separated
+    instance paths) so callers can probe state directly from PLC
+    symbols. `TcUnitRunner.run_tests` grew a `probes=` keyword that
+    forwards through; `smoke_B1.py` uses it to read
+    `MAIN.suite.Tests[1].TestIsFailed` rather than relying on the
+    XML. (The parameter is named `ReadSymbols` rather than the
+    obvious `Probes` because the PowerShell 5.1 advanced-function
+    machinery garbled a splatted key literally named `Probes`.)
+- 2026-05-14: **Outstanding from this slice** (deliberately deferred,
+  tracked but not in this PR): B2-T1 suite + MAIN authoring (one per
+  fixture); the bench-harness changes from this ADR's "Bench harness
+  changes" section (`--task-folder`, save-as-library pre-build hook,
+  post-session validation step, tamper guard, `aggregate.py`
+  PASS RATE + ITERATIONS columns); enabling the xUnit XML publisher
+  via library-parameter overrides so `/results` can serve full per-
+  test summaries instead of just the probed booleans.

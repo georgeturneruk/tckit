@@ -65,19 +65,27 @@ That validates the two spike-by-implementation defaults documented
 in ADR-0009. Six bridge bugs were caught and fixed along the way
 (see PRs #73 and #74).
 
-## Deferred
+## End-to-end runtime smoke
 
-Outside Phase C0's scope; needs separate follow-up before the bench
-is fully runnable:
+`author_B1.py` now also generates `FB_RollingAverageTests` (the
+`FB_TestSuite` descendant TASK.md promises) with the failing
+`AverageOfConstantStream` test, and a Tests-PLC `MAIN` body that
+instantiates the suite and calls `TcUnit.RUN()` cyclically. A live
+runtime smoke driver lives at
+[`_author/smoke_B1.py`](../_author/smoke_B1.py); it chains
+`save_plc_as_library` → `build` → `deploy` → `start_runtime` →
+`run_tests` → patch via `update_pou_item_patch` → re-run and asserts
+red → green. With the bridge running and `TARGET_AMS_ID` set:
 
-- The `FB_RollingAverageTests` `FB_TestSuite` descendant referenced
-  by TASK.md. The currently authored `FB_RollingAverageConsumer` is
-  a build-smoke consumer, not a TcUnit suite. The TcUnit placeholder
-  reference and `GVL_TcUnit` constant land here once the suite is
-  authored — `mcp__tckit__add_library_placeholder` (added under
-  ADR-0009 extension, PR #76) is the tool for the reference.
-- Runtime smoke (`deploy` → `start_runtime` → `run_tests` → `get_test_results`)
-  — requires a TwinCAT runtime + `TARGET_AMS_ID` env var.
+```powershell
+$env:TARGET_AMS_ID = "127.0.0.1.1.1"
+python bench/fixtures/bug-hunting/_author/smoke_B1.py
+```
+
+Pass/fail is read directly from PLC symbols
+(`MAIN.suite.Tests[1].TestIsFailed`) so the smoke doesn't depend on
+TcUnit's xUnit XML publisher, which is disabled by default
+(`GVL_Param_TcUnit.xUnitEnablePublish := FALSE`).
 
 The bench machine also needs the [TcUnit library](https://github.com/tcunit/TcUnit)
 installed in the system library repository (distributor

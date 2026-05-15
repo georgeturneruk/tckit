@@ -152,6 +152,22 @@ def scaffold_fixture(
         writer.add_plc_project(str(sln_path), tests_plc),
     )
 
+    # TcUnit placeholder lands here, before any user-added POUs, so that a
+    # suite FB declaring `EXTENDS TcUnit.FB_TestSuite` resolves the namespace
+    # at add time. add_library_reference for the library-under-test stays in
+    # finalise_fixture because it depends on the .library produced by
+    # save_plc_as_library, which can only happen after the library's POUs
+    # have been added.
+    _check(
+        f"add_library_placeholder({tests_plc} -> TcUnit)",
+        writer.add_library_placeholder(
+            tests_plc,
+            "TcUnit",
+            "TcUnit",
+            distributor=TCUNIT_DISTRIBUTOR,
+        ),
+    )
+
     return FixtureScaffold(
         writer=writer,
         builder=builder,
@@ -189,16 +205,6 @@ def finalise_fixture(scaffold: FixtureScaffold) -> None:
     _check(
         f"add_library_reference({scaffold.tests_plc} -> {scaffold.library_plc})",
         writer.add_library_reference(scaffold.tests_plc, scaffold.library_plc),
-    )
-
-    _check(
-        f"add_library_placeholder({scaffold.tests_plc} -> TcUnit)",
-        writer.add_library_placeholder(
-            scaffold.tests_plc,
-            "TcUnit",
-            "TcUnit",
-            distributor=TCUNIT_DISTRIBUTOR,
-        ),
     )
 
     # GVLs aren't POUs — POUType deliberately scopes to function blocks,
