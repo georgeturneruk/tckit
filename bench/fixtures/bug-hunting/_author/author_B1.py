@@ -89,12 +89,8 @@ AverageOfConstantStream();
 """
 
 
-# Empty VAR/END_VAR included as the issue-#84 workaround so Add-TcMethod's
-# splitter sees a clear declaration/implementation boundary.
 TEST_METHOD_CODE = """\
 METHOD PRIVATE AverageOfConstantStream
-VAR
-END_VAR
 TEST('AverageOfConstantStream');
 FOR i := 1 TO 8 DO
     result := averager.Step(sample := 10);

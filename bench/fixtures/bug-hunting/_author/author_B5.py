@@ -47,8 +47,6 @@ END_VAR
 
 STEP_METHOD = """\
 METHOD Step : REAL
-VAR
-END_VAR
 fOutput := fError * fGain;
 Step := fOutput;
 """

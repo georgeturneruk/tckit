@@ -475,8 +475,24 @@ function Split-TcCode {
     <#
     .SYNOPSIS
         Split combined ST source into a declaration block and an implementation
-        body. Splits at the last line that consists solely of "END_VAR" (with
-        optional whitespace). If no END_VAR is found, returns ($Code, '').
+        body.
+
+    .DESCRIPTION
+        Strategy, in order:
+        1. If at least one END_VAR is present, split at the last END_VAR — the
+           declaration ends there and the body follows.
+        2. Otherwise, if a POU/method header keyword (METHOD / FUNCTION_BLOCK /
+           FUNCTION / PROGRAM / INTERFACE / PROPERTY / ACTION / VAR_GLOBAL) is
+           present, split immediately after the last such header line. The
+           header stays in the declaration; everything after is body.
+        3. Otherwise, treat the whole input as implementation with an empty
+           declaration. This is the right default for "body only" callers.
+
+        Step 2 fixes #84: a method like ``METHOD Step : INT\nCASE state OF...``
+        used to land entirely in DeclarationText (because no END_VAR was
+        present), which silently broke compilation. The empty ``VAR/END_VAR``
+        workaround was a way to force step 1 to fire; with the header-line
+        fallback in place that workaround is no longer needed.
 
     .OUTPUTS
         @{ declaration = string; implementation = string }
@@ -484,15 +500,27 @@ function Split-TcCode {
     param([Parameter(Mandatory)][string]$Code)
 
     $code = $Code -replace "`r`n", "`n"
-    $matches = [regex]::Matches($code, '(?m)^[ \t]*END_VAR[ \t]*$')
-    if ($matches.Count -eq 0) {
-        return @{ declaration = $Code; implementation = '' }
+
+    $endVarMatches = [regex]::Matches($code, '(?m)^[ \t]*END_VAR[ \t]*$')
+    if ($endVarMatches.Count -gt 0) {
+        $last = $endVarMatches[$endVarMatches.Count - 1]
+        $cut = $last.Index + $last.Length
+        $decl = $code.Substring(0, $cut)
+        $impl = if ($cut -lt $code.Length) { $code.Substring($cut).TrimStart("`n", "`r", " ", "`t") } else { '' }
+        return @{ declaration = $decl; implementation = $impl }
     }
-    $last = $matches[$matches.Count - 1]
-    $cut = $last.Index + $last.Length
-    $decl = $code.Substring(0, $cut)
-    $impl = if ($cut -lt $code.Length) { $code.Substring($cut).TrimStart("`n", "`r", " ", "`t") } else { '' }
-    return @{ declaration = $decl; implementation = $impl }
+
+    $headerPattern = '(?m)^[ \t]*(METHOD|FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE|PROPERTY|ACTION|VAR_GLOBAL)\b[^\n]*$'
+    $headerMatches = [regex]::Matches($code, $headerPattern)
+    if ($headerMatches.Count -gt 0) {
+        $lastHeader = $headerMatches[$headerMatches.Count - 1]
+        $cut = $lastHeader.Index + $lastHeader.Length
+        $decl = $code.Substring(0, $cut)
+        $impl = if ($cut -lt $code.Length) { $code.Substring($cut).TrimStart("`n", "`r", " ", "`t") } else { '' }
+        return @{ declaration = $decl; implementation = $impl }
+    }
+
+    return @{ declaration = ''; implementation = $code }
 }
 
 function Set-TcItemSource {
