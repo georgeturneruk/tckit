@@ -262,6 +262,27 @@ def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
         client.close()
 
 
+def close_solution(bridge_url: str) -> dict[str, Any]:
+    """POST /close to release the bridge's in-memory project model.
+
+    Used to bracket a ``claude -p`` invocation that may edit .plcproj /
+    .TcPOU XML directly (the vanilla arm, no MCP tools). With the
+    solution closed, XAE won't flag the disk edits as "modified
+    externally"; a subsequent ``/open`` re-reads from the new disk
+    state. Mirrors the close/edit/reopen pattern in
+    ``bridge/harness/Add-TcLibraryPlaceholder.ps1``.
+    """
+    from tckit.utils.bridge_client import BridgeClient, BridgeError, build_timeout
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
+    try:
+        return client.post("/close", {})
+    except BridgeError as exc:
+        return {"success": False, "error": str(exc)}
+    finally:
+        client.close()
+
+
 def build_project(bridge_url: str, sln_path: str) -> dict[str, Any]:
     """POST /build via the bridge and return the parsed response.
 
@@ -604,6 +625,16 @@ def main() -> int:
                             "Repository root used by --tests-guard-path for "
                             "the git diff call. Defaults to the parent of bench/."
                         ))
+    parser.add_argument("--close-during-run", action="store_true",
+                        help=(
+                            "Close the bridge's loaded solution before each "
+                            "claude -p invocation and re-open it after. Required "
+                            "for the vanilla arm of bug-hunting benches: the "
+                            "model edits .plcproj / .TcPOU XML directly, which "
+                            "trips XAE's 'modified externally' guard. The pre-"
+                            "save-as-library still runs while the solution is "
+                            "open; the close fires only around the model session."
+                        ))
     args = parser.parse_args()
 
     if args.build_after_each and not args.sln_path:
@@ -693,7 +724,26 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 4
+        if args.close_during_run:
+            print(" close-sln...", end="", flush=True)
+            close_resp = close_solution(args.bridge_url)
+            if not close_resp.get("success", False):
+                print(
+                    f"\n  /close failed: {close_resp.get('error', close_resp)}",
+                    file=sys.stderr,
+                )
+                return 5
         result = run_one(prompt, args.config, args.tcunit_path)
+        if args.close_during_run:
+            print(" reopen-sln...", end="", flush=True)
+            reopen_resp = open_solution(args.bridge_url, args.sln_path)
+            if not reopen_resp.get("success", False):
+                print(
+                    f"\n  /open (post-run reopen) failed: "
+                    f"{reopen_resp.get('error', reopen_resp)}",
+                    file=sys.stderr,
+                )
+                return 5
         metrics = extract_metrics(result)
 
         out = {

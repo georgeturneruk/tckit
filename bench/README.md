@@ -221,7 +221,8 @@ python bench/run.py `
     --post-run-tests RollingAverageTests `
     --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
 
-# vanilla arm (swap the config only)
+# vanilla arm: also pass --close-during-run so XAE doesn't trip on the
+# raw .TcPOU edits the model makes without MCP writer tools.
 python bench/run.py `
     --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
     --config bench/configs/empty.json --runs 1 `
@@ -230,7 +231,8 @@ python bench/run.py `
     --reset-cmd $reset `
     --pre-save-as-library B1RollingAverage_Plc `
     --post-run-tests RollingAverageTests `
-    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/ `
+    --close-during-run
 ```
 
 ### What each flag does
@@ -250,6 +252,13 @@ python bench/run.py `
   + `MAIN.suite.Tests[1].TestIsFailed` (B1's probe set). Pass-fail is
   derived from any `*.TestIsFailed` probe; a "True" value flips the run
   to failed. Override for fixtures with more than one registered test.
+- `--close-during-run` — closes the bridge's loaded solution before
+  `claude -p` and re-opens after. Required for the vanilla arm: the
+  model edits `.plcproj` and `.TcPOU` XML directly (no MCP writer
+  tools available), and an open XAE flags those as "modified
+  externally". The pre-save-as-library still runs with the solution
+  open; the close fires only around the model session. Mirrors the
+  pattern in `Add-TcLibraryPlaceholder.ps1`.
 
 ### Pre-flight smoke (optional but recommended)
 
