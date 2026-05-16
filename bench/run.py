@@ -342,16 +342,57 @@ def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
     return dest
 
 
+def inject_skills_into_isolated(
+    temp_fixture: pathlib.Path, skills_dir: str
+) -> int:
+    """Copy a skills directory into a temp fixture's ``.claude/skills/``.
+
+    Used on the tckit arm to inject the shippable ``plugin/skills/``
+    surface into the isolated temp cwd. Without it, the tckit arm
+    has no skills at all when paired with --isolate-cwd (which
+    strips ``.claude/`` from the fixture copy); with it, the model
+    sees exactly the 6 user-facing TcKit skills, not the dev-only
+    `tc-adr` / `tc-docs-write` that live in this repo's
+    ``.claude/skills/``.
+
+    Returns the number of skills copied. Each skill must be a
+    directory under ``skills_dir`` with at least a ``SKILL.md``.
+    """
+    src = pathlib.Path(skills_dir).resolve()
+    if not src.is_dir():
+        raise FileNotFoundError(
+            f"--inject-skills path is not a directory: {src}"
+        )
+    dest = temp_fixture / ".claude" / "skills"
+    dest.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for skill in sorted(src.iterdir()):
+        if not skill.is_dir():
+            continue
+        shutil.copytree(skill, dest / skill.name)
+        count += 1
+    return count
+
+
 def sync_fixture_edits(tmp_fixture: pathlib.Path, real_fixture: str) -> None:
-    """Copy any files modified inside ``tmp_fixture`` back to the real
+    """Copy files modified inside ``tmp_fixture`` back to the real
     fixture, preserving relative paths.
 
-    Conservative: only mirrors files whose mtime is newer than the
-    matching path in the real fixture (i.e. the model touched them).
-    Files added in the temp copy that don't exist in the real tree
-    are still copied across; files deleted in the temp copy are NOT
-    deleted from the real tree (the bench harness's reset-cmd is
-    authoritative for that).
+    Conservative on two axes:
+
+    1. **Only mirrors files whose mtime is newer than the matching
+       path in the real fixture** (i.e. the model touched them).
+    2. **Only mirrors files that already exist in the real fixture.**
+       Injected metadata (e.g. ``.claude/skills/`` from
+       ``--inject-skills``) lives in the temp copy but never in the
+       real source tree; skipping non-existent destinations stops
+       the inject step from polluting the real fixture on sync-back.
+
+    Files deleted in the temp copy are NOT deleted from the real
+    tree; the bench harness's reset-cmd is authoritative for that.
+    Bug-hunting tasks are edits to existing code by construction, so
+    "new files don't sync" is not a real loss; if a future task
+    needs adds, this policy can be revisited.
     """
     real = pathlib.Path(real_fixture).resolve()
     for src_path in tmp_fixture.rglob("*"):
@@ -359,9 +400,10 @@ def sync_fixture_edits(tmp_fixture: pathlib.Path, real_fixture: str) -> None:
             continue
         rel = src_path.relative_to(tmp_fixture)
         dest_path = real / rel
-        if dest_path.exists() and dest_path.stat().st_mtime >= src_path.stat().st_mtime:
+        if not dest_path.exists():
             continue
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        if dest_path.stat().st_mtime >= src_path.stat().st_mtime:
+            continue
         shutil.copy2(src_path, dest_path)
 
 
@@ -744,19 +786,38 @@ def main() -> int:
                             "outside this repo before each claude -p "
                             "invocation, pin cwd there, then sync the "
                             "model's edits back to the real fixture for "
-                            "post-run validation. Use this on the vanilla "
-                            "arm so it doesn't silently inherit project "
-                            "skills (.claude/skills/) and CLAUDE.md files "
-                            "via Claude Code's cwd-ancestor walk. Leave it "
-                            "off on the tckit arm to measure the full "
-                            "TcKit experience (MCP + skills + project "
-                            "conventions). Cheaper than --bare and keeps "
+                            "post-run validation. CLAUDE.md / .claude/ / "
+                            ".mcp.json and XAE build artefacts are "
+                            "excluded from the copy. Use this on both arms "
+                            "to ensure neither inherits this repo's "
+                            "dev-side .claude/skills/ + CLAUDE.md via "
+                            "Claude Code's cwd-ancestor walk. Pair with "
+                            "--inject-skills on the tckit arm to give it "
+                            "the user-facing plugin/skills/ surface "
+                            "afterwards. Cheaper than --bare and keeps "
                             "OAuth working (--bare requires API key)."
+                        ))
+    parser.add_argument("--inject-skills", default="",
+                        help=(
+                            "Path to a skills directory to copy into the "
+                            "isolated temp fixture's .claude/skills/ "
+                            "after --isolate-cwd has prepared it. Use "
+                            "this on the tckit arm with `plugin/skills` "
+                            "to inject the 6 user-facing TcKit skills, "
+                            "so the model sees the shippable plugin "
+                            "surface rather than this repo's dev-side "
+                            ".claude/skills/ (which adds tc-adr and "
+                            "tc-docs-write — dev-only). Requires "
+                            "--isolate-cwd."
                         ))
     args = parser.parse_args()
 
     if args.build_after_each and not args.sln_path:
         print("--build-after-each requires --sln-path", file=sys.stderr)
+        return 2
+
+    if args.inject_skills and not args.isolate_cwd:
+        print("--inject-skills requires --isolate-cwd", file=sys.stderr)
         return 2
 
     if args.post_run_tests:
@@ -872,6 +933,11 @@ def main() -> int:
         if args.isolate_cwd:
             print(" isolate-cwd...", end="", flush=True)
             tmp_fixture = isolate_fixture_to_tempdir(args.tcunit_path)
+            if args.inject_skills:
+                n_skills = inject_skills_into_isolated(
+                    tmp_fixture, args.inject_skills
+                )
+                print(f" inject-{n_skills}-skills...", end="", flush=True)
             run_cwd = str(tmp_fixture)
         try:
             result = run_one(prompt, args.config, run_cwd)

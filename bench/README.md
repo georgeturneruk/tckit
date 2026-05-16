@@ -211,6 +211,10 @@ $repo = "C:/tckit"
 $reset = "git -C $repo checkout HEAD -- bench/fixtures/bug-hunting/B1-off-by-one"
 $env:TARGET_AMS_ID = "127.0.0.1.1.1"
 
+# tckit arm: --isolate-cwd to drop this repo's dev-side .claude/skills/
+# + CLAUDE.md, then --inject-skills plugin/skills to put the 6
+# user-facing TcKit skills back. That's what a real TcKit-plugin user
+# would actually see (no tc-adr / tc-docs-write meta-skills).
 python bench/run.py `
     --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
     --config bench/configs/tckit.json --runs 1 `
@@ -219,12 +223,14 @@ python bench/run.py `
     --reset-cmd $reset `
     --pre-save-as-library B1RollingAverage_Plc `
     --post-run-tests RollingAverageTests `
-    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/ `
+    --close-during-run `
+    --isolate-cwd `
+    --inject-skills plugin/skills
 
-# vanilla arm: --close-during-run (XAE doesn't trip on raw .TcPOU
-# edits) and --isolate-cwd (cwd is a temp dir outside this repo, so
-# Claude Code's skill-discovery / CLAUDE.md ancestor walk doesn't
-# inherit TcKit context from C:/tckit/.claude/ or C:/tckit/CLAUDE.md).
+# vanilla arm: same isolation, no skills injection — bare stock Claude
+# Code plus the project sources. --close-during-run handles XAE's
+# external-mod prompt when the model edits raw .TcPOU XML.
 python bench/run.py `
     --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
     --config bench/configs/empty.json --runs 1 `
@@ -265,14 +271,19 @@ python bench/run.py `
 - `--isolate-cwd` — copies the fixture to a fresh temp directory
   outside this repo before each `claude -p` and pins cwd there,
   then syncs the model's edits back to the real fixture before the
-  post-run validation cycle. Use this on the vanilla arm so it
-  doesn't silently inherit the project skills (`.claude/skills/`)
-  and `CLAUDE.md` files that Claude Code would otherwise walk up
-  from the fixture's cwd into this repo. Leave it off on the tckit
-  arm: an installed-TcKit user gets the full project context (MCP
-  server + skills + CLAUDE.md), and the bench should measure that
-  full experience. Avoids `--bare`, which would also work but
-  forces `ANTHROPIC_API_KEY` auth (no OAuth/keychain).
+  post-run validation cycle. The copy excludes `CLAUDE.md`,
+  `.claude/`, `.mcp.json`, and XAE build artefacts. Use on both
+  arms so neither inherits this repo's dev-side `.claude/skills/`
+  or `CLAUDE.md` via Claude Code's cwd-ancestor walk. Pair with
+  `--inject-skills` on the tckit arm to give it the user-facing
+  plugin surface afterwards. Avoids `--bare`, which would also
+  work but forces `ANTHROPIC_API_KEY` auth (no OAuth/keychain).
+- `--inject-skills <dir>` — after `--isolate-cwd` has prepared the
+  temp fixture, copies the contents of `<dir>` (each subdirectory
+  is one skill) into `<temp>/.claude/skills/`. Use on the tckit
+  arm with `plugin/skills` so the model sees the 6 user-facing
+  TcKit skills, not this repo's dev-only `tc-adr` /
+  `tc-docs-write`. Requires `--isolate-cwd`.
 
 ### Pre-flight smoke (optional but recommended)
 
