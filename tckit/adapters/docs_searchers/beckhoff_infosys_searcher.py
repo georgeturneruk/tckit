@@ -1,4 +1,4 @@
-"""beckhoff_infosys — DocsSearcher adapter targeting infosys.beckhoff.com.
+"""beckhoff_infosys_searcher — DocsSearcher adapter targeting infosys.beckhoff.com.
 
 Uses infosys's own menu.php tree navigation to build section indexes — no DDG,
 no external search APIs, no rate limiting.
@@ -54,7 +54,7 @@ _HEADERS = {
 }
 
 
-class BeckhoffInfosys(DocsSearcher):
+class BeckhoffInfosysSearcher(DocsSearcher):
     """Searches and fetches Beckhoff infosys documentation.
 
     Uses infosys's own navigation structure to build section indexes — no

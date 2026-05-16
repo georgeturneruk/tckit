@@ -1,10 +1,10 @@
-"""Integration tests for BeckhoffInfosys — network tests marked separately."""
+"""Integration tests for BeckhoffInfosysSearcher; network tests marked separately."""
 
 from pathlib import Path
 
 import pytest
 
-from tckit.adapters.docs_searchers.beckhoff_infosys import BeckhoffInfosys
+from tckit.adapters.docs_searchers.beckhoff_infosys_searcher import BeckhoffInfosysSearcher
 from tckit.ports.types import DocPage
 
 
@@ -15,14 +15,14 @@ from tckit.ports.types import DocPage
 
 def test_cache_miss_returns_none(tmp_path: Path) -> None:
     """_load_cache returns None when no cached file exists."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     result = infosys._load_page_cache("https://infosys.beckhoff.com/content/1033/test.html")
     assert result is None
 
 
 def test_save_and_load_cache(tmp_path: Path) -> None:
     """Pages saved to cache can be loaded back correctly."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/sample.html"
     infosys._save_page_cache(url, "Sample Title", "Sample content text.")
 
@@ -36,14 +36,14 @@ def test_save_and_load_cache(tmp_path: Path) -> None:
 
 def test_cache_key_is_deterministic(tmp_path: Path) -> None:
     """Same URL always produces the same cache key."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/test.html"
     assert infosys._cache_key(url) == infosys._cache_key(url)
 
 
 def test_different_urls_have_different_keys(tmp_path: Path) -> None:
     """Different URLs produce different cache keys."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     key1 = infosys._cache_key("https://infosys.beckhoff.com/a.html")
     key2 = infosys._cache_key("https://infosys.beckhoff.com/b.html")
     assert key1 != key2
@@ -51,7 +51,7 @@ def test_different_urls_have_different_keys(tmp_path: Path) -> None:
 
 def test_get_page_returns_cached(tmp_path: Path) -> None:
     """get_page() returns cached DocPage on second call without network."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/cached_page.html"
     infosys._save_page_cache(url, "Cached Page", "This is cached content.")
 
@@ -64,7 +64,7 @@ def test_get_page_returns_cached(tmp_path: Path) -> None:
 
 def test_normalise_url_strips_english_php_wrapper(tmp_path: Path) -> None:
     """_normalise_url converts english.php wrapper URLs to direct content URLs."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     wrapper = (
         "https://infosys.beckhoff.com/english.php"
         "?content=../content/1033/tf6310_tc3_tcpip/index.html&id="
@@ -77,14 +77,14 @@ def test_normalise_url_strips_english_php_wrapper(tmp_path: Path) -> None:
 
 def test_normalise_url_passes_through_direct_url(tmp_path: Path) -> None:
     """_normalise_url leaves direct content URLs unchanged."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84136843.html"
     assert infosys._normalise_url(url) == url
 
 
 def test_section_index_round_trip(tmp_path: Path) -> None:
     """Section index can be saved and loaded from cache."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     section = "tf6310_tc3_tcpip"
     index = {
         "fb_socketsend": "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84149131.html",
@@ -97,13 +97,13 @@ def test_section_index_round_trip(tmp_path: Path) -> None:
 
 def test_section_index_miss_returns_none(tmp_path: Path) -> None:
     """_load_section_index returns None when no cached index exists."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     assert infosys._load_section_index("tf6310_tc3_tcpip") is None
 
 
 def test_find_fb_uses_section_index_cache(tmp_path: Path) -> None:
     """find_fb() resolves from section index + page cache without network calls."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/tf6310_tc3_tcpip/84136843.html"
 
     # Prime section index and page cache
@@ -131,7 +131,7 @@ def test_find_fb_uses_section_index_cache(tmp_path: Path) -> None:
 @pytest.mark.network
 def test_get_page_fetches_and_caches(tmp_path: Path) -> None:
     """get_page() fetches a real infosys page and writes it to cache."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     url = "https://infosys.beckhoff.com/content/1033/tc3_plc_intro/index.html"
     page = infosys.get_page(url)
     assert isinstance(page, DocPage)
@@ -147,7 +147,7 @@ def test_get_page_fetches_and_caches(tmp_path: Path) -> None:
 @pytest.mark.network
 def test_find_fb_returns_fb_doc(tmp_path: Path) -> None:
     """find_fb() returns a populated FBDoc for a known Beckhoff FB."""
-    infosys = BeckhoffInfosys(cache_path=str(tmp_path / "cache"))
+    infosys = BeckhoffInfosysSearcher(cache_path=str(tmp_path / "cache"))
     fb_doc = infosys.find_fb("FB_MemSet")
     assert fb_doc.name == "FB_MemSet"
     assert len(fb_doc.description) > 0
