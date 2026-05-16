@@ -94,14 +94,29 @@ way.
 
 | Task | Config | Isolation | Calls | Tokens | Wall (s) | Test | Build |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1-off-by-one | empty | `--isolate-cwd` | **10** | **2,557** | **52.5** | PASSED | green |
+| B1-off-by-one | empty | `--isolate-cwd` (hardened) | **7** | **2,088** | **40.6** | PASSED | green |
 | B1-off-by-one | tckit | full TcKit context | **16** | **3,194** | **87.5** | PASSED | green |
 
 Pairwise ratios (vanilla / tckit; >1 means TcKit more efficient):
 
 | Task | Tokens | Wall | Tool calls |
 | --- | --- | --- | --- |
-| B1-off-by-one | 0.80× | 0.60× | 0.625× |
+| B1-off-by-one | 0.65× | 0.46× | 0.44× |
+
+Three rounds of vanilla for reference, showing how the contamination
+trimmed off as isolation tightened:
+
+| Round | Isolation | Calls | Tokens | Wall (s) |
+| --- | --- | --- | --- | --- |
+| Initial | none (project skills + CLAUDE.md leaked) | 9 | 2,815 | 51.6 |
+| Mid | `--isolate-cwd` (still copies fixture CLAUDE.md) | 10 | 2,557 | 52.5 |
+| Hardened | `--isolate-cwd` excludes CLAUDE.md/.claude/.mcp.json | 7 | 2,088 | 40.6 |
+
+The fixture's local `CLAUDE.md` was meaningfully nudging the model
+toward extra exploration ("If a TwinCAT automation interface (such
+as TcKit) is available, use it for any structural change..."). Once
+that's out of the cwd, the model converges directly to grep + read
++ edit.
 
 **Vanilla won on every metric.** That is the expected shape for a
 one-line ST edit on a comment-tracked region, where vanilla's `Edit`
@@ -116,11 +131,14 @@ paying overhead.
 
 ### Tool breakdown
 
-**Vanilla (10 calls, isolated):** `Bash×7, Edit×1, Read×2`. One
-Edit landed the fix; the bulk of the budget went to bash-driven
-orientation (grep / find / ls under the temp fixture). Notably no
-`Skill` and no `ToolSearch` calls — the isolation worked, the
-model didn't try to invoke TcKit skills it doesn't have access to.
+**Vanilla (7 calls, hardened isolation):** `Bash×4, Edit×1, Read×2`.
+One Edit landed the fix; orientation was a handful of bash calls
+(grep / find / ls under the temp fixture) plus two reads. No
+`Skill` and no `ToolSearch` calls — the cwd-ancestor walk found
+no project skills, and the temp copy excluded the fixture-local
+CLAUDE.md (which previously contained "If a TwinCAT automation
+interface (such as TcKit) is available, use it...") so the model
+had no nudge to look for TcKit tools at all.
 
 **TcKit (16 calls, full context):** `Bash×5, Glob×1, Read×2,
 Skill×1, ToolSearch×1, mcp__tckit__get_pou_item×1,
@@ -320,12 +338,38 @@ local-only).
 
 ## Interpretation, in one line
 
-**B1's closed-loop bench harness ships with proper isolation
-(`--isolate-cwd` for vanilla, `--close-during-run` for the XAE
-external-mod wedge, `/close` bridge route), both arms went green
-end-to-end on N=1, and the writer thesis isn't visible on this
-particular task — vanilla edited the `.TcPOU` XML directly in one
-`Edit` call and beat TcKit on every metric (0.80× tokens, 0.60×
-wall, 0.625× calls), exactly as the W1 round predicted: the writer
-thesis lives in tasks where vanilla has to fabricate identifiers,
-not single-line replacements.**
+**B1's closed-loop bench harness ships with hardened isolation
+(`--isolate-cwd` copies the fixture to a tmp dir minus CLAUDE.md /
+`.claude` / `.mcp.json` / XAE build artefacts; `--close-during-run`
++ `/close` bridge route handle XAE's external-mod guard), both
+arms went green end-to-end on N=1, and the writer thesis isn't
+visible on this particular task — vanilla edited the `.TcPOU` XML
+directly in one `Edit` call and beat TcKit on every metric (0.65×
+tokens, 0.46× wall, 0.44× calls), exactly as the W1 round
+predicted: the writer thesis lives in tasks where vanilla has to
+fabricate identifiers, not single-line replacements.**
+
+## Asymmetry worth flagging on the tckit side
+
+The vanilla arm is now cleanly isolated, but the **tckit arm still
+loads the *dev*-side surface of this repo**, not just the
+user-facing plugin:
+
+- `.claude/skills/` contains 8 skills, of which `tc-adr` and
+  `tc-docs-write` are dev-only (for editing TcKit's own ADRs and
+  docs site). The other 6 mirror `plugin/skills/`, which is the
+  shippable user-facing surface.
+- `C:/tckit/CLAUDE.md` is the dev project's CLAUDE.md (adapter
+  isolation rules, port-methods reference, contributor git
+  workflow). A real TcKit user installing the plugin would see
+  the plugin's CLAUDE.md, not this one.
+
+In practice the dev-only skills have narrow triggers ("write an
+ADR", "update docs") that wouldn't fire on a bug-fix task, so the
+N=1 numbers aren't visibly distorted by them. But for an
+apples-to-apples "what a user installing the TcKit plugin sees"
+measurement, the tckit arm should also use `--isolate-cwd` with
+the temp dir set up to look like a fresh install: fixture +
+plugin/skills/ symlinked or copied in + a user-facing CLAUDE.md
+(if any). Deferred; the current vanilla isolation already
+addresses the bigger noise source.

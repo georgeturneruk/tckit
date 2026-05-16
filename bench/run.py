@@ -278,12 +278,33 @@ def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
 
 
 def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
-    """Copy a fixture tree into a fresh temp directory outside any repo.
+    """Copy a fixture tree into a fresh temp directory outside any repo,
+    stripping Claude Code metadata files so the vanilla arm doesn't
+    inherit them.
 
     Returns the temp path. The caller passes this path as cwd for
     ``claude -p``, which moves Claude Code's skill-discovery /
     CLAUDE.md ancestor walk out of the project tree and into a
     location with no ``.claude/`` or ``CLAUDE.md`` anywhere above it.
+
+    Excluded from the copy:
+
+    - ``CLAUDE.md`` / ``CLAUDE.local.md`` — would auto-load at cwd
+      and bias the vanilla arm. The B1 fixture's CLAUDE.md mentions
+      TcKit by name, which is precisely the contamination we're
+      isolating against.
+    - ``.claude/`` — any project skills, settings, agents the
+      fixture might ship.
+    - ``.mcp.json`` — would auto-add MCP servers that ``empty.json``
+      is supposed to prevent.
+    - XAE / Visual Studio build artefacts that the operator's
+      currently-attached XAE has open file handles on (which makes
+      shutil.copytree raise PermissionError), and which are
+      gitignored anyway because they're rebuilt per run:
+      ``.vs/``, ``_Boot/``, ``_CompileInfo*/``, ``_Deployment/``,
+      ``_Libraries/``, ``_Output/``, ``*.tmc``, ``*.suo``,
+      ``*.~u``, ``*.bak``, ``*.tpzip``, ``*.tszip``, ``*.tpy``,
+      ``*.library``.
 
     The temp dir is created under ``$TEMP``/``/tmp`` (per-user) so a
     credentials-grade isolation isn't needed; the cwd just has to be
@@ -292,7 +313,32 @@ def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
     src = pathlib.Path(fixture_path).resolve()
     tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="tckit-bench-"))
     dest = tmp_root / src.name
-    shutil.copytree(src, dest)
+    ignore = shutil.ignore_patterns(
+        # Claude Code metadata — the contamination this flag exists for.
+        "CLAUDE.md",
+        "CLAUDE.local.md",
+        ".claude",
+        ".mcp.json",
+        # XAE / VS build artefacts: locked by an open XAE and
+        # gitignored. Skipping them avoids PermissionError on copy
+        # and keeps the temp tree close to a "freshly-cloned" shape.
+        ".vs",
+        "_Boot",
+        "_CompileInfo",
+        "_CompileInfo_Upload",
+        "_Deployment",
+        "_Libraries",
+        "_Output",
+        "*.tmc",
+        "*.suo",
+        "*.~u",
+        "*.bak",
+        "*.tpzip",
+        "*.tszip",
+        "*.tpy",
+        "*.library",
+    )
+    shutil.copytree(src, dest, ignore=ignore)
     return dest
 
 
