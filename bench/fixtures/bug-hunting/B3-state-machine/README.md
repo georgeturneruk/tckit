@@ -1,6 +1,6 @@
 # B3 state-machine fixture
 
-ADR-0007 §"B3 state-machine wrong transition". Same authoring chain
+ADR-0007 task B3 state-machine wrong transition. Same authoring chain
 as B1/B2, different bug category.
 
 ## What the seeded bug is

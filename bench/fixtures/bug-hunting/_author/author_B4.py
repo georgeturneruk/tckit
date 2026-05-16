@@ -4,7 +4,7 @@
 ``bError`` for a known-bad input. The outer FB never reads
 ``inner.bError``, so the consumer can't tell that the stage failed.
 
-See ADR-0007 §"Task set (initial six)" §B4 and `_common.py` for the
+See ADR-0007 task B4 (under "Task set (initial six)") and `_common.py` for the
 shared scaffolding.
 """
 

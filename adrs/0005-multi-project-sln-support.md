@@ -203,7 +203,7 @@ fallback rule (1-2-3 above) is deliberately deterministic; no magic.
     centralises the 1-2-3-4 fallback for writer/builder/test-runner
     callers; the reader uses a symbol-aware variant inline that
     prefers the unique-symbol fallback over an "any PLC project"
-    auto-resolve (matches ADR Decision §Resolution rule).
+    auto-resolve (matches ADR Decision section "Resolution rule").
   - **TestRunner gained `target_ams_id`.** The original ADR text
     listed only `plc_name` on the TestRunner methods. The IDE
     workflow requires picking both a PLC project and a target route

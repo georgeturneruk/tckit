@@ -8,7 +8,7 @@
     payload with a key literally named "Probes" arrived at the harness
     script as an empty hashtable instead of the caller's string. We
     renamed the parameter to "ReadSymbols" and moved on (see ADR-0010
-    §B.3). These tests pin the converter's behaviour for the suspect
+    section B.3). These tests pin the converter's behaviour for the suspect
     key so the next attempt to land a /symbol-read style route doesn't
     silently reproduce the same bug.
 

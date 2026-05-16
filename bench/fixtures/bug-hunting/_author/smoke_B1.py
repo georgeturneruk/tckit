@@ -15,7 +15,7 @@ install + reachable TARGET_AMS_ID:
         -> assert GREEN (failures == 0)
 
 This is a manual smoke runner, not part of `bench/run.py`. The bench
-harness changes from ADR-0007 §"Bench harness changes" are deferred.
+harness changes from ADR-0007 section "Bench harness changes" are deferred.
 
 Prerequisites:
 - Bridge service reachable at $BRIDGE_URL (default localhost:8765).

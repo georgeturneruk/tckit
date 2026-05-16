@@ -1,6 +1,6 @@
 # B1 off-by-one fixture
 
-ADR-0007 §"B1 off-by-one". Pilot fixture for the bug-hunting bench.
+ADR-0007 task B1 off-by-one. Pilot fixture for the bug-hunting bench.
 Authored entirely through TcKit's MCP tools — no hand-edited XML —
 to exercise the ADR-0009 multi-PLC + library-tools chain end-to-end.
 
