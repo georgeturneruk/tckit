@@ -29,7 +29,7 @@ cyclic body, plus zero or more methods / actions / properties hanging
 underneath. The three `update_pou_*` calls target the POU itself; the
 three `update_method_body*` calls target a named child item.
 The patch variants mirror Claude Code's `Edit` semantics — exactly one
-unique anchor, fail otherwise. See ADR-0003 and ADR-0010.
+unique anchor, fail otherwise.
 
 ## Multi-project solutions
 
@@ -37,7 +37,7 @@ PLC-scoped writes take an optional `plc_name`. The bridge already enforces
 the same fallback policy on the PowerShell side (`Resolve-TcPlcName`):
 per-call name → `PLC_PROJECT_NAME` env var → auto-resolve on a
 single-project sln → throw with the candidate list. `open_project` and
-`create_project` stay solution-scoped. See ADR-0005.
+`create_project` stay solution-scoped.
 
 To author a multi-PLC sln from scratch (e.g. a Library + Tests split), use
 `create_project` for the sln + first PLC project, then `add_plc_project` for

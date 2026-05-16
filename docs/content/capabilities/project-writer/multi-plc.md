@@ -3,7 +3,7 @@
 **Port methods:** `add_plc_project`, `save_plc_as_library`, `add_library_reference`, `add_library_placeholder`
 **MCP tools:** `mcp__tckit__add_plc_project`, `mcp__tckit__save_plc_as_library`, `mcp__tckit__add_library_reference`, `mcp__tckit__add_library_placeholder`
 **Bridge harness:** `Add-TcPlcProject.ps1`, `Save-TcPlcAsLibrary.ps1`, `Add-TcLibraryReference.ps1`, `Add-TcLibraryPlaceholder.ps1`
-**Status:** Phase B of ADR-0009 — adapter + bridge wired; integration tests exercise both reference styles end-to-end.
+**Status:** adapter and bridge wired; integration tests exercise both reference styles end-to-end.
 **Requires:** TwinCAT 4026+ (the documented automation interface entry points target the current major).
 
 ## What this is for
@@ -57,7 +57,7 @@ C:/work/
         └── Tests.plcproj
 ```
 
-The `_Tc` suffix on the second TwinCAT project is generated automatically. Earlier versions of these tools stacked multiple PLCs under one PLC-only `.tspproj` (one `<Plc>` element with multiple `<Project>` children); that layout authored cleanly in-memory but the on-disk `.tspproj` was missing the `<System Manager><Instance>` blocks, and `TcXaeShell.exe` segfaulted in `IVsParentProject.OpenChildren` on every reload. See [ADR-0009 status notes](https://github.com/georgeturneruk/tckit/blob/main/adrs/0009-multi-plc-authoring-and-library-tools.md#status-notes) for the rethink ([PR #81](https://github.com/georgeturneruk/tckit/pull/81)).
+The `_Tc` suffix on the second TwinCAT project is generated automatically. Earlier versions of these tools stacked multiple PLCs under one PLC-only `.tspproj` (one `<Plc>` element with multiple `<Project>` children); that layout authored cleanly in-memory but the on-disk `.tspproj` was missing the `<System Manager><Instance>` blocks, and `TcXaeShell.exe` segfaulted in `IVsParentProject.OpenChildren` on every reload. See [PR #81](https://github.com/georgeturneruk/tckit/pull/81) for the rethink.
 
 ## Why each level has a distinct name
 
@@ -70,7 +70,7 @@ A TwinCAT solution holds several named tree items that the IDE keeps separate. S
 
 A compiled library reference resolves against the *installed* library, not the source. After editing the library's source, you must `save_plc_as_library(install=True)` before rebuilding the consumer; otherwise the consumer build picks up stale code.
 
-The `tc-build-test-loop` skill documents this rule for the model side. The bench harness (per ADR-0007) automates it on the validation side. Operators outside TcKit's loaded-skill scope read the rule via the [portable CLAUDE.md template](https://github.com/georgeturneruk/tckit/blob/main/templates/twincat-claude.md).
+The `tc-build-test-loop` skill documents this rule for the model side. The bench harness automates it on the validation side. Operators outside TcKit's loaded-skill scope read the rule via the [portable CLAUDE.md template](https://github.com/georgeturneruk/tckit/blob/main/templates/twincat-claude.md).
 
 If the solution uses Source-Only references instead (resolved automatically by TwinCAT's build), this step is unnecessary. The save+install path is idempotent — running it on a Source-Only project is harmless.
 
@@ -85,7 +85,7 @@ In scope (v1):
 
 Out of scope (deliberate):
 
-- TwinCAT 4026 Source-Only library references. The automation interface entry point is not publicly documented; ADR-0009 chose the compiled-library path instead, which is equivalent in build behaviour for in-sln references and uses only documented methods.
+- TwinCAT 4026 Source-Only library references. The automation interface entry point is not publicly documented; TcKit takes the compiled-library path instead, which is equivalent in build behaviour for in-sln references and uses only documented methods.
 - `.compiled-library` (encrypted) output. Not exposed by the automation interface.
 - Cross-sln library references. Same-sln only.
 - Non-default library repositories. `repository="System"` only in v1; other values return an explicit error.

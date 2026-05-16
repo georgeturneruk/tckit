@@ -15,8 +15,7 @@
 `build` and `deploy` accept an optional `plc_name` to scope the operation
 to a single PLC project on multi-project solutions; `start_runtime` is
 target-wide. The bridge follows the standard fallback chain (per-call
-name → `PLC_PROJECT_NAME` env → auto-resolve → ambiguous error). See
-ADR-0005.
+name → `PLC_PROJECT_NAME` env → auto-resolve → ambiguous error).
 
 ## Why this shape
 

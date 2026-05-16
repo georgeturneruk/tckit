@@ -6,8 +6,7 @@
 
 End-to-end TcUnit test driver: orchestrates a run against a target
 runtime, polls for completion via ADS, and parses TcUnit's
-JUnit-shaped XML output into a structured `TestResults`. Implemented
-under [ADR-0006](https://github.com/georgeturneruk/tckit/blob/main/adrs/0006-test-runner-tcunit-adapter.md).
+JUnit-shaped XML output into a structured `TestResults`.
 
 ## Configuration
 
