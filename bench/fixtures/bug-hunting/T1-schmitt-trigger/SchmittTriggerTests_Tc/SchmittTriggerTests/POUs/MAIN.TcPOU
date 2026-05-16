@@ -1,13 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="MAIN" Id="{f427b895-601e-4ec8-b38b-44fdcf4e39a4}">
+  <POU Name="MAIN" Id="{f427b895-601e-4ec8-b38b-44fdcf4e39a4}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
+    suite : FB_SchmittTriggerTests;
 END_VAR
-]]>
-    </Declaration>
+]]></Declaration>
     <Implementation>
-      <ST><![CDATA[]]></ST>
+      <ST><![CDATA[suite();
+TcUnit.RUN();
+]]></ST>
     </Implementation>
   </POU>
 </TcPlcObject>

@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_SchmittTriggerTests" Id="{e6c8db19-e2b5-47b5-b1d7-68885c08a9d5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SchmittTriggerTests EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[LatchesHighAboveHighThreshold();
+LatchesLowBelowLowThreshold();
+HoldsInHysteresisBand();
+SequencedTransitions();
+BoundaryValues();
+]]></ST>
+    </Implementation>
+    <Method Name="BoundaryValues" Id="{9b291a7c-da07-4378-93bd-1b58f33c2ed8}">
+      <Declaration><![CDATA[METHOD PRIVATE BoundaryValues
+VAR
+    trigger : T1SchmittTrigger_Plc.FB_SchmittTrigger;
+    latchedHigh : BOOL;
+    atHighBoundary : BOOL;
+    afterReset : BOOL;
+    atLowBoundary : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('BoundaryValues');
+trigger(fInput := 0.9);
+latchedHigh := trigger.Step();
+trigger(fInput := 0.7);
+atHighBoundary := trigger.Step();
+trigger(fInput := 0.1);
+afterReset := trigger.Step();
+trigger(fInput := 0.3);
+atLowBoundary := trigger.Step();
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := latchedHigh,
+    Message := 'fInput := 0.9 should latch HIGH (precondition)');
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := atHighBoundary,
+    Message := 'fInput := 0.7 (high boundary, strict >) should hold previous TRUE');
+AssertEquals_BOOL(
+    Expected := FALSE,
+    Actual := afterReset,
+    Message := 'fInput := 0.1 should latch LOW (reset for next assertion)');
+AssertEquals_BOOL(
+    Expected := FALSE,
+    Actual := atLowBoundary,
+    Message := 'fInput := 0.3 (low boundary, strict <) should hold previous FALSE');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="HoldsInHysteresisBand" Id="{6a4e8897-f582-43db-9126-05c16b8cc408}">
+      <Declaration><![CDATA[METHOD PRIVATE HoldsInHysteresisBand
+VAR
+    trigger : T1SchmittTrigger_Plc.FB_SchmittTrigger;
+    bResult : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('HoldsInHysteresisBand');
+trigger(fInput := 0.9);
+trigger.Step();
+trigger(fInput := 0.5);
+bResult := trigger.Step();
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := bResult,
+    Message := 'trigger.Step() in band with previous TRUE should hold TRUE');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LatchesHighAboveHighThreshold" Id="{ce7659dd-81ac-4592-aed4-a5d0cdb558be}">
+      <Declaration><![CDATA[METHOD PRIVATE LatchesHighAboveHighThreshold
+VAR
+    trigger : T1SchmittTrigger_Plc.FB_SchmittTrigger;
+    bResult : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LatchesHighAboveHighThreshold');
+trigger(fInput := 0.9);
+bResult := trigger.Step();
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := bResult,
+    Message := 'trigger.Step() with fInput := 0.9 should latch HIGH');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="LatchesLowBelowLowThreshold" Id="{5647c07d-d98b-42f0-94fa-7f217875fcfa}">
+      <Declaration><![CDATA[METHOD PRIVATE LatchesLowBelowLowThreshold
+VAR
+    trigger : T1SchmittTrigger_Plc.FB_SchmittTrigger;
+    stateHigh : BOOL;
+    stateLow : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('LatchesLowBelowLowThreshold');
+trigger(fInput := 0.9);
+stateHigh := trigger.Step();
+trigger(fInput := 0.1);
+stateLow := trigger.Step();
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := stateHigh,
+    Message := 'fInput := 0.9 should first latch HIGH (precondition for LOW test)');
+AssertEquals_BOOL(
+    Expected := FALSE,
+    Actual := stateLow,
+    Message := 'fInput := 0.1 (after HIGH) should latch LOW');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SequencedTransitions" Id="{f42328c0-dd15-4bfa-a285-86828a7239b5}">
+      <Declaration><![CDATA[METHOD PRIVATE SequencedTransitions
+VAR
+    trigger : T1SchmittTrigger_Plc.FB_SchmittTrigger;
+    state1 : BOOL;
+    state2 : BOOL;
+    state3 : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('SequencedTransitions');
+trigger(fInput := 0.5);
+state1 := trigger.Step();
+trigger(fInput := 0.9);
+state2 := trigger.Step();
+trigger(fInput := 0.5);
+state3 := trigger.Step();
+AssertEquals_BOOL(
+    Expected := FALSE,
+    Actual := state1,
+    Message := 'Sequence step 1: 0.5 from default should be FALSE');
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := state2,
+    Message := 'Sequence step 2: 0.9 should latch TRUE');
+AssertEquals_BOOL(
+    Expected := TRUE,
+    Actual := state3,
+    Message := 'Sequence step 3: 0.5 with previous TRUE should hold TRUE');
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
