@@ -53,7 +53,7 @@ nav:
       - "Example: TcUnit": capabilities/doc-generator/tcunit-example.md
     - DocsSearcher:
       - Overview: capabilities/docs-searcher/overview.md
-      - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys.md
+      - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys-searcher.md
   - Architecture:
     - Overview: architecture/overview.md
   - Contributing: contributing.md
