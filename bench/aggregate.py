@@ -54,9 +54,12 @@ def main() -> int:
     builds_by_pair: dict[tuple[str, str], list[bool]] = defaultdict(list)
 
     for path in sorted(args.results_dir.glob("*.json")):
-        # Skip the build-result siblings — they're aggregated separately,
-        # below, via their (task, config) match against the main run JSON.
+        # Skip the build- and test-result siblings — they're sibling
+        # artefacts of a main run JSON, not standalone runs. Pass-rate /
+        # iteration-count aggregation lives in a separate PR.
         if path.name.endswith(".build.json"):
+            continue
+        if path.name.endswith(".test-result.json"):
             continue
         if args.filter and args.filter not in path.name:
             continue

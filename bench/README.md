@@ -177,6 +177,93 @@ then bypasses the comparison by calling the bridge directly. With
 test, which is the apples-to-apples surface the bench is meant
 to measure.
 
+## Running bug-hunting tasks (B-series)
+
+Closed-loop debugging fixtures live under `bench/fixtures/bug-hunting/<id>-<slug>/`
+and follow the layout in [ADR-0007](../adrs/0007-bug-hunting-bench.md): one
+`.sln` with two PLC projects (a library under test and a tests project that
+references the library as a compiled `.library`). The bug-hunting bench
+extends `run.py` with three flags so it can:
+
+- save the library PLC as a freshly-installed `.library` before each run
+  (so the consumer build resolves against the seeded source);
+- after the model session ends, re-save the library against the model's
+  edits, then build → deploy → start_runtime → run_tests on the tests
+  PLC, and read pass/fail from runtime symbols;
+- guard against the model editing test code to make the suite pass.
+
+### Prerequisites (in addition to the writer-bench setup above)
+
+- Target runtime reachable, AMS NetID exported as `TARGET_AMS_ID`
+  (e.g. `127.0.0.1.1.1` for a local UmRT_Default).
+- TcUnit installed in the System library repository (distributor
+  `www.tcunit.org`).
+- The bridge runs in `XAE_MODE=headless` or the operator's XAE Shell is
+  already attached.
+- Reset is path-scoped to the fixture directory, not the whole repo,
+  because the fixture lives inside the TcKit working tree.
+
+### B1 invocation
+
+```powershell
+$fix  = "C:/tckit/bench/fixtures/bug-hunting/B1-off-by-one"
+$repo = "C:/tckit"
+$reset = "git -C $repo checkout HEAD -- bench/fixtures/bug-hunting/B1-off-by-one"
+$env:TARGET_AMS_ID = "127.0.0.1.1.1"
+
+python bench/run.py `
+    --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
+    --config bench/configs/tckit.json --runs 1 `
+    --tcunit-path $fix `
+    --sln-path "$fix/B1RollingAverage.sln" `
+    --reset-cmd $reset `
+    --pre-save-as-library B1RollingAverage_Plc `
+    --post-run-tests RollingAverageTests `
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/
+
+# vanilla arm (swap the config only)
+python bench/run.py `
+    --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
+    --config bench/configs/empty.json --runs 1 `
+    --tcunit-path $fix `
+    --sln-path "$fix/B1RollingAverage.sln" `
+    --reset-cmd $reset `
+    --pre-save-as-library B1RollingAverage_Plc `
+    --post-run-tests RollingAverageTests `
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/
+```
+
+### What each flag does
+
+- `--pre-save-as-library <plc-name>` — runs after `--reset-cmd` and before
+  `claude -p`. Saves the named library PLC as `<sln-dir>/<plc-name>.library`
+  and installs it to the System repo. Non-zero on failure aborts the run.
+- `--post-run-tests <plc-name>` — runs after the model session. Drives the
+  full validation cycle against the tests PLC: re-save library → build →
+  deploy → start_runtime → run_tests (with probes). Writes a
+  `.test-result.json` sibling capturing each step and the parsed probes.
+  Requires `--sln-path`, `--pre-save-as-library`, and `TARGET_AMS_ID`.
+- `--tests-guard-path <repo-relative-path>` — runs `git diff --name-only`
+  against this path after each run; any output sets `tests_modified: true`
+  and `passed: false` in `.test-result.json`. Per ADR-0007's tamper guard.
+- `--test-probe <symbol>` — repeatable. Defaults to `MAIN.suite.NumberOfTests`
+  + `MAIN.suite.Tests[1].TestIsFailed` (B1's probe set). Pass-fail is
+  derived from any `*.TestIsFailed` probe; a "True" value flips the run
+  to failed. Override for fixtures with more than one registered test.
+
+### Pre-flight smoke (optional but recommended)
+
+Before the first bench run on a new machine, sanity-check the closed-loop
+infrastructure with the deterministic smoke runner (no model in the loop):
+
+```powershell
+python bench/fixtures/bug-hunting/_author/smoke_B1.py
+```
+
+It drives red → patch → green and exits 0 on success. Reset the fixture
+afterwards (`git -C $repo checkout HEAD -- bench/fixtures/bug-hunting/B1-off-by-one`)
+so the bench run starts on the seeded bug.
+
 ## Aggregate
 
 ```powershell
