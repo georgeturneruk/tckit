@@ -1,7 +1,7 @@
 # beckhoff infosys
 
 **Port:** `DocsSearcher`  
-**Module:** `tckit.adapters.docs_searchers.beckhoff_infosys.BeckhoffInfosys`  
+**Module:** `tckit.adapters.docs_searchers.beckhoff_infosys_searcher.BeckhoffInfosysSearcher`  
 **Status:** Phase 1 — complete
 
 Searches and retrieves Beckhoff infosys documentation. Uses DuckDuckGo HTML search to resolve infosys page URLs (which use opaque numeric IDs), then fetches and parses the content directly. Pages are cached locally — each FB is only looked up once.
