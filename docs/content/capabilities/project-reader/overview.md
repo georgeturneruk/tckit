@@ -30,8 +30,7 @@ solutions return a one-entry dict. Each `PLCSection` carries that PLC
 project's `pous` / `gvls` / `duts` / `libraries`; tasks live at the
 solution level.
 
-Per-symbol methods take an optional `plc_name`. The fallback chain (see
-ADR-0005):
+Per-symbol methods take an optional `plc_name`. The fallback chain:
 
 1. explicit `plc_name`,
 2. `PLC_PROJECT_NAME` env var,

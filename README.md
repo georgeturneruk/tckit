@@ -17,9 +17,11 @@ An MCP server that gives AI agents a precise, structured view of a TwinCAT 3 pro
 
 ## Why TcKit
 
-LLMs get worse as their context fills up. Anthropic call this [context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), and PLC projects trigger it fast: a single `.TcPOU` is XML wrapped around code, thousands of lines for one function block. Pasting one in to ask about one method poisons the rest of the conversation.
+LLMs get worse as their context fills up. Anthropic call this [context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents). TwinCAT's file format makes it worse: a `.TcPOU` is XML wrapped around code, easily thousands of lines for one function block. That XML contaminates context the moment it's loaded.
 
-TcKit is the layer in between. Six MCP capabilities, each shaped around just-in-time retrieval, a single source of truth for writes, and structured results from builds and tests.
+TcKit is the layer in between. It groups six MCP capabilities around three ideas: just-in-time retrieval for reads, a single source of truth for writes, and structured results from builds and tests.
+
+Wired together, the model runs that loop without an engineer walking each cycle: write a method, build, test, fix the failure, build again.
 
 ## Capabilities
 
@@ -38,16 +40,16 @@ Each port is a stable contract; adapters are swappable. See [tckit.org](https://
 
 Head-to-head writer-task runs of TcKit-equipped Claude vs vanilla Claude:
 
-| Task | Vanilla tokens | TcKit tokens | Vanilla wall | TcKit wall | Tool calls (V → T) |
-|---|---|---|---|---|---|
-| Add a `VAR_INPUT` to an FB | 1,653 | **691** (2.4×) | 27.5s | **21.7s** (1.27×) | 5 → 3 |
-| Add a method to an FB | 1,236 | **508** (2.4×) | 26.2s | **15.5s** (1.69×) | 5 → 2 |
+| Task | Tokens | Wall time | Tool calls |
+|---|---|---|---|
+| Add a `VAR_INPUT` to an FB | **2.4× fewer** (1,653 → 691) | **1.27× faster** (27.5s → 21.7s) | 5 → 3 |
+| Add a method to an FB | **2.4× fewer** (1,236 → 508) | **1.69× faster** (26.2s → 15.5s) | 5 → 2 |
 
 N=1 per cell. See [`bench/findings/`](bench/findings/) for full methodology and a record of the harness gotchas behind the numbers.
 
 ## See it in action
 
-The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published live at **[tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/)**. Navigate the function block hierarchy, search the API, drill into a method, all rendered from comments in TcUnit's ST source.
+The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published live at **[tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/)**. Navigate the function block hierarchy, search the API, drill into a method, all rendered from TcUnit's source code. Under the hood, the same understanding of TwinCAT's XML powers ProjectReader: an agent reads a project the way you would, never loading more than the question needs.
 
 ## Architecture
 

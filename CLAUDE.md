@@ -234,6 +234,13 @@ User-facing means any of:
 Update the README only when the surface shown there changes. Otherwise update the
 relevant page under `docs/content/`. Stale docs are a bug.
 
+**Docs voice (what to keep out):**
+
+- **No ADR references on user-facing surfaces.** ADRs are an internal design store. `docs/content/`, the README, MCP tool descriptions, and CLI help text describe current behaviour, not the history of how it got there. If a passage needs more context than fits inline, link to the PR; never to `adrs/`.
+- **No history paragraphs in docs.** Don't chronicle what something used to be. "The port had two more methods in an earlier draft" belongs on the ADR or commit message, not on a page describing the current shape.
+- **The README is the voice reference for `docs/content/index.md`.** When editing the home page, match the README's structure, density, and tone. This rule applies to the home page only; the capability and adapter pages are denser reference material and have their own appropriate voice.
+- **No marketing scaffolding on the home page.** Specifically, do not add: problem/solution framing tables that repeat the capabilities list (e.g. "What TcKit solves"), redundant capability summaries ("X at a glance" next to a capabilities table), "Design philosophy" or similar sections that duplicate the architecture page, or feature-pitch bullet lists. State what it does, link where it can be verified, move on.
+
 ---
 
 ## Quick Reference — Port Methods

@@ -28,8 +28,3 @@ failing assertion and jump straight to that POU item via
 [ProjectReader](../project-reader/overview.md). Same
 [tool-design principle](https://www.anthropic.com/engineering/writing-tools-for-agents)
 as BuildRunner: parsed beats raw.
-
-The port was two methods larger in earlier drafts (`wait_complete` and
-`get_status`), but neither was wired to an MCP tool and ADR-0006 moves
-all waiting server-side into the bridge harness. The two-method ABC is
-the honest shape.
