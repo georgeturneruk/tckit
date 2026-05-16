@@ -219,7 +219,7 @@ python bench/run.py `
     --reset-cmd $reset `
     --pre-save-as-library B1RollingAverage_Plc `
     --post-run-tests RollingAverageTests `
-    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
 
 # vanilla arm (swap the config only)
 python bench/run.py `
@@ -230,7 +230,7 @@ python bench/run.py `
     --reset-cmd $reset `
     --pre-save-as-library B1RollingAverage_Plc `
     --post-run-tests RollingAverageTests `
-    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/
+    --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
 ```
 
 ### What each flag does
