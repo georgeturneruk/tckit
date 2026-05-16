@@ -9,25 +9,22 @@ pr:
 
 ## Context
 
-The W-series writer benchmarks (#52, #54, #56) measured TcKit on
-synthetic atomic write tasks: change one line, add one variable,
-add one method. They confirmed the writer thesis on tokens, calls,
-and wall-clock, but they don't say much about whether TcKit helps
-Claude in a realistic debugging loop. A real session typically
-involves running a failing test, reading the assertion, locating
-the bug, patching, and re-running until green. The W series
-exercises a fragment of that loop in isolation.
+The W-series writer benchmarks (#52, #54, #56) measured TcKit on synthetic
+atomic write tasks: change one line, add one variable, add one method.
+They confirmed the writer thesis on tokens, calls, and wall-clock, but
+they don't say much about whether TcKit helps Claude in a realistic
+debugging loop. A real session typically involves running a failing test,
+reading the assertion, locating the bug, patching, and re-running until
+green. The W series exercises a fragment of that loop in isolation.
 
-The bug-hunting bench measures the loop end-to-end. It depends on
-four pieces of infrastructure: multi-project sln support
-(ADR-0005), a working TestRunner adapter (ADR-0006), the portable
-TwinCAT CLAUDE.md template (ADR-0008), and multi-PLC sln authoring
-+ library tools (ADR-0009). The first three are `Implemented`;
-ADR-0009 is the prerequisite that surfaced during this ADR's
-planning round — TcKit had no documented way to add a second
-`.plcproj` to an existing sln, save it as a library, install it,
-or add a library reference. The bench fixtures need all four to
-exist before they can be authored.
+The bug-hunting bench measures the loop end-to-end. It depends on four
+pieces of infrastructure: multi-project sln support (ADR-0005), a working
+TestRunner adapter (ADR-0006), the portable TwinCAT CLAUDE.md template
+(ADR-0008), and multi-PLC sln authoring + library tools (ADR-0009). The
+first three are `Implemented`; ADR-0009 is the prerequisite that surfaced
+during this ADR's planning round (TcKit had no documented way to add a
+second `.plcproj`, save it as a library, install it, or add a library
+reference).
 
 ## Decision
 
@@ -46,433 +43,200 @@ B1-off-by-one/
 │       └── FB_*.TcPOU
 └── Tests/
     ├── Tests.plcproj      (TcUnit harness + failing test)
-    ├── GVLs/
-    │   └── GVL_TcUnit.TcGVL   (TcUnit-ResultExportXmlPath constant)
     └── POUs/
         └── FB_*Tests.TcPOU
 ```
 
-Tests references Library as a compiled library: each bench run
-calls `mcp__tckit__save_plc_as_library` on Library (per ADR-0009)
-to produce a fresh `.library` file and install it into the system
-repo, then builds Tests against the installed library. This is
-what the IDE effectively does for the user when they press Build
-on a Source-Only-referenced sln, just done explicitly through
-documented automation interface methods. The original draft of
-this ADR specified a TwinCAT 4026 "Source-Only" reference, but
-that reference type has no publicly documented automation
-interface entry point; the compiled-library path produces
-equivalent build behaviour for the bench's purpose and uses only
-documented methods. The bench's reset reverts the whole task
-folder per run; the generated `.library` file is gitignored and
-regenerated per build.
+Tests references Library as a compiled library: each bench run calls
+`mcp__tckit__save_plc_as_library` on Library (per ADR-0009) to produce a
+fresh `.library` file and install it into the system repo, then builds
+Tests against the installed library. This is what the IDE effectively
+does for the user when they press Build on a Source-Only-referenced sln,
+just done explicitly through documented automation interface methods.
+(The original draft of this ADR specified a TwinCAT 4026 "Source-Only"
+reference, but that reference type has no publicly documented automation
+entry point; the compiled-library path produces equivalent build behaviour
+using only documented methods.) The generated `.library` file is
+gitignored and regenerated per build.
 
 ### Task set (initial six)
 
-The six tasks cover a graded set of bug categories on realistic
-domain code. FB names are illustrative; final names land with the
-fixture-implementation PR.
+Six tasks cover a graded set of bug categories on realistic domain code.
+FB names are illustrative.
 
 - **B1 off-by-one.** `FB_RollingAverage.Step` with a
   `FOR i := 1 TO Count DO` that should be `FOR i := 0 TO Count-1 DO`.
-  Single method body. Test asserts the average of a known input
-  vector; the off-by-one shifts the result by one sample.
-
-- **B2 sign / type.** `FB_Counter.GetSignedDelta` returns a `UDINT`
-  where it should be `DINT`; subtraction past zero underflows to
-  4 billion. Test asserts a small negative result.
-
-- **B3 state-machine wrong transition.** `FB_TrafficLight.Step`
-  with a `CASE` statement where `Green -> Yellow` accidentally
-  jumps to `Red`. Test runs the cycle for one full period and
-  asserts the sequence of state observations.
-
-- **B4 missing bError propagation.** `FB_PipelineStage` wraps an
-  inner FB whose `bError` is set on a known input. The outer FB
-  never reads `bInnerFB.bError`. Test asserts
-  `pipelineStage.bError = TRUE` after the failing input.
-
-- **B5 wrong default initialisation.** `FB_PIDController.VAR`
-  initialises `fGain := 0.0` (should be `1.0`); first call returns
-  zero. Test asserts a non-zero output for a non-zero error input.
-
-- **T1 TDD.** `FB_SchmittTrigger.Step` is fully declared (signature,
-  VAR_INPUT, VAR_OUTPUT, hysteresis parameters) but its method
-  body is `;`. Test suite has multiple assertions covering:
-  - input below low threshold -> output FALSE,
-  - input above high threshold -> output TRUE,
-  - input between thresholds -> output holds previous value,
-  - sequenced inputs across the hysteresis band asserting the
-    correct transition,
-  - boundary values exactly at the thresholds.
-  No hardcoded return value can satisfy all five assertions. The
-  model has to implement Schmitt-trigger logic.
+- **B2 sign / type.** `FB_Counter.GetSignedDelta` returns a `UDINT` where
+  it should be `DINT`; subtraction past zero underflows to 4 billion.
+- **B3 state-machine wrong transition.** `FB_TrafficLight.Step` with a
+  `CASE` where `Green -> Yellow` accidentally jumps to `Red`.
+- **B4 missing bError propagation.** `FB_PipelineStage` wraps an inner FB
+  whose `bError` is set on a known input; the outer FB never reads
+  `bInnerFB.bError`.
+- **B5 wrong default initialisation.** `FB_PIDController.VAR` initialises
+  `fGain := 0.0` (should be `1.0`); first call returns zero.
+- **T1 TDD.** `FB_SchmittTrigger.Step` is fully declared but its method
+  body is `;`. The suite has five assertions across thresholds, hysteresis
+  hold, transitions, and boundary values. No hardcoded return value
+  satisfies all five.
 
 ### Prompt shape
 
-Each task's `.md` gives:
-
-- Failing test suite name (TcUnit test-suite FB name).
-- Failing test name (TcUnit `TEST(...)` name).
-- Assertion failure message and expected/actual values from a
-  baseline harness run.
-- One sentence of framing: "this test is failing; modify the
-  project source to make it pass. Do not change the test code."
-- A note that the test project files (any `*Tests.TcPOU`) are
-  read-only for grading purposes.
-
-No FB pointer, no diagnosis hint. Vanilla and TcKit get identical
+Each task's `.md` gives the failing test suite name, the failing test
+name, the assertion message and expected/actual values, one sentence of
+framing ("modify the project source to make this test pass; do not change
+the test code"), and a note that `*Tests.TcPOU` files are read-only for
+grading. No FB pointer, no diagnosis hint. Vanilla and TcKit get identical
 prompts.
 
-### Vanilla open-loop shape
+### Bench arms
 
-Vanilla's `bench/configs/empty.json` has no MCP server and no
-bridge URL exposed to the model. The model reads the source, the
-failing test, and the assertion message; makes its edits; the
-session ends naturally when the model stops emitting tool calls.
-After session termination, the bench harness — not the model —
-builds the sln and runs the test suite via the bridge's
-`/tcunit-run` and `/results` routes and writes
-`.test-result.json`. The bridge is a harness-side resource; the
-vanilla session never sees it. Vanilla gets exactly one
-validation cycle. It cannot iterate on test results because it
-cannot run the tests.
+Vanilla's `bench/configs/empty.json` exposes no MCP server. The model
+reads the source and the assertion, makes edits, the session ends when it
+stops emitting tool calls; the harness then builds and runs tests via the
+bridge's `/tcunit-run` and `/results` routes (the bridge is harness-side
+only, the vanilla session never sees it). Vanilla gets exactly one
+validation cycle.
 
-### TcKit closed-loop shape
-
-TcKit's config exposes the MCP server (`tckit.json`). The model
-uses `run_tests` + `get_test_results` between edits and stops
-when tests pass or when the `tc-build-test-loop` skill's
-5-iteration cap is hit. After the session ends, the harness runs
-tests one more time to corroborate the model's last reading.
-Discrepancy between "model said pass" and "harness saw fail" is
-a finding worth surfacing per task.
+TcKit's config exposes the MCP server. The model uses `run_tests` +
+`get_test_results` between edits and stops when tests pass or when the
+`tc-build-test-loop` skill's 5-iteration cap is hit. The harness runs
+tests one more time post-session to corroborate the model's last reading;
+discrepancy between "model said pass" and "harness saw fail" is a finding
+worth surfacing.
 
 ### Scoring
 
-- **Pass/fail** per (task, config). Headline metric. Aggregate to
-  success rate.
+- **Pass/fail** per (task, config). Headline metric.
 - **Iterations to green** for TcKit (vanilla is always 1).
-- **Tokens / calls / wall** same as the W series. Apples-to-apples
-  comparison restricted to tasks where both arms reached green.
-- **Validation:** harness's post-session test run writes
-  `.test-result.json` for both configs. For TcKit this
-  corroborates the model's last `get_test_results`; for vanilla
-  this is the only validation.
-- **Secondary signals (optional):** "vanilla got close" indicator
-  showing whether vanilla's edits reduced the number of failing
-  assertions, kept them constant, or introduced new failures.
+- **Tokens / calls / wall** same as the W series; apples-to-apples
+  restricted to tasks where both arms reached green.
+- **Validation:** harness's post-session run writes `.test-result.json`.
+- **Secondary signal:** "vanilla got close" indicator (reduced / unchanged
+  / increased failing assertions vs baseline).
 
 ### Bench harness changes
 
 `bench/run.py` gains:
 
-- `--task-folder` flag so a task is a directory (with its own
-  sln, sources, and CLAUDE.md), not a single `.md` file.
-- Pre-build orchestration step: for every Library PLC project in
-  the fixture, call `/save-as-library` (per ADR-0009) so the
-  library is freshly installed before the consumer build. This
-  is the harness-side mirror of the rule documented in the
-  `tc-build-test-loop` skill for the TcKit-arm sessions.
-- Post-session validation step: build the sln, run tests via the
-  bridge's `/tcunit-run` and `/results` routes, write
-  `.test-result.json`. This step uses the longer build-timeout
-  envelope (`TCKIT_BUILD_TIMEOUT`-class headroom, ~600s) rather
-  than the TestRunner adapter's default 180s HTTP envelope; cold
-  XAE + first deploy on a fresh fixture routinely exceeds 180s.
-- Test-files tamper guard: after each run, `git -C <repo-root>
-  diff --name-only -- <task-folder>/Tests/`. If non-empty, the
-  per-run JSON gets `tests_modified: true` and the run is graded
-  failed regardless of `/results`. The "read-only for grading"
-  rule needs enforcement, not just a polite instruction.
-- `bench/aggregate.py` gains a `PASS RATE` column and an
-  `ITERATIONS` column derived from the per-run JSONs (counting
-  `mcp__tckit__run_tests` events in `tool_breakdown` for TcKit,
+- `--task-folder` flag so a task is a directory (sln + sources +
+  CLAUDE.md), not a single `.md` file.
+- Pre-build orchestration: for every Library PLC project, call
+  `/save-as-library` (per ADR-0009) before the consumer build.
+- Post-session validation: build the sln, run tests via `/tcunit-run` and
+  `/results`, write `.test-result.json`. Uses the longer build-timeout
+  envelope (~600s); cold XAE + first deploy routinely exceeds the
+  TestRunner adapter's 180s HTTP default.
+- Tamper guard: `git -C <repo-root> diff --name-only -- <task-folder>/Tests/`
+  after each run. Non-empty -> `tests_modified: true` and the run grades
+  failed regardless of `/results`.
+- `bench/aggregate.py` gains `PASS RATE` and `ITERATIONS` columns
+  (counting `mcp__tckit__run_tests` events in `tool_breakdown` for TcKit,
   1 for vanilla).
 
-The task-folder flag is additive; the existing single-`.md`
-flow keeps working for the W series.
+The task-folder flag is additive; the single-`.md` flow keeps working for
+the W series.
 
 ### What does not change
 
-- Reset between runs uses the existing `--reset-cmd` flag with a
-  per-task reset command. The task folder lives inside the TcKit
-  repo (not an independent git root), so the correct reset is
-  path-scoped: `git -C <repo-root> checkout HEAD -- <task-folder>`.
-  A naive `git -C <task-folder> reset --hard HEAD` would resolve
-  to the TcKit repo and reset unrelated paths in the tree.
-- cwd isolation: each `claude -p` runs with cwd pinned to the
-  task folder, never the TcKit repo.
+- Reset uses `--reset-cmd` with a per-task, *path-scoped* command:
+  `git -C <repo-root> checkout HEAD -- <task-folder>`. The task folder
+  lives inside the TcKit repo; a naive `git -C <task-folder> reset --hard`
+  would resolve to the TcKit repo and reset unrelated paths.
+- cwd isolation: each `claude -p` runs with cwd pinned to the task
+  folder, never the TcKit repo.
 - Bridge runs in `XAE_MODE=headless` for autonomy.
 
 ## Alternatives considered
 
-- **Many bugs in one sln.** Rejected per the W-series lesson:
-  atomic tasks beat noisy aggregates at this scale. Mixed-bug
-  projects make the "did Claude succeed" judgement fuzzy and
-  hide which categories help vs hurt.
-- **Synthetic minimal FBs.** Rejected so the model can't
-  pattern-match "this is a benchmark fixture" off the FB shape.
-  Realistic-looking domain code is harder to reverse-engineer.
-- **Let vanilla bash to msbuild and parse XML.** Rejected as
-  breaking the cwd isolation that the W series proved load-bearing.
-  Vanilla's open-loop shape is honest: it represents what vanilla
-  can do without TcKit on a real TwinCAT codebase, which is
-  exactly the comparison we're trying to measure.
-- **Multiple TDD tasks, no bug-hunting tasks.** Rejected: bug
-  hunting and feature implementation are different debugging
-  modes, both common in real sessions, both worth measuring.
-- **Score by iterations to green, weighted.** Rejected as
-  premature optimisation. Pass/fail and raw iteration counts are
-  the right primitives for N=1 directional reads. Weighting
-  schemes belong in a later round once the bench is calibrated.
+- **Many bugs in one sln.** Rejected per the W-series lesson: atomic
+  tasks beat noisy aggregates at this scale.
+- **Synthetic minimal FBs.** Rejected so the model can't pattern-match
+  "this is a benchmark fixture" off the FB shape.
+- **Let vanilla bash to msbuild and parse XML.** Rejected as breaking
+  the cwd isolation the W series proved load-bearing.
+- **Multiple TDD tasks, no bug-hunting tasks.** Rejected: bug hunting
+  and feature implementation are different debugging modes, both common
+  in real sessions, both worth measuring.
+- **Score by weighted iterations to green.** Rejected as premature
+  optimisation. Pass/fail and raw counts are the right primitives for
+  N=1 directional reads.
 
 ## Consequences
 
-**Enables:** the first end-to-end measurement of TcKit's value in
-a realistic closed-loop debugging session. Vanilla baseline tells
-us what's reachable without the tooling; TcKit numbers tell us how
-much the tooling moves the needle.
+**Enables:** the first end-to-end measurement of TcKit's value in a
+realistic closed-loop debugging session.
 
-**Costs:** authoring six realistic FBs and six TcUnit test suites
-is real work. Scoped to a single fixture-implementation PR after
-this ADR is accepted. Each task takes maybe 30-60 minutes of
-authoring once the patterns are settled.
+**Costs:** authoring six realistic FBs and six TcUnit suites is real
+work; scoped to a single fixture-implementation PR after this ADR is
+accepted. ~30-60 minutes per task once patterns settle.
 
 **Risks:**
 
-- The bench is measurably less precise than the W series: N=1
-  success rates are coarse, and the win condition is binary. A
-  task that vanilla passes 50% of the time will look "won" or
-  "lost" depending on the single roll.
-- Authoring realistic-looking FBs that hide a specific bug is
-  itself a skill. If the bug is too obvious (or too obscure), the
-  task is uninformative. The first round of authoring will
-  probably need a second pass after seeing how each task plays.
-- The 5-iteration cap means TcKit can "give up" without finding
-  the bug. The pass/fail metric records this; it doesn't punish
-  TcKit beyond the binary outcome.
+- N=1 success rates are coarse; a task vanilla passes 50% of the time
+  reads "won" or "lost" on the single roll.
+- Authoring realistic-looking FBs that hide a specific bug is itself a
+  skill. The first round probably needs a second pass after seeing how
+  each task plays.
+- The 5-iteration cap means TcKit can "give up" without finding the bug.
+  The pass/fail metric records this; it doesn't punish TcKit beyond the
+  binary outcome.
 
-**Locks out:** nothing. The fixture layout and prompt shape can
-evolve; the harness changes are additive; the W-series surface is
-unaffected.
+**Locks out:** nothing. The fixture layout and prompt shape can evolve;
+harness changes are additive; the W-series surface is unaffected.
 
 ## Status notes
 
-- 2026-05-12: Drafted as `Proposed`. Implementation lands as a
-  dedicated PR after ADR-0005 and ADR-0006 are implemented.
-  Initial fixture-authoring round will likely produce findings
-  that loop back into this ADR's status notes (which bugs were
-  too obvious, which prompts needed tightening).
-- 2026-05-14: Planning round surfaced a prerequisite the original
-  draft assumed but didn't acknowledge: TcKit has no documented
-  way to add a second `.plcproj` to an existing sln, save a PLC
-  project as a library, install it, or add a library reference.
-  Verified against Beckhoff infosys that `ITcSmTreeItem.CreateChild`,
-  `ITcPlcIECProject.SaveAsLibrary`, `ITcPlcLibraryManager.InstallLibrary`,
-  and `ITcPlcLibraryManager.AddLibrary` are all documented; the
-  Source-Only reference type the original draft specified is not.
-  Captured the prerequisite work in ADR-0009 and rewrote the
-  fixture-layout section here to use a compiled library reference
-  with an explicit save+install step before each build instead.
-  Equivalent build behaviour, fully documented API. Also corrected
-  the `--reset-cmd` example (was wrong for in-repo fixtures), added
-  the test-files tamper guard, fixed the MCP-namespaced tool name
-  for iteration counting, noted the longer cold-start timeout, and
-  clarified that the bridge is harness-side only (vanilla never
-  sees it).
-- 2026-05-14: Phase C0 (B1 pilot-fixture authoring) landed. The
-  Python authoring script drove the full ADR-0009 chain end-to-end
-  against a live 4026 install: `create_project` → `add_plc_project`
-  → `add_pou` (library) → `add_method` → `save_plc_as_library` →
-  `add_library_reference` → `add_pou` (consumer) → `build` on Tests.
-  The consumer build resolved the library reference against the
-  installed library and completed clean, validating both ADR-0009
-  spike-by-implementation defaults (`distributor="Tc3 Project"` and
-  the `TIPC^<plc>^<plc> Project^References` tree path). C0 caught
-  six bridge bugs total along the way, fixed in PRs #73 (Out-Null
-  on COM call outputs, Create-fallback after close) and #74 (Title
-  metadata round-trip in `save_plc_as_library`, File.SaveAll after
-  `AddLibrary` to persist the reference to .plcproj, retry/backoff
-  in `Get-TcSysManager` for the .Object null race, Create-first then
-  fall-back-and-retry pattern in `New-TcProject`). Generated tree
-  committed under `bench/fixtures/bug-hunting/B1-off-by-one/`.
-- 2026-05-14: Phase C0 redone after a deeper bug surfaced.
-  The original layout (one PLC-only `.tspproj`, two PLCs stacked
-  under one `<Plc>`) authored and built cleanly in memory but
-  segfaulted `TcXaeShell.exe` on every `Solution.Open` from disk
-  (`AccessViolationException` in `TwinCAT System Manager.x64.dll`
-  during `IVsParentProject.OpenChildren()`). Root cause was that
-  the PLC-only template doesn't persist the System Manager
-  `<Instance>` block for the second PLC; the on-disk `.tspproj`
-  ended up as a 4-line skeleton. The bench needs to load fixtures
-  from disk on every run, so this was a hard blocker. Fix
-  ([#81](https://github.com/georgeturneruk/tckit/pull/81)): one
-  full `.tsproj` per PLC, multiple TwinCAT projects per sln,
-  `File.SaveAll` after every structural write. Wrapping TwinCAT
-  project gets a `_Tc` suffix so its name doesn't collide with the
-  PLC's. Details in
-  [ADR-0009 status notes](0009-multi-plc-authoring-and-library-tools.md).
-  Two more PRs around the same change:
-  [#80](https://github.com/georgeturneruk/tckit/pull/80) hardens
-  the bridge (COM retries, lazy-load source trees, stale `.~u`
-  cleanup); [#82](https://github.com/georgeturneruk/tckit/pull/82)
-  inserts empty `VAR/END_VAR` into B3-B5 Step methods to work
-  around an `Add-TcMethod` parser gap
-  ([#84](https://github.com/georgeturneruk/tckit/issues/84)). All
-  six fixtures (B1-T1) re-authored on disk in the new layout and
-  build clean against a fresh XAE, verified at the end of the
-  session.
-- 2026-05-14: **What still needs doing for Phase C0:** the TcUnit
-  suite POUs (`FB_*Tests EXTENDS TcUnit.FB_TestSuite` plus a MAIN
-  that instantiates the suite and calls TcUnit's run macro) are
-  not authored yet. The fixture trees have `FB_<Subject>` (the
-  buggy code), `FB_<Subject>Consumer` (forces the library reference
-  to actually compile), `GVL_TcUnit` (the
-  `TcUnit_ResultExportXmlPath` constant), `MAIN` (template
-  placeholder), and the TcUnit placeholder reference. The MAIN
-  bodies need replacing with a suite instantiation + run, and a
-  suite FB needs adding per fixture. Once that lands, `/tcunit-run`
-  has something to exercise and the runtime smoke can produce the
-  expected `failures >= 1` on each buggy fixture.
-- 2026-05-14: Known harness issues found while doing this work,
-  filed for follow-up but not blocking Phase C0 completion:
-  - [#84](https://github.com/georgeturneruk/tckit/issues/84):
-    `Split-TcCode` silently treats a method body as declaration when
-    there's no `END_VAR`. Current workaround is empty `VAR/END_VAR`
-    in author scripts; proper fix is to detect a `METHOD`/`FUNCTION`
-    signature line and split there.
-  - [#85](https://github.com/georgeturneruk/tckit/issues/85):
-    Authoring chain intermittently flakes mid-run with
-    `DTE.Solution null` or `StubSyncLock`. Manual retry clears it;
-    bench/run.py for Phase C1 should be robust against it.
-- 2026-05-14: **B1 closed-loop smoke now passes end-to-end** on a
-  live TwinCAT 4026 install (UmRT_Default runtime, `TARGET_AMS_ID =
-  127.0.0.1.1.1`). `author_B1.py` authors
-  `FB_RollingAverageTests EXTENDS TcUnit.FB_TestSuite` with the
-  failing `AverageOfConstantStream` test plus a Tests-PLC `MAIN`
-  body that instantiates the suite and calls `TcUnit.RUN()`.
-  `_common.py` moves the TcUnit placeholder install into
-  `scaffold_fixture` so it lands before any user POU references the
-  namespace. The live smoke driver
-  `bench/fixtures/bug-hunting/_author/smoke_B1.py` chains
-  `save_plc_as_library` → `build` → `deploy` → `start_runtime` →
-  `run_tests` → patch via `update_pou_item_patch` → re-run and
-  asserts red → green by reading `MAIN.suite.Tests[1].TestIsFailed`
-  directly from PLC symbols. Getting there exposed five real bugs
-  that have all been fixed in the same change set:
-  - **Bridge symbol path.** `Invoke-TcUnitRun.ps1` was polling
-    `TcUnit.G_TestRunner.bTestSuitesFinished` and a matching counter
-    block (`G_TestRunner.nNumberOfTestCases` etc). None of those
-    symbols exist in any current TcUnit release. The runner FB lives
-    at `GVL_TcUnit.TcUnitRunner` and the finished flag is named
-    `AllTestSuitesFinished`; the ADS symbol tree does **not** prefix
-    library symbols with the placeholder name even though source code
-    references them as `TcUnit.GVL_TcUnit`. Symbol path corrected;
-    counters collapsed to the one TcUnit exposes globally
-    (`NumberOfInitializedTestSuites`). The test-runner adapter has
-    never actually completed a real `/tcunit-run` since ADR-0006
-    landed; only the `/results` XML parser worked, and the XML it
-    parsed was always written by something else.
-  - **PLC autostart on deploy.** `ActivateConfiguration()` puts the
-    TwinCAT system into Run mode and downloads the bootapp, but
-    leaves the PLC application *loaded but stopped* until a manual
-    Login + Start. A stopped PLC doesn't serve its symbol table on
-    port 851 (every read returns "Target doesn't provide symbolic
-    information"). `Invoke-TcDeploy.ps1` now calls
-    `BootProjectAutostart = $true` + `GenerateBootProject($true)` on
-    `TIPC^<plc>` before `ActivateConfiguration`, matching what the
-    IDE's "Autostart boot project" tick does in the activate dialog.
-    See [infosys: Accessing, creating and handling PLC projects](https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html).
-  - **Adapter `ProjectPath`.** `XaeComBuilder.deploy` and
-    `start_runtime` weren't sending `ProjectPath` in their payloads,
-    so the bridge's deploy handler returned `ProjectPath required.`
-    on every call. `TcUnitRunner.run_tests` always sent it via
-    `_with_target_and_plc`; the builder methods now do the same via
-    `os.getenv("PLC_PROJECT_PATH", "")`.
-  - **Adapter timeouts.** `deploy` and `start_runtime` were using the
-    default 60s HTTP timeout, but ActivateConfiguration + bootapp
-    regen on a cold target is firmly in build-class latency. Both
-    now use `build_timeout()` (default 600s, env-overridable).
-  - **xUnit XML publisher off by default.** TcUnit's
-    `GVL_Param_TcUnit.xUnitEnablePublish` defaults to `FALSE`, so
-    the publisher never writes an XML file. The bridge used to fail
-    `/tcunit-run` after suites finished if the XML wasn't fresh.
-    `/tcunit-run` now reports `xml_published = false` instead of
-    failing, and accepts a `ReadSymbols` parameter (newline-separated
-    instance paths) so callers can probe state directly from PLC
-    symbols. `TcUnitRunner.run_tests` grew a `probes=` keyword that
-    forwards through; `smoke_B1.py` uses it to read
-    `MAIN.suite.Tests[1].TestIsFailed` rather than relying on the
-    XML. (The parameter is named `ReadSymbols` rather than the
-    obvious `Probes` because the PowerShell 5.1 advanced-function
-    machinery garbled a splatted key literally named `Probes`.)
-- 2026-05-14: **Outstanding from this slice** (deliberately deferred,
-  tracked but not in this PR): B2-T1 suite + MAIN authoring (one per
-  fixture); the bench-harness changes from this ADR's "Bench harness
-  changes" section (`--task-folder`, save-as-library pre-build hook,
-  post-session validation step, tamper guard, `aggregate.py`
-  PASS RATE + ITERATIONS columns); enabling the xUnit XML publisher
-  via library-parameter overrides so `/results` can serve full per-
-  test summaries instead of just the probed booleans.
-- 2026-05-15: xUnit publisher enablement landed (ADR-0010 §A.2 +
-  §C.2): `_common.py:scaffold_fixture` now passes
-  `parameters={"xUnitEnablePublish": "TRUE"}` to
-  `add_library_placeholder` for TcUnit, so the publisher actually
-  writes per-test XML to its default path. The fictional
-  `TcUnit_ResultExportXmlPath` GVL convention has been retired
-  across template / fixtures / docs / harness; six committed
-  `GVL_TcUnit.TcGVL` files removed. Existing fixture trees may need
-  a re-author on the bench machine before the next bench run to
-  pick up the `<ParameterValues>` block on the TcUnit
-  `<PlaceholderReference>`. B2-T1 suite + MAIN authoring and the
-  harness changes remain on the deferred list.
-- 2026-05-15: First-pass implementation of the `parameters=` kwarg
-  shipped above had two silent-drop bugs, both caught while smoke-
-  testing B1 end-to-end. Wave one round-tripped the placeholder tree
-  item's XML through `ProduceXml(false)` → splice → `ConsumeXml`;
-  the in-memory tree-item schema for placeholder parameters is
-  undocumented and `ConsumeXml` accepted the input without applying
-  it. Wave two bypassed `ConsumeXml` and edited the consumer
-  `.plcproj` directly, but used a schema
-  (`<ParameterValues>/<Parameter Name=>`) that doesn't match what
-  XAE itself writes — the build accepted the file but the runtime
-  ignored the override, so the publisher stayed off. The actual
-  on-disk schema, reverse-engineered from the IDE's own output, is:
-
-  ```xml
-  <Parameters>
-    <Parameter ListName="GVL_PARAM_TCUNIT" xmlns="">
-      <Key>XUNITENABLEPUBLISH</Key>
-      <Value>TRUE</Value>
-    </Parameter>
-  </Parameters>
-  ```
-
-  `<Parameters>` (plural) sits in the MSBuild namespace; each
-  `<Parameter>` child resets to the empty namespace via `xmlns=""`;
-  `ListName` carries the host parameter-list GVL name UPPERCASED;
-  `<Key>` uppercased, `<Value>` verbatim; one `<Parameter>` per
-  (ListName, Key) pair. `Set-TcPlcProjPlaceholderParameters` now
-  writes exactly that shape directly to `.plcproj`. Order remains
-  `AddPlaceholder` → `Save-TcSolution` (flush the basic block) →
-  close → splice on disk → reopen, so the in-memory model picks
-  the change up before the next `File.SaveAll` can regenerate from
-  a stale tree. The Python `add_library_placeholder` signature
-  grew with it from `parameters: dict[str, str]` to
-  `dict[str, dict[str, str]]` so callers group keys under their
-  host parameter-list GVL — e.g.
-  `{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}`. Two
-  helpers in `_TcDte.psm1` (`Set-TcPlcProjPlaceholderParameters`
-  and `Find-TcPlcProjFile`) plus a Pester suite at
-  `bridge/tests/Add-TcLibraryPlaceholder.Tests.ps1` pin the file
-  splice so this can't silently regress again. Validated against
-  B1 end-to-end (red→patch→green plus fresh xUnit XML at
-  `%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml`). Same change set
-  adds the `TCKIT_TCUNIT_XML_PATH` env var (documented in
-  `.env.example`) and routes `Get-TcUnitDefaultXmlPath` through it;
-  the previous hard-coded kernel-RT default is wrong on UmRT bench
-  setups, where `%TC_BOOTPRJPATH%` expands to a different root.
-  Fixture re-author on the bench machine is still required to pick
-  the new `<Parameters>` block up; the committed `.plcproj` files
-  authored by the broken first/second passes don't yet contain it.
+- 2026-05-12: Drafted as `Proposed`. Implementation lands as a dedicated
+  PR after ADR-0005 and ADR-0006 are implemented.
+- 2026-05-14: Planning round surfaced ADR-0009 as a prerequisite (TcKit
+  had no documented way to add a second `.plcproj`, save as library,
+  install, or add a library reference). Fixture layout rewritten to use
+  a compiled-library + explicit save+install step. Reset semantics,
+  tamper guard, namespaced tool name, and cold-start timeout corrected
+  in the same pass. Clarified that the bridge is harness-side only
+  (vanilla never sees it).
+- 2026-05-14: Phase C0 (B1 pilot-fixture authoring) landed in PRs #71-#74
+  and was reworked in #80-#82 after a layout bug surfaced. The full
+  multi-tsproj layout reversal is in ADR-0009's status notes.
+  - **Lesson:** A PLC-only `.tspproj` template doesn't persist the
+    System Manager `<Instance>` block for additional PLCs. The on-disk
+    file ends up as a 4-line skeleton; in-memory looks fine, but XAE
+    segfaults on `Solution.Open` (`AccessViolationException` in
+    `TwinCAT System Manager.x64.dll`). Use one full `.tsproj` per PLC,
+    multiple TwinCAT projects per sln.
+  - **Lesson:** `Add-TcMethod` silently treats a method body as part of
+    the declaration when there's no `END_VAR`. Tracked in
+    [#84](https://github.com/georgeturneruk/tckit/issues/84); workaround
+    is empty `VAR/END_VAR` in author scripts. Proper fix is to detect
+    a `METHOD`/`FUNCTION` signature line and split there.
+- 2026-05-14: B1 closed-loop smoke green end-to-end on a live 4026
+  install (UmRT_Default, `TARGET_AMS_ID = 127.0.0.1.1.1`). Five real
+  bridge bugs fixed in the same change set.
+  - **Lesson:** TcUnit's runner lives at `GVL_TcUnit.TcUnitRunner` (not
+    `TcUnit.GVL_TcUnit.TcUnitRunner`); the ADS symbol tree drops the
+    placeholder prefix even though source references include it. The
+    finished flag is `AllTestSuitesFinished` and the global counter
+    TcUnit exposes is `NumberOfInitializedTestSuites`.
+  - **Lesson:** `ActivateConfiguration()` leaves the PLC
+    loaded-but-stopped until manual Login + Start; a stopped PLC serves
+    no symbols on 851 (every read returns "Target doesn't provide
+    symbolic information"). Need `BootProjectAutostart = $true` +
+    `GenerateBootProject($true)` on `TIPC^<plc>` before activate,
+    matching the IDE's "Autostart boot project" tick. `Invoke-TcDeploy.ps1`
+    now does this unconditionally.
+  - **Lesson:** Deploy + start_runtime are build-class latencies on a
+    cold target (ActivateConfiguration + bootapp regen can hit 90-300s).
+    Use `build_timeout()` (~600s default), not the 60s HTTP default.
+  - **Lesson:** Adapter methods that talk to the bridge must send
+    `ProjectPath` in their payload. The bridge's deploy/start_runtime
+    handlers reject empty `ProjectPath` with a clear error;
+    `XaeComBuilder.deploy` and `start_runtime` originally skipped it.
+    Use `_with_target_and_plc` consistently.
+  - **Lesson:** PowerShell 5.1's advanced-function machinery silently
+    garbles a splatted parameter literally named `Probes`. Renamed to
+    `ReadSymbols`; root cause undiagnosed (tracked under ADR-0010
+    section B.3). When adding a new bridge route param, avoid one-word
+    names that collide with PS built-in vocabulary.
+- 2026-05-15: xUnit publisher enabled via library parameters; full
+  schema retelling is in ADR-0010 section A.2.
