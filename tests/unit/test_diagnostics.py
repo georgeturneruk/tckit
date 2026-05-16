@@ -10,6 +10,7 @@ from tckit.utils.bridge_client import BridgeClient
 from tckit.utils.diagnostics import (
     bridge_dependencies,
     bridge_health,
+    config_file_status,
     install_bridge_dependency,
     is_valid_ams_netid,
     validate_config,
@@ -105,6 +106,49 @@ def test_validate_config_skips_unset_optional_keys(
         monkeypatch.delenv(var, raising=False)
     cfg = TcKitConfig({})
     assert validate_config(cfg) == []
+
+
+# ---------------------------------------------------------------------------
+# config_file_status — surfaces missing-config / unset-target for the doctor
+# ---------------------------------------------------------------------------
+
+
+def test_config_file_status_reports_missing(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.delenv("TARGET_AMS_ID", raising=False)
+    cfg = TcKitConfig({})
+    file_exists, target_set = config_file_status(cfg)
+    assert file_exists is False
+    assert target_set is False
+
+
+def test_config_file_status_reports_present_with_target(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.delenv("TARGET_AMS_ID", raising=False)
+    (tmp_path / "config.toml").touch()
+    cfg = TcKitConfig({"TARGET_AMS_ID": "192.168.1.5.1.1"})
+    file_exists, target_set = config_file_status(cfg)
+    assert file_exists is True
+    assert target_set is True
+
+
+def test_config_file_status_target_set_via_env(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Env var alone counts as 'target set' even with no file."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.setenv("TARGET_AMS_ID", "192.168.1.5.1.1")
+    cfg = TcKitConfig({})
+    file_exists, target_set = config_file_status(cfg)
+    assert file_exists is False
+    assert target_set is True
 
 
 # ---------------------------------------------------------------------------

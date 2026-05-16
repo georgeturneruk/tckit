@@ -76,7 +76,9 @@ Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host
 
 The bundled `tc-config` skill walks you through setup. The MCP server runs as `uvx tckit`.
 
-**Docker (opt-in).** For isolation or remote-server installs, see [tckit.org/getting-started/docker-setup/](https://tckit.org/getting-started/docker-setup/).
+**pip.** If you'd rather manage the MCP server yourself: `pip install tckit`, then `tckit init` to scaffold `~/.tckit/config.toml`, then `claude mcp add tckit -- tckit`.
+
+**Docker.** CI / containerised dev only. See [tckit.org/getting-started/docker-setup/](https://tckit.org/getting-started/docker-setup/) for the caveats.
 
 **Bridge.** For write/build/deploy/test, run the bridge in a separate PowerShell window with TcXaeShell open:
 

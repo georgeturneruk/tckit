@@ -111,9 +111,10 @@ function Get-TcUnitDefaultXmlPath {
             (no Plc\Port_<port>\ subdirectory)
 
         Env var override: TCKIT_TCUNIT_XML_PATH points at the absolute
-        file path on this machine. Set in .env (see .env.example) — the
-        kernel-runtime default below is wrong on a UmRT bench, so the
-        operator must declare the path explicitly per machine.
+        file path on this machine. Set as a real env var (or in a local
+        .env) — the kernel-runtime default below is wrong on a UmRT
+        bench, so the operator must declare the path explicitly per
+        machine.
 
         Callers that also override xUnitFilePath via library parameters
         must pass the resolved path to /tcunit-run / /results

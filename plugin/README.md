@@ -40,21 +40,7 @@ Five skills that load on demand based on what you ask:
 
 Plus the underlying MCP server exposing 20 tools (project reader, writer, builder, test runner, doc generator, Beckhoff infosys searcher).
 
-## Docker mode (opt-in)
-
-If you prefer to run TcKit in a container instead of via `uvx`:
-
-```bash
-git clone https://github.com/georgeturneruk/tckit
-cd tckit
-# In Claude Code:
-/tc-config init
-# Pick "docker" mode, fill in prompts.
-docker compose -f docker/docker-compose.yml up -d
-claude mcp add --transport sse tckit http://localhost:8000/sse
-```
-
-You can install this plugin separately just for the skills. The plugin's bundled MCP registration is stdio-only; Docker users register the SSE endpoint manually.
+The plugin is stdio-only. Docker mode exists for CI / contributor workflows and isn't a user install path; see the [docker-setup docs](https://tckit.org/getting-started/docker-setup/) if you need it.
 
 ## Documentation
 

@@ -74,12 +74,16 @@ rule, source-of-truth split) lives in the [tc-adr skill](.claude/skills/tc-adr/S
 
 ## Config and secrets
 
-- `config.json`: committed, no secrets, adapter names and non-sensitive settings.
-- `.env`: gitignored, machine-specific values (paths, IPs, AMS IDs).
-- `.env.example`: committed template.
+- `~/.tckit/config.toml`: user-global, machine-specific values (AMS IDs, paths,
+  safety stance). Scaffold via `tckit init`.
+- `tckit/templates/config.toml.example`: committed template, shipped as package
+  data and printable via `tckit init --print`.
+- `config.json` (project-local, optional): adapter-name overrides only. Never
+  put secrets, AMS IDs, or file paths here.
+- `docker/.env`: Docker-mode env vars; gitignored. `docker/.env.example` is the
+  committed template.
 
-Never put secrets, AMS IDs, or file paths in `config.json`. Never commit any
-`.env` file.
+Never commit a `.env` file or any file containing AMS IDs or absolute paths.
 
 ---
 

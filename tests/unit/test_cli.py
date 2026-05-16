@@ -208,9 +208,19 @@ def _stub_doctor_deps(monkeypatch: pytest.MonkeyPatch, deps: dict) -> None:
     )
 
 
+def _stub_config_file_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend the user has a config file and TARGET_AMS_ID set, so the
+    Config-file section in _doctor passes and the test can focus on the
+    section it actually exercises."""
+    monkeypatch.setattr(
+        "tckit.cli.config_file_status", lambda cfg: (True, True)
+    )
+
+
 def test_doctor_returns_zero_when_all_checks_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
@@ -228,6 +238,7 @@ def test_doctor_returns_zero_when_all_checks_pass(
 def test_doctor_returns_one_when_bridge_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health",
@@ -248,6 +259,7 @@ def test_doctor_returns_one_when_bridge_down(
 def test_doctor_returns_one_when_config_invalid(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr(
         "tckit.cli.validate_config",
         lambda cfg: ["TARGET_AMS_ID is malformed"],
@@ -268,6 +280,7 @@ def test_doctor_returns_one_when_config_invalid(
 def test_doctor_no_install_reports_missing_dep_and_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
@@ -287,6 +300,7 @@ def test_doctor_no_install_reports_missing_dep_and_fails(
 def test_doctor_prompts_and_installs_missing_dep(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
@@ -312,6 +326,7 @@ def test_doctor_prompts_and_installs_missing_dep(
 def test_doctor_skips_install_when_user_declines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _stub_config_file_present(monkeypatch)
     monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
     monkeypatch.setattr(
         "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
@@ -329,3 +344,155 @@ def test_doctor_skips_install_when_user_declines(
         rc = cli._doctor(no_install=False)
     assert "Skipped TcXaeMgmt" in buf.getvalue()
     assert rc == 1
+
+
+def test_doctor_fails_loud_when_config_file_missing(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First-touch new user case: no ~/.tckit/config.toml, no env var."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("TARGET_AMS_ID", raising=False)
+
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": "6.2.127"})
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    output = buf.getvalue()
+    assert rc == 1
+    assert "no config file" in output
+    assert "tckit init" in output
+
+
+def test_doctor_warns_but_passes_when_file_present_but_target_unset(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read-only user: file exists but TARGET_AMS_ID is empty — should warn, not fail."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("TARGET_AMS_ID", raising=False)
+    (tmp_path / "config.toml").write_text('XAE_MODE = "attach"\n')
+
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": "6.2.127"})
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    output = buf.getvalue()
+    assert rc == 0
+    assert "TARGET_AMS_ID is unset" in output
+
+
+# ---------------------------------------------------------------------------
+# _init — scaffold ~/.tckit/config.toml
+# ---------------------------------------------------------------------------
+
+
+def test_init_writes_template_when_file_absent(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init()
+    assert rc == 0
+
+    target = tmp_path / "config.toml"
+    assert target.exists()
+    assert "TARGET_AMS_ID" in target.read_text(encoding="utf-8")
+    assert str(target) in buf.getvalue()
+
+
+def test_init_refuses_to_overwrite_without_force(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    target = tmp_path / "config.toml"
+    target.write_text("# don't touch me\n", encoding="utf-8")
+
+    rc = cli._init()
+    assert rc == 1
+    assert target.read_text(encoding="utf-8") == "# don't touch me\n"
+    err = capsys.readouterr().err
+    assert "already exists" in err
+    assert "--force" in err
+
+
+def test_init_force_overwrites_existing(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    target = tmp_path / "config.toml"
+    target.write_text("# stale\n", encoding="utf-8")
+
+    rc = cli._init(force=True)
+    assert rc == 0
+    assert "TARGET_AMS_ID" in target.read_text(encoding="utf-8")
+
+
+def test_init_print_emits_template_without_touching_disk(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init(print_only=True)
+    assert rc == 0
+    assert "TARGET_AMS_ID" in buf.getvalue()
+    assert not (tmp_path / "config.toml").exists()
+
+
+def test_init_print_matches_template_on_disk() -> None:
+    """`tckit init --print` and the bundled template must be byte-for-byte equal
+    (single source of truth for the skill that reads the printed output)."""
+    from importlib import resources
+
+    template = (
+        resources.files("tckit.templates")
+        .joinpath("config.toml.example")
+        .read_text(encoding="utf-8")
+    )
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        cli._init(print_only=True)
+    printed = buf.getvalue()
+    # _init guarantees a trailing newline; the template already ends with one,
+    # so the printed output should equal the file content exactly.
+    assert printed == template if template.endswith("\n") else printed == template + "\n"
+
+
+def test_init_recognised_by_parser() -> None:
+    args = cli._build_parser().parse_args(["init"])
+    assert args.command == "init"
+    assert args.force is False
+    assert args.print_only is False
+
+
+def test_init_parser_force_flag() -> None:
+    args = cli._build_parser().parse_args(["init", "--force"])
+    assert args.force is True
+
+
+def test_init_parser_print_flag() -> None:
+    args = cli._build_parser().parse_args(["init", "--print"])
+    assert args.print_only is True

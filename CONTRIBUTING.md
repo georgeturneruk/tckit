@@ -6,9 +6,9 @@ Adapters live under `tckit/adapters/<port_kind>/`. The one hard rule: adapters i
 
 **File naming.** Match the last word (singular) of the adapter folder. So files under `readers/` end in `_reader`, files under `writers/` end in `_writer`, files under `test_runners/` end in `_runner`, `doc_generators/` ends in `_generator`, `docs_searchers/` ends in `_searcher`, `builders/` ends in `_builder`. Examples: `xml_reader.py`, `xae_com_builder.py`, `tcunit_runner.py`, `beckhoff_infosys_searcher.py`. The class name is the PascalCase form (`XmlReader`, `BeckhoffInfosysSearcher`).
 
-**Registry key.** The short string that goes in `config.json` is the tool name only, no port suffix. This is the user-facing config name; keep it terse. Pattern: `key = "<tool>"` maps to `class = <Tool><PortSuffix>`. Examples:
+**Registry key.** The short string a user can put in `~/.tckit/config.toml` (or a project-local `config.json`) is the tool name only, no port suffix. Keep it terse. Pattern: `key = "<tool>"` maps to `class = <Tool><PortSuffix>`. Examples:
 
-| Registry key (in `config.json`) | Class |
+| Registry key | Class |
 |---|---|
 | `"xml"` | `XmlReader` |
 | `"automation_interface"` | `AutomationWriter` |
@@ -47,14 +47,9 @@ The docs page filename also follows a pattern: kebab-case `{tool}-{port_suffix}.
    _READER_REGISTRY["my_format"] = MyFormatReader
    ```
 
-5. **Add** the config key to `config.example.json`:
-   ```json
-   { "reader": "my_format" }
-   ```
+5. **Write** unit tests in `tests/unit/`.
 
-6. **Write** unit tests in `tests/unit/`.
-
-7. **Document** in `docs/content/capabilities/<port>/<adapter>.md` and add it to `docs/mkdocs.yml`.
+6. **Document** in `docs/content/capabilities/<port>/<adapter>.md` and add it to `docs/mkdocs.yml`. If the adapter changes a default that users would set, mention the key in `tckit/templates/config.toml.example`.
 
 ## Adding a new port
 
