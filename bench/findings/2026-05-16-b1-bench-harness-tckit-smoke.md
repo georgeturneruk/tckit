@@ -32,6 +32,32 @@ directional only.**
    wedge `DTE.Solution` for the rest of the session. The bench
    closes the solution around `claude -p` and re-opens before the
    post-run cycle's save-as-library / build / deploy / test steps.
+   The same `/close` + `/open` dance now also wraps `--reset-cmd`
+   so the per-iteration git checkout doesn't trip the same wedge.
+5. **`--isolate-cwd` flag**. Claude Code walks from cwd up the
+   filesystem tree to discover `.claude/skills/` and `CLAUDE.md`
+   files. The bench's fixture lives at
+   `bench/fixtures/bug-hunting/B1-off-by-one/` inside this repo, so
+   the walk used to find `C:/tckit/.claude/skills/` (eight TcKit
+   skills, including `tc-write-st` which prescribes TcKit's writer
+   tools) and `C:/tckit/CLAUDE.md` (TcKit project conventions).
+   Both arms inherited that context. `--isolate-cwd` copies the
+   fixture to a fresh temp directory outside the repo, pins cwd
+   there, runs the model session, then syncs edits back to the
+   real fixture before the validation cycle. Walking up from the
+   temp dir hits filesystem root with nothing to find. Avoids
+   Claude Code's `--bare` flag, which would also work but disables
+   OAuth and forces `ANTHROPIC_API_KEY` auth.
+6. **`TASK.md` tooling prescription dropped on B1-B5/T1.** The old
+   prompt said "Do not edit `.plcproj` or `.TcPOU` XML directly.
+   Use the TwinCAT automation interface (e.g. TcKit's
+   `update_method_body` / `update_method_body_patch`) for any
+   change." That's a tool-specific prescription that contradicts
+   vanilla's capabilities (its only edit primitive IS the raw XML
+   path) and shouldn't need stating for tckit (its skill routes
+   there anyway). The constraint was the prompt prescribing
+   *tooling*, not *task*; the harness imbalance (skills present /
+   absent, MCP present / absent) is the differentiator now.
 
 ## Setup
 
@@ -54,16 +80,28 @@ read FALSE after the model's edits, the harness rebuilt + redeployed +
 re-ran tests cleanly, and the produced diff was byte-identical between
 arms on the bug fix itself.
 
-| Task | Config | Calls | Tokens | Wall (s) | Test | Build |
-| --- | --- | --- | --- | --- | --- | --- |
-| B1-off-by-one | empty | **9** | **2,815** | **51.6** | PASSED | green |
-| B1-off-by-one | tckit | **17** | **3,461** | **79.2** | PASSED | green |
+The first round of pair runs had vanilla contaminated by Claude Code's
+ancestor walk into this repo's `.claude/skills/` and `CLAUDE.md`
+(visible as `Skill×1 + ToolSearch×2` in the vanilla tool breakdown,
+the model invoking `tc-write-st` and searching for TcKit tools it
+didn't have). The second round added the `--isolate-cwd` flag on
+the vanilla arm so the model session runs from a temp directory
+outside the repo; the upward walk hits the filesystem root with no
+`.claude/` or `CLAUDE.md` to find. Numbers below are the second
+round; the first round's vanilla (9 / 2,815 / 51.6s) was within
+run-to-run variance of these, so the direction is the same either
+way.
+
+| Task | Config | Isolation | Calls | Tokens | Wall (s) | Test | Build |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B1-off-by-one | empty | `--isolate-cwd` | **10** | **2,557** | **52.5** | PASSED | green |
+| B1-off-by-one | tckit | full TcKit context | **16** | **3,194** | **87.5** | PASSED | green |
 
 Pairwise ratios (vanilla / tckit; >1 means TcKit more efficient):
 
 | Task | Tokens | Wall | Tool calls |
 | --- | --- | --- | --- |
-| B1-off-by-one | 0.81× | 0.65× | 0.53× |
+| B1-off-by-one | 0.80× | 0.60× | 0.625× |
 
 **Vanilla won on every metric.** That is the expected shape for a
 one-line ST edit on a comment-tracked region, where vanilla's `Edit`
@@ -78,18 +116,21 @@ paying overhead.
 
 ### Tool breakdown
 
-**Vanilla (9 calls):** `Edit×1, Glob×3, Read×2, Skill×1, ToolSearch×2`.
-One Edit landed the fix. The bulk of the budget went to orientation
-(Glob×3 to find files, Read×2 to read the FB and task) and tool
-discovery (ToolSearch×2). Skill was the tc-write-st rules surface.
+**Vanilla (10 calls, isolated):** `Bash×7, Edit×1, Read×2`. One
+Edit landed the fix; the bulk of the budget went to bash-driven
+orientation (grep / find / ls under the temp fixture). Notably no
+`Skill` and no `ToolSearch` calls — the isolation worked, the
+model didn't try to invoke TcKit skills it doesn't have access to.
 
-**TcKit (17 calls):** `Bash×3, Glob×2, Read×2, Skill×1,
-mcp__tckit__get_pou_interface×1, mcp__tckit__get_structure×3,
-mcp__tckit__open_project×2, mcp__tckit__update_method_body×3`.
-Three `update_method_body` calls (some iteration before landing
-the fix), three `get_structure` for orientation, an `open_project`
-pair, and a `get_pou_interface` read. The MCP path is "richer" but
-also wider for a task this small.
+**TcKit (16 calls, full context):** `Bash×5, Glob×1, Read×2,
+Skill×1, ToolSearch×1, mcp__tckit__get_pou_item×1,
+mcp__tckit__get_structure×3, mcp__tckit__open_project×1,
+mcp__tckit__update_method_body_patch×1`. A single
+`update_method_body_patch` (anchored swap) landed the fix —
+cleaner shape than the writer thesis expects, but the orientation
+spend (get_structure×3, open_project, Bash×5) eats the
+single-call win. The MCP path is "richer" but also wider for a
+task this small.
 
 ### Model's final answer
 
@@ -279,10 +320,12 @@ local-only).
 
 ## Interpretation, in one line
 
-**B1's closed-loop bench harness ships, both arms went green
+**B1's closed-loop bench harness ships with proper isolation
+(`--isolate-cwd` for vanilla, `--close-during-run` for the XAE
+external-mod wedge, `/close` bridge route), both arms went green
 end-to-end on N=1, and the writer thesis isn't visible on this
 particular task — vanilla edited the `.TcPOU` XML directly in one
-`Edit` call and beat TcKit on every metric (0.81× tokens, 0.65×
-wall, 0.53× calls), exactly as the W1 round predicted: the writer
+`Edit` call and beat TcKit on every metric (0.80× tokens, 0.60×
+wall, 0.625× calls), exactly as the W1 round predicted: the writer
 thesis lives in tasks where vanilla has to fabricate identifiers,
 not single-line replacements.**
