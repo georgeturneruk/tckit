@@ -4,10 +4,10 @@ Unlike B1-B5, T1 is a TDD task: `FB_SchmittTrigger.Step` is fully
 declared (signature, VAR_INPUT, VAR_OUTPUT, hysteresis state) but
 its method body is empty (just `;`). The accompanying TcUnit test
 suite asserts five behaviours covering the Schmitt-trigger hysteresis
-band — no hardcoded return value can satisfy all five, so the model
+band; no hardcoded return value can satisfy all five, so the model
 must implement the logic.
 
-See ADR-0007 §"Task set (initial six)" §T1 and `_common.py` for the
+See ADR-0007 task T1 (under "Task set (initial six)") and `_common.py` for the
 shared scaffolding.
 """
 

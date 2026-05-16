@@ -1,6 +1,6 @@
 # B2 sign / type fixture
 
-ADR-0007 §"B2 sign / type". Sibling of B1 — same authoring chain,
+ADR-0007 task B2 sign / type. Sibling of B1; same authoring chain,
 different bug category.
 
 ## Layout

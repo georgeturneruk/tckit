@@ -1,6 +1,6 @@
 # B5 default-init fixture
 
-ADR-0007 §"B5 wrong default initialisation". Same authoring chain as
+ADR-0007 task B5 wrong default initialisation. Same authoring chain as
 B1-B4, different bug category.
 
 ## What the seeded bug is

@@ -1,6 +1,6 @@
 # B4 bError-propagation fixture
 
-ADR-0007 §"B4 missing bError propagation". Same authoring chain as
+ADR-0007 task B4 missing bError propagation. Same authoring chain as
 B1-B3, different bug category.
 
 ## What the seeded bug is

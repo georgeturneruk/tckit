@@ -8,7 +8,7 @@ only the bugged FB content and the consumer FB differ. This module
 owns the boilerplate; each author script owns the FB authoring
 calls.
 
-See ADR-0007 §"Fixture layout" and `author_B1.py` for the reference
+See ADR-0007 section "Fixture layout" and `author_B1.py` for the reference
 shape.
 """
 

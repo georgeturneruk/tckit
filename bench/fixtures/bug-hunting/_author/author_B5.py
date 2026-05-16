@@ -4,7 +4,7 @@
 should be ``1.0`` (multiplicative identity). The first ``Step``
 call returns zero regardless of the error input.
 
-See ADR-0007 §"Task set (initial six)" §B5 and `_common.py` for the
+See ADR-0007 task B5 (under "Task set (initial six)") and `_common.py` for the
 shared scaffolding.
 """
 

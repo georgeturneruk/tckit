@@ -4,7 +4,7 @@
 out of ``Green`` accidentally jumps to ``Red`` instead of ``Amber``,
 breaking the standard Red -> RedAmber -> Green -> Amber -> Red cycle.
 
-See ADR-0007 §"Task set (initial six)" §B3 and `_common.py` for the
+See ADR-0007 task B3 (under "Task set (initial six)") and `_common.py` for the
 shared scaffolding.
 """
 

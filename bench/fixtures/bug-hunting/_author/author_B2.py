@@ -4,7 +4,7 @@
 result where it should return signed. When ``b > a`` the subtraction
 underflows to ~4 billion instead of yielding a negative value.
 
-See ADR-0007 §"Task set (initial six)" §B2 and `_common.py` for the
+See ADR-0007 task B2 (under "Task set (initial six)") and `_common.py` for the
 shared scaffolding.
 """
 
