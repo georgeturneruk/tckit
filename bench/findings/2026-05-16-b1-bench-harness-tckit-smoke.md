@@ -94,29 +94,47 @@ way.
 
 | Task | Config | Isolation | Calls | Tokens | Wall (s) | Test | Build |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| B1-off-by-one | empty | `--isolate-cwd` (hardened) | **7** | **2,088** | **40.6** | PASSED | green |
-| B1-off-by-one | tckit | full TcKit context | **16** | **3,194** | **87.5** | PASSED | green |
+| B1-off-by-one | empty | hardened `--isolate-cwd` | **7** | **2,088** | **40.6** | PASSED | green |
+| B1-off-by-one | tckit | hardened `--isolate-cwd` + `--inject-skills plugin/skills` | **9** | **2,344** | **51.2** | PASSED | green |
 
-Pairwise ratios (vanilla / tckit; >1 means TcKit more efficient):
+Pairwise ratios (vanilla / tckit; <1 means vanilla more efficient):
 
 | Task | Tokens | Wall | Tool calls |
 | --- | --- | --- | --- |
-| B1-off-by-one | 0.65× | 0.46× | 0.44× |
+| B1-off-by-one | 0.89× | 0.79× | 0.78× |
 
-Three rounds of vanilla for reference, showing how the contamination
-trimmed off as isolation tightened:
+Three rounds per arm, showing how contamination came off as
+isolation tightened:
+
+**Vanilla progression:**
 
 | Round | Isolation | Calls | Tokens | Wall (s) |
 | --- | --- | --- | --- | --- |
 | Initial | none (project skills + CLAUDE.md leaked) | 9 | 2,815 | 51.6 |
 | Mid | `--isolate-cwd` (still copies fixture CLAUDE.md) | 10 | 2,557 | 52.5 |
-| Hardened | `--isolate-cwd` excludes CLAUDE.md/.claude/.mcp.json | 7 | 2,088 | 40.6 |
+| Hardened | `--isolate-cwd` excludes CLAUDE.md / `.claude` / `.mcp.json` | 7 | 2,088 | 40.6 |
 
-The fixture's local `CLAUDE.md` was meaningfully nudging the model
-toward extra exploration ("If a TwinCAT automation interface (such
-as TcKit) is available, use it for any structural change..."). Once
-that's out of the cwd, the model converges directly to grep + read
-+ edit.
+**TcKit progression:**
+
+| Round | Isolation | Calls | Tokens | Wall (s) |
+| --- | --- | --- | --- | --- |
+| Initial | none (dev `.claude/skills/` + dev CLAUDE.md loaded) | 16 | 3,194 | 87.5 |
+| Symmetric | hardened isolation + `--inject-skills plugin/skills` | 9 | 2,344 | 51.2 |
+
+The TcKit dev contamination was costing roughly 40% on every
+metric: 16 → 9 calls (-44%), 3,194 → 2,344 tokens (-27%),
+87.5s → 51.2s wall (-41%). The dev surface this repo ships at
+`.claude/skills/` includes `tc-adr` and `tc-docs-write` (dev-only
+meta-skills) plus a `CLAUDE.md` full of contributor architecture
+rules; none of that is in the shippable plugin, and inheriting
+it was making the model exploration significantly noisier.
+
+The fixture's local `CLAUDE.md` was also nudging vanilla toward
+extra exploration ("If a TwinCAT automation interface (such as
+TcKit) is available, use it for any structural change..."). Once
+that's out of the cwd, vanilla converges directly to grep + read
++ edit. Same fix applies to tckit, then the plugin skills cover
+the project-conventions guidance that file used to provide.
 
 **Vanilla won on every metric.** That is the expected shape for a
 one-line ST edit on a comment-tracked region, where vanilla's `Edit`
@@ -140,15 +158,18 @@ CLAUDE.md (which previously contained "If a TwinCAT automation
 interface (such as TcKit) is available, use it...") so the model
 had no nudge to look for TcKit tools at all.
 
-**TcKit (16 calls, full context):** `Bash×5, Glob×1, Read×2,
-Skill×1, ToolSearch×1, mcp__tckit__get_pou_item×1,
-mcp__tckit__get_structure×3, mcp__tckit__open_project×1,
+**TcKit (9 calls, symmetric isolation):** `Bash×1, Skill×1,
+ToolSearch×1, mcp__tckit__get_pou_interface×2,
+mcp__tckit__get_pou_item×2, mcp__tckit__get_structure×1,
 mcp__tckit__update_method_body_patch×1`. A single
-`update_method_body_patch` (anchored swap) landed the fix —
-cleaner shape than the writer thesis expects, but the orientation
-spend (get_structure×3, open_project, Bash×5) eats the
-single-call win. The MCP path is "richer" but also wider for a
-task this small.
+`update_method_body_patch` lands the fix. Orientation is a
+`get_structure` plus two `get_pou_interface` and two
+`get_pou_item` reads — using the MCP reader surface rather than
+bash/grep because the tc-write-st skill routes there. `Skill×1`
+loads the user-facing tc-write-st skill (from the injected
+`plugin/skills/`); `ToolSearch×1` resolves the MCP tool surface.
+Notably no `open_project`, no defensive `build` — much leaner
+than the contaminated round.
 
 ### Model's final answer
 
@@ -338,38 +359,34 @@ local-only).
 
 ## Interpretation, in one line
 
-**B1's closed-loop bench harness ships with hardened isolation
-(`--isolate-cwd` copies the fixture to a tmp dir minus CLAUDE.md /
-`.claude` / `.mcp.json` / XAE build artefacts; `--close-during-run`
-+ `/close` bridge route handle XAE's external-mod guard), both
-arms went green end-to-end on N=1, and the writer thesis isn't
-visible on this particular task — vanilla edited the `.TcPOU` XML
-directly in one `Edit` call and beat TcKit on every metric (0.65×
-tokens, 0.46× wall, 0.44× calls), exactly as the W1 round
-predicted: the writer thesis lives in tasks where vanilla has to
-fabricate identifiers, not single-line replacements.**
+**Under symmetric hardened isolation (`--isolate-cwd` on both
+arms, `--inject-skills plugin/skills` only on tckit so it sees
+the 6 user-facing skills a plugin install actually ships, plus
+`--close-during-run` + `/close` bridge route for XAE's
+external-mod guard), both arms went green end-to-end on N=1 and
+vanilla edged tckit by a modest margin on a one-line ST edit
+(0.89× tokens, 0.79× wall, 0.78× calls) — exactly as the W1
+round predicted: the writer thesis lives in tasks where vanilla
+has to fabricate identifiers, not in single-line text
+replacements where vanilla's `Edit` on `.TcPOU` XML is direct
+and TcKit's MCP layer is the one paying overhead.**
 
-## Asymmetry worth flagging on the tckit side
+## What the tckit arm DOES NOT see, under symmetric isolation
 
-The vanilla arm is now cleanly isolated, but the **tckit arm still
-loads the *dev*-side surface of this repo**, not just the
-user-facing plugin:
+- `tc-adr` and `tc-docs-write` skills from this repo's
+  `.claude/skills/` — dev-only meta-skills with narrow triggers
+  that wouldn't fire on bug-fix tasks anyway, but loading their
+  SKILL.md descriptions still cost tokens.
+- `C:/tckit/CLAUDE.md` — this repo's dev project conventions
+  (adapter isolation rules, port-methods reference, contributor
+  git workflow). A real TcKit-plugin user never sees this.
+- The fixture-local `CLAUDE.md` — the "drop this in any TwinCAT
+  project" template that mentions TcKit by name.
+- Any `~/.claude/` user-globals — these apply equally to both
+  arms (writing-style prefs etc.), so they don't bias the
+  comparison, and we leave them alone.
 
-- `.claude/skills/` contains 8 skills, of which `tc-adr` and
-  `tc-docs-write` are dev-only (for editing TcKit's own ADRs and
-  docs site). The other 6 mirror `plugin/skills/`, which is the
-  shippable user-facing surface.
-- `C:/tckit/CLAUDE.md` is the dev project's CLAUDE.md (adapter
-  isolation rules, port-methods reference, contributor git
-  workflow). A real TcKit user installing the plugin would see
-  the plugin's CLAUDE.md, not this one.
-
-In practice the dev-only skills have narrow triggers ("write an
-ADR", "update docs") that wouldn't fire on a bug-fix task, so the
-N=1 numbers aren't visibly distorted by them. But for an
-apples-to-apples "what a user installing the TcKit plugin sees"
-measurement, the tckit arm should also use `--isolate-cwd` with
-the temp dir set up to look like a fresh install: fixture +
-plugin/skills/ symlinked or copied in + a user-facing CLAUDE.md
-(if any). Deferred; the current vanilla isolation already
-addresses the bigger noise source.
+What the tckit arm DOES see is `plugin/skills/` injected as
+`<temp>/.claude/skills/` (the 6 user-facing skills) + the TcKit
+MCP server. That's exactly the surface a real TcKit-plugin user
+gets.
