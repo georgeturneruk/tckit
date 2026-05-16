@@ -55,6 +55,9 @@ Issues = "https://github.com/turb5/tckit/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tckit"]
+# tckit/templates/config.toml.example is package data used by `tckit init`
+# and `tckit init --print`. Hatch picks it up automatically because it lives
+# inside the `tckit` package directory.
 
 [tool.ruff]
 target-version = "py311"

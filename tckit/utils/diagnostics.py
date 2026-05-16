@@ -9,10 +9,22 @@ from __future__ import annotations
 
 import re
 
-from tckit.config import TcKitConfig
+from tckit.config import TcKitConfig, _user_home
 from tckit.utils.bridge_client import BridgeClient
 
 _AMS_NETID_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+\.\d+\.\d+$")
+
+
+def config_file_status(cfg: TcKitConfig) -> tuple[bool, bool]:
+    """Return ``(config_file_exists, target_ams_id_set)``.
+
+    Pure helper for the doctor's first section. ``target_ams_id_set`` covers
+    both the file and the env-var paths so a user who only exports
+    ``TARGET_AMS_ID`` (no file) still reads as "set".
+    """
+    file_exists = (_user_home() / "config.toml").exists()
+    target_set = bool(cfg.get("TARGET_AMS_ID"))
+    return file_exists, target_set
 
 
 def is_valid_ams_netid(value: str) -> bool:

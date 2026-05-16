@@ -198,13 +198,46 @@ class TcKitConfig:
         return cls(cache_path=cache_path, lang=lang)  # type: ignore[call-arg]
 
 
+def _normalise_keys(raw: dict[str, Any]) -> dict[str, Any]:
+    """Uppercase env-shaped keys so file-source values are found by env-style lookups.
+
+    Adapter-name keys (``reader``, ``writer``, ``builder``, ``test_runner``,
+    ``doc_generator``, ``docs_searcher``) and the two ``infosys_*`` knobs are
+    kept lowercase because that's how the resolved-key consumers ask for them.
+    Everything else (``TARGET_AMS_ID``, ``XAE_MODE``, ``COM_VERSION``, ...) is
+    uppercased so a TOML or JSON file that wrote ``xae_mode`` still resolves.
+    """
+    keep_lower = {
+        "reader",
+        "writer",
+        "builder",
+        "test_runner",
+        "doc_generator",
+        "docs_searcher",
+        "infosys_cache_path",
+        "infosys_lang",
+        "doc_trigger",
+        "comment_style",
+        "docs_output_path",
+    }
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key in keep_lower:
+            out[key] = value
+        else:
+            out[key.upper()] = value
+    return out
+
+
 def load_config() -> TcKitConfig:
     """Load layered config sources and return a :class:`TcKitConfig`.
 
     Project ``config.json`` overrides user-global ``config.toml``; env vars
-    override both at lookup time via :meth:`TcKitConfig.get`.
+    override both at lookup time via :meth:`TcKitConfig.get`. Raw keys from
+    both files are normalised so env-style lookups (``XAE_MODE``) find values
+    written as ``xae_mode`` in a JSON or TOML file.
     """
-    user_cfg = _load_user_toml()
-    project_cfg = _load_project_config()
+    user_cfg = _normalise_keys(_load_user_toml())
+    project_cfg = _normalise_keys(_load_project_config())
     merged: dict[str, Any] = {**user_cfg, **project_cfg}
     return TcKitConfig(merged)

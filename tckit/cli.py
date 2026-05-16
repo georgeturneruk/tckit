@@ -3,7 +3,9 @@
 Dispatches subcommands:
 
 - ``tckit`` (no args)         start the MCP server on stdio.
-- ``tckit --transport sse``   start the MCP server on SSE (Docker mode).
+- ``tckit --transport sse``   start the MCP server on SSE (CI / containers).
+- ``tckit init``              write ``~/.tckit/config.toml`` from the bundled template.
+- ``tckit init --print``      emit the template to stdout (no file I/O).
 - ``tckit config show``       print resolved config and its sources.
 - ``tckit config validate``   check config for missing or malformed values.
 - ``tckit doctor``            run health checks (config + bridge).
@@ -19,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+from importlib import resources
 from typing import Any
 
 from tckit.config import (
@@ -31,6 +34,7 @@ from tckit.config import (
 from tckit.utils.diagnostics import (
     bridge_dependencies,
     bridge_health,
+    config_file_status,
     install_bridge_dependency,
     validate_config,
 )
@@ -47,8 +51,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=os.getenv("TCKIT_TRANSPORT", "stdio"),
         help=(
             "MCP transport for the server (used when no subcommand is given). "
-            "Default: stdio (also via TCKIT_TRANSPORT env var). Use sse for the "
-            "Docker / long-running server path."
+            "Default: stdio (also via TCKIT_TRANSPORT env var). Use sse for "
+            "the CI / containerised server path."
         ),
     )
 
@@ -77,6 +81,23 @@ def _build_parser() -> argparse.ArgumentParser:
             "Don't prompt to install missing bridge dependencies; just "
             "report them. Use in CI or non-interactive contexts."
         ),
+    )
+
+    # `tckit init`
+    init_parser = sub.add_parser(
+        "init",
+        help="Write ~/.tckit/config.toml from the bundled template.",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite ~/.tckit/config.toml if it already exists.",
+    )
+    init_parser.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="Emit the template to stdout without touching the filesystem.",
     )
 
     # `tckit docgen <project_path> <output_path>`
@@ -111,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _doctor(no_install=args.no_install)
+
+    if args.command == "init":
+        return _init(force=args.force, print_only=args.print_only)
 
     if args.command == "docgen":
         return _docgen(args.project_path, args.output_path)
@@ -180,6 +204,51 @@ def _config_validate() -> int:
     return 1
 
 
+def _read_template() -> str:
+    """Return the bundled ``config.toml`` template as a string."""
+    return (
+        resources.files("tckit.templates")
+        .joinpath("config.toml.example")
+        .read_text(encoding="utf-8")
+    )
+
+
+def _init(force: bool = False, print_only: bool = False) -> int:
+    """Scaffold ``~/.tckit/config.toml`` from the bundled template.
+
+    ``--print`` returns the template content to stdout, used by the
+    ``tc-config`` skill so it has one source of truth for the template.
+    """
+    template = _read_template()
+
+    if print_only:
+        # Newline-terminated so callers can pipe through `tee` cleanly.
+        sys.stdout.write(template)
+        if not template.endswith("\n"):
+            sys.stdout.write("\n")
+        return 0
+
+    home = _user_home()
+    target = home / "config.toml"
+
+    if target.exists() and not force:
+        print(
+            f"{target} already exists. Re-run with --force to overwrite, or "
+            "edit it directly.",
+            file=sys.stderr,
+        )
+        return 1
+
+    home.mkdir(parents=True, exist_ok=True)
+    target.write_text(template, encoding="utf-8")
+    print(f"Wrote {target}")
+    print(
+        "Next: edit the file to set TARGET_AMS_ID (and any other values), "
+        "then run `tckit doctor`."
+    )
+    return 0
+
+
 def _docgen(project_path: str, output_path: str) -> int:
     """Run the HTML doc generator against a TwinCAT solution."""
     from tckit.adapters.doc_generators.html_generator import HtmlGenerator
@@ -203,6 +272,26 @@ def _doctor(no_install: bool = False) -> int:
     bridge_url = cfg.get("BRIDGE_URL")
 
     sections: list[tuple[str, bool, list[str]]] = []
+
+    # Config-file presence is the first thing a new user gets wrong; surface
+    # it before the shape-check so the next-step hint is unambiguous.
+    file_present, target_set = config_file_status(cfg)
+    file_lines: list[str] = []
+    file_ok = True
+    if not file_present and not target_set:
+        file_ok = False
+        file_lines.append(
+            f"no config file at {_user_home() / 'config.toml'} and TARGET_AMS_ID unset. "
+            "Run `tckit init` (pip) or ask Claude 'Set me up for TcKit' (plugin)."
+        )
+    elif not target_set:
+        file_lines.append(
+            "TARGET_AMS_ID is unset. Read-only tools work, but deploy/build/test need it set "
+            f"in {_user_home() / 'config.toml'} or as an env var."
+        )
+    else:
+        file_lines.append(f"config file present at {_user_home() / 'config.toml'}")
+    sections.append(("Config file", file_ok, file_lines))
 
     issues = validate_config(cfg)
     sections.append(("Config", not issues, issues))

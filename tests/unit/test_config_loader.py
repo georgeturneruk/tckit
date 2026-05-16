@@ -157,3 +157,51 @@ def test_get_returns_none_when_no_default_and_unset(
     monkeypatch.delenv("MYSTERY_KEY", raising=False)
     cfg = TcKitConfig({})
     assert cfg.get("mystery_key") is None
+
+
+# ---------------------------------------------------------------------------
+# Key-casing normalisation — env-style lookups find file values regardless of case
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_uppercases_env_style_keys_from_toml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lowercase ``xae_mode`` in TOML resolves through uppercase ``XAE_MODE`` lookup."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("XAE_MODE", raising=False)
+    (tmp_path / "config.toml").write_text('xae_mode = "headless"\n')
+
+    cfg = load_config()
+    assert cfg.get("XAE_MODE") == "headless"
+
+
+def test_load_config_keeps_adapter_keys_lowercase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Adapter-name keys (``reader``, ``writer``, ...) stay lowercase since the
+    server looks them up lowercase."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("READER", raising=False)
+    (tmp_path / "config.toml").write_text('reader = "xml"\n')
+
+    cfg = load_config()
+    assert cfg.get("reader") == "xml"
+
+
+def test_load_config_uppercases_env_style_keys_from_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same normalisation applies to project ``config.json``."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("COM_VERSION", raising=False)
+    (tmp_path / "config.json").write_text('{"com_version": "17.2"}')
+
+    cfg = load_config()
+    assert cfg.get("COM_VERSION") == "17.2"
