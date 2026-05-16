@@ -7,9 +7,11 @@
 # .TcPOU) are the canonical fixture; everything below is rebuilt.
 _Boot/
 _CompileInfo/
+_CompileInfo_Upload/
 _Deployment/
 _Libraries/
 _Output/
+*.tmc
 *.tpzip
 *.tszip
 *.tpy
