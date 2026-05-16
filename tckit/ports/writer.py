@@ -351,7 +351,7 @@ class ProjectWriter(ABC):
         *,
         version: str = "*",
         distributor: str = "",
-        parameters: dict[str, str] | None = None,
+        parameters: dict[str, dict[str, str]] | None = None,
     ) -> Result:
         """Add a library placeholder reference to a consumer PLC project.
 
@@ -383,10 +383,13 @@ class ProjectWriter(ABC):
             distributor explicitly so the placeholder resolves correctly.
         :param parameters: Optional library parameter overrides serialised
             into the ``<PlaceholderReference>`` block, equivalent to the
-            IDE's "Library Parameters" dialog. Maps parameter name → value
-            string; values are written verbatim, so TwinCAT booleans need
-            ``"TRUE"`` / ``"FALSE"`` (not Python ``True``/``False``). Use
-            this to override defaults like
-            ``parameters={"xUnitEnablePublish": "TRUE"}`` on TcUnit.
+            IDE's "Library Parameters" dialog. Nested mapping grouped by
+            the parameter-list GVL: ``{list_name: {key: value, ...}, ...}``.
+            Both the list name and the inner keys are uppercased on disk
+            (the IDE's own schema requirement); values are written
+            verbatim, so TwinCAT booleans need ``"TRUE"`` / ``"FALSE"``
+            (not Python ``True``/``False``). Example for the TcUnit
+            publisher:
+            ``parameters={"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}``.
         """
         ...

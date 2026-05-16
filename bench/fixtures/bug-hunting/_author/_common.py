@@ -136,7 +136,9 @@ def scaffold_fixture(
     # JUnit-style XML at %TC_BOOTPRJPATH%tcunit_xunit_testresults.xml; it
     # defaults FALSE on the library, so without this override the suite
     # finishes correctly but no XML lands and /tcunit-run can only return
-    # live counters or whatever symbol Probes the caller asked for.
+    # live counters or whatever symbol Probes the caller asked for. The
+    # GVL_Param_TcUnit grouping is the host parameter-list name the IDE
+    # writes (uppercased on disk by the writer).
     _check(
         f"add_library_placeholder({tests_plc} -> TcUnit)",
         writer.add_library_placeholder(
@@ -144,7 +146,7 @@ def scaffold_fixture(
             "TcUnit",
             "TcUnit",
             distributor=TCUNIT_DISTRIBUTOR,
-            parameters={"xUnitEnablePublish": "TRUE"},
+            parameters={"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}},
         ),
     )
 

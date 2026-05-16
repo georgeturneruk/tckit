@@ -101,14 +101,29 @@ function Get-TcUnitDefaultXmlPath {
     .DESCRIPTION
         Mirrors GVL_Param_TcUnit.xUnitFilePath, whose default is
         '%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml'. TwinCAT expands
-        TC_BOOTPRJPATH per running PLC instance to
-        C:\TwinCAT\3.1\Boot\Plc\Port_<port>\.
+        TC_BOOTPRJPATH per running PLC instance, and the expansion is
+        runtime-kind dependent:
 
-        Callers that override xUnitFilePath via library parameters must
-        pass the resolved path to /tcunit-run / /results explicitly; the
-        bridge does not read xUnitFilePath off the running runtime today.
+          - Kernel runtime (TcRTime):
+              C:\TwinCAT\3.1\Boot\Plc\Port_<port>\
+          - User-mode runtime (UmRT_<name>):
+              C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\<name>\3.1\Boot\
+            (no Plc\Port_<port>\ subdirectory)
+
+        Env var override: TCKIT_TCUNIT_XML_PATH points at the absolute
+        file path on this machine. Set in .env (see .env.example) — the
+        kernel-runtime default below is wrong on a UmRT bench, so the
+        operator must declare the path explicitly per machine.
+
+        Callers that also override xUnitFilePath via library parameters
+        must pass the resolved path to /tcunit-run / /results
+        explicitly; the bridge does not read xUnitFilePath off the
+        running runtime today.
     #>
     param([int]$Port = $script:TcUnitDefaultPlcPort)
+    if ($env:TCKIT_TCUNIT_XML_PATH) {
+        return $env:TCKIT_TCUNIT_XML_PATH
+    }
     return "C:\TwinCAT\3.1\Boot\Plc\Port_$Port\$script:TcUnitDefaultXmlFileName"
 }
 

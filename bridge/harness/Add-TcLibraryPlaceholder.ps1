@@ -43,11 +43,24 @@
     libraries).
 
 .PARAMETER Parameters
-    Optional hashtable of library parameter overrides (Name -> Value
-    strings). Equivalent to the IDE's "Library Parameters" dialog. Values
-    serialise verbatim, so TwinCAT booleans need 'TRUE' / 'FALSE'. Applied
-    via ConsumeXml on the placeholder tree item after AddPlaceholder lands;
-    see https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242733963.html
+    Optional nested hashtable of library parameter overrides, grouped by
+    parameter list name:
+
+        @{ 'GVL_Param_TcUnit' = @{ 'xUnitEnablePublish' = 'TRUE' } }
+
+    Equivalent to the IDE's "Library Parameters" dialog. Both the list
+    name and the inner keys are uppercased before being written to disk;
+    values serialise verbatim, so TwinCAT booleans need 'TRUE' / 'FALSE'.
+
+    Applied by editing the consumer .plcproj's <PlaceholderReference>
+    block directly after AddPlaceholder lands — see
+    Set-TcPlcProjPlaceholderParameters for the on-disk schema. The
+    Automation Interface exposes no documented programmatic surface for
+    these overrides on ITcPlcLibraryManager / ITcPlcPlaceholderRef, and
+    the placeholder tree item's ConsumeXml schema is undocumented; the
+    MSBuild schema on disk is the only reliable target. See
+    https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242733963.html
+    for the surrounding library-manager API.
 #>
 param(
     [string]$ProjectPath     = $env:PLC_PROJECT_PATH,
@@ -80,39 +93,37 @@ try {
     $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
     $libManager.AddPlaceholder($PlaceholderName, $DefaultLibrary, $Version, $Distributor) | Out-Null
 
-    # Apply parameter overrides via ConsumeXml on the placeholder tree item.
-    # AddPlaceholder leaves the placeholder with default parameter values;
-    # to override (e.g. xUnitEnablePublish on TcUnit) we round-trip the
-    # placeholder's XML, splice in <ParameterValues>/<Parameter> children,
-    # and feed it back. ConsumeXml is the same call the IDE uses behind the
-    # "Library Parameters" dialog.
-    if ($Parameters.Count -gt 0) {
-        $placeholderItem = $libManager.LookupChild($PlaceholderName)
-        if ($null -eq $placeholderItem) {
-            return @{ success = $false; error = "Placeholder '$PlaceholderName' not found under References after AddPlaceholder." }
-        }
-        $existingXml = [string]$placeholderItem.ProduceXml($false)
-        $doc = [xml]$existingXml
-        $root = $doc.DocumentElement
-        $paramsNode = $root.SelectSingleNode('ParameterValues')
-        if ($null -eq $paramsNode) {
-            $paramsNode = $doc.CreateElement('ParameterValues')
-            [void]$root.AppendChild($paramsNode)
-        }
-        foreach ($entry in $Parameters.GetEnumerator()) {
-            $existing = $paramsNode.SelectSingleNode("Parameter[@Name='$($entry.Key)']")
-            if ($null -ne $existing) { [void]$paramsNode.RemoveChild($existing) }
-            $node = $doc.CreateElement('Parameter')
-            $node.SetAttribute('Name', [string]$entry.Key)
-            $node.InnerText = [string]$entry.Value
-            [void]$paramsNode.AppendChild($node)
-        }
-        $placeholderItem.ConsumeXml($doc.OuterXml) | Out-Null
-    }
-
-    # AddPlaceholder + ConsumeXml mutate in-memory state; persist to .plcproj
-    # so the change survives a re-open / git-reset cycle. See Save-TcSolution.
+    # Persist the basic <PlaceholderReference> block to the consumer
+    # .plcproj before we splice in any parameter overrides; the override
+    # editor reads the on-disk XML, not the in-memory tree.
     Save-TcSolution -Dte $dte
+
+    if ($Parameters.Count -gt 0) {
+        # The Automation Interface has no documented method for setting
+        # library parameter overrides on a placeholder (the IDE's "Library
+        # Parameters" dialog has no programmatic counterpart on
+        # ITcPlcLibraryManager / ITcPlcPlaceholderRef), and the placeholder
+        # tree item's ConsumeXml schema is undocumented. The MSBuild XML
+        # schema that XAE itself writes on disk uses a <Parameters>
+        # wrapper with one xmlns=""-namespaced <Parameter ListName="..">
+        # child per (list, key) pair (uppercased), each carrying <Key>
+        # and <Value> children. Set-TcPlcProjPlaceholderParameters
+        # writes that shape directly.
+        #
+        # We close the solution before the file edit so that the next
+        # File.SaveAll on this DTE session can't regenerate the .plcproj
+        # from an in-memory tree that doesn't know about our injected
+        # overrides. Reopening from disk afterwards re-hydrates the
+        # in-memory model with the new state, so subsequent harness
+        # calls in the same session see consistent data.
+        $plcProjPath = Find-TcPlcProjFile -SolutionPath $ProjectPath -PlcName $plc
+        $dte.Solution.Close($false) | Out-Null
+        Set-TcPlcProjPlaceholderParameters `
+            -PlcProjPath $plcProjPath `
+            -PlaceholderName $PlaceholderName `
+            -Parameters $Parameters
+        Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    }
 
     return @{
         success = $true
