@@ -299,11 +299,13 @@ def test_add_library_placeholder_parameters_passed_through(
         "TcUnit",
         "TcUnit",
         distributor="www.tcunit.org",
-        parameters={"xUnitEnablePublish": "TRUE"},
+        parameters={"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}},
     )
 
     _, payload = client.calls[0]
-    assert payload["Parameters"] == {"xUnitEnablePublish": "TRUE"}
+    assert payload["Parameters"] == {
+        "GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}
+    }
 
 
 def test_add_library_placeholder_parameters_omitted_by_default(

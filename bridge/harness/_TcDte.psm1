@@ -472,6 +472,191 @@ function Get-TcPlcProjectNode {
     Write-Output $node -NoEnumerate
 }
 
+# ------------------------------------------------------------------
+# .plcproj file editing (pure XML manipulation, no DTE/COM)
+# ------------------------------------------------------------------
+
+function Find-TcPlcProjFile {
+    <#
+    .SYNOPSIS
+        Locate the .plcproj file for a named PLC project under a solution
+        directory.
+
+    .DESCRIPTION
+        The on-disk layout varies (Add-TcPlcProject creates a TwinCAT
+        wrapper folder per .tsproj, with the PLC project's source folder
+        nested inside), but each PLC project's source folder always
+        contains exactly one file called <PlcName>.plcproj. Recursive
+        search from the sln directory finds it reliably; throws if zero
+        or more than one match is found.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$SolutionPath,
+        [Parameter(Mandatory)][string]$PlcName
+    )
+    $slnDir = [System.IO.Path]::GetDirectoryName($SolutionPath)
+    if (-not (Test-Path -LiteralPath $slnDir)) {
+        throw "Solution directory not found: $slnDir"
+    }
+    $candidates = @(
+        Get-ChildItem -Path $slnDir -Filter "$PlcName.plcproj" `
+                      -Recurse -File -ErrorAction SilentlyContinue
+    )
+    if ($candidates.Count -eq 0) {
+        throw "No .plcproj file found for PLC '$PlcName' under $slnDir."
+    }
+    if ($candidates.Count -gt 1) {
+        $paths = ($candidates | ForEach-Object { $_.FullName }) -join ', '
+        throw "Multiple .plcproj files match PLC name '$PlcName' under ${slnDir}: $paths"
+    }
+    return $candidates[0].FullName
+}
+
+function Set-TcPlcProjPlaceholderParameters {
+    <#
+    .SYNOPSIS
+        Splice or replace a <Parameters> override block under a named
+        <PlaceholderReference Include="..."> in a .plcproj file.
+
+    .DESCRIPTION
+        TwinCAT's "Library Parameters" dialog writes overrides into the
+        consumer .plcproj in this exact shape:
+
+            <PlaceholderReference Include="TcUnit">
+              <DefaultResolution>...</DefaultResolution>
+              <Namespace>TcUnit</Namespace>
+              <Parameters>
+                <Parameter ListName="GVL_PARAM_TCUNIT" xmlns="">
+                  <Key>XUNITENABLEPUBLISH</Key>
+                  <Value>TRUE</Value>
+                </Parameter>
+              </Parameters>
+            </PlaceholderReference>
+
+        The schema is specific and was reverse-engineered off the IDE's
+        own output; nothing else makes the runtime honour the override:
+
+          - Wrapper element is <Parameters> (plural) in the MSBuild
+            namespace.
+          - Each <Parameter> child resets to the empty namespace via
+            xmlns="", so <Key>/<Value> aren't in the MSBuild namespace.
+          - The ListName attribute carries the host parameter list's GVL
+            name UPPERCASED (e.g. "GVL_Param_TcUnit" -> "GVL_PARAM_TCUNIT").
+          - <Key> carries the parameter identifier UPPERCASED; <Value>
+            carries the value verbatim, so TwinCAT booleans need
+            "TRUE"/"FALSE".
+          - One <Parameter> element per (ListName, Key) pair; siblings
+            stack inside the same <Parameters> wrapper.
+
+        The Automation Interface has no Set/ChangeParameter equivalent on
+        ITcPlcLibraryManager or ITcPlcPlaceholderRef, and the placeholder
+        tree item's ConsumeXml schema for these overrides is undocumented.
+        Writing the on-disk MSBuild XML directly is the only reliable
+        path. The caller is responsible for closing the solution before
+        this call and reopening after, so the DTE's in-memory model picks
+        the change up before the next File.SaveAll can regenerate the
+        file from a stale tree.
+
+        This function is file-only (no DTE/COM), which makes it unit-
+        testable without a live bridge.
+
+        Idempotent: existing <Parameter> elements with matching
+        (ListName, Key) attribute pairs are replaced; new ones are
+        appended; the <Parameters> wrapper is reused if already present.
+
+    .PARAMETER PlcProjPath
+        Absolute path to the consumer .plcproj file.
+
+    .PARAMETER PlaceholderName
+        Value of <PlaceholderReference Include="...">. Throws if no
+        matching placeholder is found.
+
+    .PARAMETER Parameters
+        Nested hashtable @{ ListName -> @{ Key -> Value } }. Both
+        ListName and Key are uppercased on disk regardless of the casing
+        passed here; Value is written verbatim.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$PlcProjPath,
+        [Parameter(Mandatory)][string]$PlaceholderName,
+        [Parameter(Mandatory)][hashtable]$Parameters
+    )
+
+    if (-not (Test-Path -LiteralPath $PlcProjPath)) {
+        throw "PLC project file not found: $PlcProjPath"
+    }
+    [xml]$doc = Get-Content -LiteralPath $PlcProjPath -Raw -ErrorAction Stop
+    $defaultNs = $doc.DocumentElement.NamespaceURI
+    $nsMgr = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+    if ($defaultNs) {
+        $nsMgr.AddNamespace('m', $defaultNs)
+        $placeholderXPath = "//m:PlaceholderReference[@Include='$PlaceholderName']"
+        $wrapperXPath     = 'm:Parameters'
+    } else {
+        $placeholderXPath = "//PlaceholderReference[@Include='$PlaceholderName']"
+        $wrapperXPath     = 'Parameters'
+    }
+    $placeholder = $doc.SelectSingleNode($placeholderXPath, $nsMgr)
+    if ($null -eq $placeholder) {
+        throw "PlaceholderReference '$PlaceholderName' not found in $PlcProjPath."
+    }
+
+    $wrapperNode = $placeholder.SelectSingleNode($wrapperXPath, $nsMgr)
+    if ($null -eq $wrapperNode) {
+        $wrapperNode = $doc.CreateElement('Parameters', $defaultNs)
+        [void]$placeholder.AppendChild($wrapperNode)
+    }
+
+    foreach ($listEntry in $Parameters.GetEnumerator()) {
+        $listName = ([string]$listEntry.Key).ToUpperInvariant()
+        $keys = $listEntry.Value
+        if ($keys -isnot [System.Collections.IDictionary]) {
+            throw "Parameters['$($listEntry.Key)'] must be a hashtable of key -> value; got $($keys.GetType().FullName)."
+        }
+        foreach ($kvp in $keys.GetEnumerator()) {
+            $key   = ([string]$kvp.Key).ToUpperInvariant()
+            $value = [string]$kvp.Value
+
+            # Each <Parameter> child sits in the empty namespace ("xmlns=''")
+            # while its <Parameters> parent is in the MSBuild namespace, so
+            # XPath against the wrapper's children needs the local-name()
+            # axis — a namespace-prefixed match would miss the empty-ns
+            # children entirely.
+            $existing = $null
+            foreach ($cand in $wrapperNode.ChildNodes) {
+                if ($cand.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+                if ($cand.LocalName -ne 'Parameter') { continue }
+                if ($cand.GetAttribute('ListName') -ne $listName) { continue }
+                $keyChild = $null
+                foreach ($childOfCand in $cand.ChildNodes) {
+                    if ($childOfCand.NodeType -eq [System.Xml.XmlNodeType]::Element -and
+                        $childOfCand.LocalName -eq 'Key') {
+                        $keyChild = $childOfCand
+                        break
+                    }
+                }
+                if ($null -ne $keyChild -and $keyChild.InnerText -eq $key) {
+                    $existing = $cand
+                    break
+                }
+            }
+            if ($null -ne $existing) { [void]$wrapperNode.RemoveChild($existing) }
+
+            $paramElem = $doc.CreateElement('Parameter', '')
+            $paramElem.SetAttribute('ListName', $listName)
+            $keyElem = $doc.CreateElement('Key', '')
+            $keyElem.InnerText = $key
+            $valueElem = $doc.CreateElement('Value', '')
+            $valueElem.InnerText = $value
+            [void]$paramElem.AppendChild($keyElem)
+            [void]$paramElem.AppendChild($valueElem)
+            [void]$wrapperNode.AppendChild($paramElem)
+        }
+    }
+
+    $doc.Save($PlcProjPath)
+}
+
 function Get-TcPousFolder {
     param(
         [Parameter(Mandatory)]$SysManager,
@@ -701,4 +886,5 @@ Export-ModuleMember -Function `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
-    Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution
+    Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
+    Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters

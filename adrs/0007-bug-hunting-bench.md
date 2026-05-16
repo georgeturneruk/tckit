@@ -427,3 +427,52 @@ unaffected.
   pick up the `<ParameterValues>` block on the TcUnit
   `<PlaceholderReference>`. B2-T1 suite + MAIN authoring and the
   harness changes remain on the deferred list.
+- 2026-05-15: First-pass implementation of the `parameters=` kwarg
+  shipped above had two silent-drop bugs, both caught while smoke-
+  testing B1 end-to-end. Wave one round-tripped the placeholder tree
+  item's XML through `ProduceXml(false)` → splice → `ConsumeXml`;
+  the in-memory tree-item schema for placeholder parameters is
+  undocumented and `ConsumeXml` accepted the input without applying
+  it. Wave two bypassed `ConsumeXml` and edited the consumer
+  `.plcproj` directly, but used a schema
+  (`<ParameterValues>/<Parameter Name=>`) that doesn't match what
+  XAE itself writes — the build accepted the file but the runtime
+  ignored the override, so the publisher stayed off. The actual
+  on-disk schema, reverse-engineered from the IDE's own output, is:
+
+  ```xml
+  <Parameters>
+    <Parameter ListName="GVL_PARAM_TCUNIT" xmlns="">
+      <Key>XUNITENABLEPUBLISH</Key>
+      <Value>TRUE</Value>
+    </Parameter>
+  </Parameters>
+  ```
+
+  `<Parameters>` (plural) sits in the MSBuild namespace; each
+  `<Parameter>` child resets to the empty namespace via `xmlns=""`;
+  `ListName` carries the host parameter-list GVL name UPPERCASED;
+  `<Key>` uppercased, `<Value>` verbatim; one `<Parameter>` per
+  (ListName, Key) pair. `Set-TcPlcProjPlaceholderParameters` now
+  writes exactly that shape directly to `.plcproj`. Order remains
+  `AddPlaceholder` → `Save-TcSolution` (flush the basic block) →
+  close → splice on disk → reopen, so the in-memory model picks
+  the change up before the next `File.SaveAll` can regenerate from
+  a stale tree. The Python `add_library_placeholder` signature
+  grew with it from `parameters: dict[str, str]` to
+  `dict[str, dict[str, str]]` so callers group keys under their
+  host parameter-list GVL — e.g.
+  `{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}`. Two
+  helpers in `_TcDte.psm1` (`Set-TcPlcProjPlaceholderParameters`
+  and `Find-TcPlcProjFile`) plus a Pester suite at
+  `bridge/tests/Add-TcLibraryPlaceholder.Tests.ps1` pin the file
+  splice so this can't silently regress again. Validated against
+  B1 end-to-end (red→patch→green plus fresh xUnit XML at
+  `%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml`). Same change set
+  adds the `TCKIT_TCUNIT_XML_PATH` env var (documented in
+  `.env.example`) and routes `Get-TcUnitDefaultXmlPath` through it;
+  the previous hard-coded kernel-RT default is wrong on UmRT bench
+  setups, where `%TC_BOOTPRJPATH%` expands to a different root.
+  Fixture re-author on the bench machine is still required to pick
+  the new `<Parameters>` block up; the committed `.plcproj` files
+  authored by the broken first/second passes don't yet contain it.

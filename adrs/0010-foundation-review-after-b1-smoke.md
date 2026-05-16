@@ -257,3 +257,37 @@ any point and the partial state is still better than today.
   TASK.md prompts and writer docs all updated. Closes
   [#40](https://github.com/georgeturneruk/tckit/issues/40) by
   construction. ADR promoted to `Implemented`.
+- 2026-05-15: §A.2 first-pass had two silent-drop bugs caught while
+  smoke-testing B1 end-to-end. Wave one (PR #90) round-tripped the
+  placeholder tree item's XML through `ProduceXml(false)` → splice
+  → `ConsumeXml`; the in-memory schema for placeholder parameters
+  is undocumented and `ConsumeXml` accepted the input without
+  applying it. Wave two bypassed `ConsumeXml` and edited the
+  consumer `.plcproj` directly, but used a schema
+  (`<ParameterValues>/<Parameter Name=>`) that doesn't match what
+  XAE itself writes — the build accepted the file but the runtime
+  ignored the override, so the publisher stayed off and the bench
+  fell back to symbol probes for `/tcunit-run`. The actual on-disk
+  schema, reverse-engineered from the IDE's own output, is
+  `<Parameters>/<Parameter ListName="...">/<Key>/<Value>` with
+  `xmlns=""` reset on the inner `<Parameter>` and both ListName
+  and Key uppercased; one `<Parameter>` element per
+  (ListName, Key) pair. `Set-TcPlcProjPlaceholderParameters` now
+  writes exactly that. The Python signature for `add_library_placeholder`
+  grew with it from `parameters: dict[str, str]` to
+  `dict[str, dict[str, str]]` so callers group keys under their
+  host parameter-list GVL — e.g.
+  `{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}`. Order
+  remains `AddPlaceholder` → `Save-TcSolution` → close → splice
+  on disk → reopen so the in-memory model picks the change up
+  before the next `File.SaveAll` can regenerate from a stale tree.
+  Helpers `Set-TcPlcProjPlaceholderParameters` and
+  `Find-TcPlcProjFile` in `_TcDte.psm1`, Pester suite under
+  `bridge/tests/` pins the splice. Same change set adds the
+  `TCKIT_TCUNIT_XML_PATH` env var (documented in `.env.example`)
+  so `Get-TcUnitDefaultXmlPath` can be overridden per machine;
+  the kernel-RT default is wrong on UmRT bench setups, where
+  `%TC_BOOTPRJPATH%` expands to a different root. Validated
+  against B1 end-to-end (red→patch→green plus fresh xUnit XML on
+  disk). ADR status stays `Implemented`; the cascade intent is
+  unchanged, this is a follow-up bug fix.

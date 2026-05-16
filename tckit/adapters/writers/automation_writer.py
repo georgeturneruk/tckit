@@ -297,7 +297,7 @@ class AutomationWriter(ProjectWriter):
         *,
         version: str = "*",
         distributor: str = "",
-        parameters: dict[str, str] | None = None,
+        parameters: dict[str, dict[str, str]] | None = None,
     ) -> Result:
         payload: dict[str, Any] = {
             "PlaceholderName": placeholder_name,
@@ -306,7 +306,9 @@ class AutomationWriter(ProjectWriter):
             "Distributor": distributor,
         }
         if parameters:
-            payload["Parameters"] = dict(parameters)
+            payload["Parameters"] = {
+                list_name: dict(keys) for list_name, keys in parameters.items()
+            }
         return self._call(
             "/add-library-placeholder",
             self._with_project(payload, plc_name=consumer_plc_name),
