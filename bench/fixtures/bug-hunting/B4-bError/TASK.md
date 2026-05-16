@@ -24,9 +24,6 @@ Modify the source under `B4Pipeline_Plc/` so the test passes.
 
 - Do not change anything under `PipelineTests/`. Test files are
   read-only for grading.
-- Do not edit `.plcproj` or `.TcPOU` XML directly. Use the TwinCAT
-  automation interface (e.g. TcKit's `update_method_body` /
-  `update_method_body_patch`) for any change.
 - After editing the library, the consumer build resolves against the
   *installed* library, not the source — so the bench harness re-runs
   `save_plc_as_library` on `B4Pipeline_Plc` before each build.

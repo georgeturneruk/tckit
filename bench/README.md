@@ -221,8 +221,10 @@ python bench/run.py `
     --post-run-tests RollingAverageTests `
     --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/
 
-# vanilla arm: also pass --close-during-run so XAE doesn't trip on the
-# raw .TcPOU edits the model makes without MCP writer tools.
+# vanilla arm: --close-during-run (XAE doesn't trip on raw .TcPOU
+# edits) and --isolate-cwd (cwd is a temp dir outside this repo, so
+# Claude Code's skill-discovery / CLAUDE.md ancestor walk doesn't
+# inherit TcKit context from C:/tckit/.claude/ or C:/tckit/CLAUDE.md).
 python bench/run.py `
     --task bench/fixtures/bug-hunting/B1-off-by-one/TASK.md `
     --config bench/configs/empty.json --runs 1 `
@@ -232,7 +234,8 @@ python bench/run.py `
     --pre-save-as-library B1RollingAverage_Plc `
     --post-run-tests RollingAverageTests `
     --tests-guard-path bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/ `
-    --close-during-run
+    --close-during-run `
+    --isolate-cwd
 ```
 
 ### What each flag does
@@ -259,6 +262,17 @@ python bench/run.py `
   externally". The pre-save-as-library still runs with the solution
   open; the close fires only around the model session. Mirrors the
   pattern in `Add-TcLibraryPlaceholder.ps1`.
+- `--isolate-cwd` — copies the fixture to a fresh temp directory
+  outside this repo before each `claude -p` and pins cwd there,
+  then syncs the model's edits back to the real fixture before the
+  post-run validation cycle. Use this on the vanilla arm so it
+  doesn't silently inherit the project skills (`.claude/skills/`)
+  and `CLAUDE.md` files that Claude Code would otherwise walk up
+  from the fixture's cwd into this repo. Leave it off on the tckit
+  arm: an installed-TcKit user gets the full project context (MCP
+  server + skills + CLAUDE.md), and the bench should measure that
+  full experience. Avoids `--bare`, which would also work but
+  forces `ANTHROPIC_API_KEY` auth (no OAuth/keychain).
 
 ### Pre-flight smoke (optional but recommended)
 

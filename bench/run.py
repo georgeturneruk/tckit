@@ -33,8 +33,10 @@ import argparse
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -61,11 +63,24 @@ def run_one(prompt: str, config: pathlib.Path, tcunit_path: str) -> dict[str, An
     Read/Grep prompts. The TcUnit directory is added via ``--add-dir``
     to grant explicit access independent of the working directory.
 
-    The child process is launched with cwd set to ``tcunit_path`` so the
-    model cannot browse the TcKit repo itself and discover the bridge
-    URL / harness contracts from the source. Without this isolation the
-    vanilla config can `curl` the bridge directly and the bench measures
-    the wrong thing.
+    The child process is launched with cwd set to ``tcunit_path``. Two
+    side-effects of that choice matter for benchmark isolation:
+
+    1. Claude Code's skill-discovery and ``CLAUDE.md`` ancestor walk
+       run from cwd up to filesystem root. If ``tcunit_path`` is
+       inside this repo, the walk picks up our project skills under
+       ``C:/tckit/.claude/skills/`` and our top-level ``CLAUDE.md``.
+       That biases the bench: the vanilla arm sees ``tc-write-st``
+       and ``tc-build-test-loop`` telling it to use TcKit's MCP tools
+       (which it doesn't have), wastes calls on ``ToolSearch``, and
+       generally inherits TcKit context that an installed-TcKit user
+       wouldn't pay for. The ``--isolate-cwd`` flag (see main()) pins
+       cwd to a temp directory outside the repo and copies the fixture
+       in, which makes the walk hit the filesystem root with nothing
+       to find.
+    2. cwd pinning also stops the model from browsing the TcKit repo
+       itself (the original W1-era rationale: vanilla can otherwise
+       ``Read`` harness scripts and discover the bridge URL).
     """
     # Resolve the config path before launch: cwd is pinned to the target
     # project below, so a relative --mcp-config would otherwise miss.
@@ -260,6 +275,48 @@ def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
         return client.post("/open", {"SolutionPath": sln_path})
     finally:
         client.close()
+
+
+def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
+    """Copy a fixture tree into a fresh temp directory outside any repo.
+
+    Returns the temp path. The caller passes this path as cwd for
+    ``claude -p``, which moves Claude Code's skill-discovery /
+    CLAUDE.md ancestor walk out of the project tree and into a
+    location with no ``.claude/`` or ``CLAUDE.md`` anywhere above it.
+
+    The temp dir is created under ``$TEMP``/``/tmp`` (per-user) so a
+    credentials-grade isolation isn't needed; the cwd just has to be
+    outside the TcKit repo.
+    """
+    src = pathlib.Path(fixture_path).resolve()
+    tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="tckit-bench-"))
+    dest = tmp_root / src.name
+    shutil.copytree(src, dest)
+    return dest
+
+
+def sync_fixture_edits(tmp_fixture: pathlib.Path, real_fixture: str) -> None:
+    """Copy any files modified inside ``tmp_fixture`` back to the real
+    fixture, preserving relative paths.
+
+    Conservative: only mirrors files whose mtime is newer than the
+    matching path in the real fixture (i.e. the model touched them).
+    Files added in the temp copy that don't exist in the real tree
+    are still copied across; files deleted in the temp copy are NOT
+    deleted from the real tree (the bench harness's reset-cmd is
+    authoritative for that).
+    """
+    real = pathlib.Path(real_fixture).resolve()
+    for src_path in tmp_fixture.rglob("*"):
+        if src_path.is_dir():
+            continue
+        rel = src_path.relative_to(tmp_fixture)
+        dest_path = real / rel
+        if dest_path.exists() and dest_path.stat().st_mtime >= src_path.stat().st_mtime:
+            continue
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_path, dest_path)
 
 
 def close_solution(bridge_url: str) -> dict[str, Any]:
@@ -635,6 +692,21 @@ def main() -> int:
                             "save-as-library still runs while the solution is "
                             "open; the close fires only around the model session."
                         ))
+    parser.add_argument("--isolate-cwd", action="store_true",
+                        help=(
+                            "Copy the fixture to a fresh temp directory "
+                            "outside this repo before each claude -p "
+                            "invocation, pin cwd there, then sync the "
+                            "model's edits back to the real fixture for "
+                            "post-run validation. Use this on the vanilla "
+                            "arm so it doesn't silently inherit project "
+                            "skills (.claude/skills/) and CLAUDE.md files "
+                            "via Claude Code's cwd-ancestor walk. Leave it "
+                            "off on the tckit arm to measure the full "
+                            "TcKit experience (MCP + skills + project "
+                            "conventions). Cheaper than --bare and keeps "
+                            "OAuth working (--bare requires API key)."
+                        ))
     args = parser.parse_args()
 
     if args.build_after_each and not args.sln_path:
@@ -707,7 +779,23 @@ def main() -> int:
     for n in range(1, args.runs + 1):
         print(f"  Run {n}/{args.runs}...", end=" ", flush=True)
         if args.reset_cmd:
+            # Close the solution around the reset so XAE doesn't catch
+            # the disk revert as an external modification and drop its
+            # in-memory project (which would wedge subsequent calls).
+            # /open is idempotent and re-reads from the now-reverted
+            # disk state. Only bother if we have a sln_path to reopen.
+            if args.sln_path:
+                close_solution(args.bridge_url)
             run_reset_cmd(args.reset_cmd)
+            if args.sln_path:
+                reopen_resp = open_solution(args.bridge_url, args.sln_path)
+                if not reopen_resp.get("success", False):
+                    print(
+                        f"\n  /open (post-reset reopen) failed: "
+                        f"{reopen_resp.get('error', reopen_resp)}",
+                        file=sys.stderr,
+                    )
+                    return 3
         pre_save_result: dict[str, Any] | None = None
         if args.pre_save_as_library:
             print(" pre-save...", end="", flush=True)
@@ -733,7 +821,21 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 5
-        result = run_one(prompt, args.config, args.tcunit_path)
+        run_cwd = args.tcunit_path
+        tmp_fixture: pathlib.Path | None = None
+        if args.isolate_cwd:
+            print(" isolate-cwd...", end="", flush=True)
+            tmp_fixture = isolate_fixture_to_tempdir(args.tcunit_path)
+            run_cwd = str(tmp_fixture)
+        try:
+            result = run_one(prompt, args.config, run_cwd)
+        finally:
+            if tmp_fixture is not None:
+                sync_fixture_edits(tmp_fixture, args.tcunit_path)
+                try:
+                    shutil.rmtree(tmp_fixture.parent, ignore_errors=True)
+                except OSError:
+                    pass
         if args.close_during_run:
             print(" reopen-sln...", end="", flush=True)
             reopen_resp = open_solution(args.bridge_url, args.sln_path)
