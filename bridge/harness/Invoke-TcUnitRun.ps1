@@ -64,6 +64,13 @@ param(
     # the splatted value arrives as an empty Hashtable instead of the
     # caller's string.
     [string]$ReadSymbols    = '',
+    # When $true (default), inline the parsed test results (summary +
+    # failures-only suites + flat failures list) into the response so
+    # the model sees pass/fail on the first cycle without a follow-up
+    # /results call. Passing tests are omitted to keep payload bounded
+    # on large green suites; /results still returns the full per-test
+    # list including passes. See ADR-0011.
+    [bool]  $IncludeResults = $true,
     [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode        = $(if ($env:XAE_MODE)    { $env:XAE_MODE }    else { 'attach' })
 )
@@ -194,16 +201,49 @@ try {
         }
 
         $sw.Stop()
-        return @{
+
+        # Inline parsed results when the XML actually landed: failures-only
+        # suite shape plus a flat `failures` list. Lets the model see
+        # pass/fail on the first run_tests call without a follow-up /results
+        # round trip. Best-effort: any parse error is reported via
+        # results_error rather than failing the whole run, so probes /
+        # summary still come back.
+        $resultsSummary  = $summary
+        $resultsSuites   = @()
+        $resultsFailures = @()
+        $resultsError    = $null
+        $resultsIncluded = $false
+        if ($IncludeResults -and $xmlPublished) {
+            try {
+                $parsed = ConvertFrom-TcUnitXml -XmlPath $xmlPath -FailuresOnly $true
+                if ($parsed.success) {
+                    $resultsSummary  = $parsed.summary
+                    $resultsSuites   = $parsed.suites
+                    $resultsFailures = $parsed.failures
+                    $resultsIncluded = $true
+                } else {
+                    $resultsError = [string]$parsed.error
+                }
+            } catch {
+                $resultsError = $_.Exception.Message
+            }
+        }
+
+        $response = @{
             success          = $true
             duration_seconds = $sw.Elapsed.TotalSeconds
-            summary          = $summary
+            summary          = $resultsSummary
             xml_path         = $xmlPath
             xml_published    = $xmlPublished
             probes           = $probes
             probes_errors    = $probesErrors
             resolve_warning  = $resolveWarning
+            results_included = $resultsIncluded
+            suites           = $resultsSuites
+            failures         = $resultsFailures
         }
+        if ($resultsError) { $response.results_error = $resultsError }
+        return $response
     }
     finally {
         if ($null -ne $session) {

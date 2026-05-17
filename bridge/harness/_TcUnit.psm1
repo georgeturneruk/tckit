@@ -20,6 +20,9 @@
                                       Get-TcUnitDefaultXmlPath, or empty
       Resolve-TcUnitXmlCandidates  - enumerate all candidate XML paths
                                       (env override, kernel-RT, UmRT glob)
+      ConvertFrom-TcUnitXml        - parse TcUnit JUnit XML into the
+                                      structured suites/summary hashtable;
+                                      optional FailuresOnly mode
       Wait-TcFileFresh             - wait for a file to appear with mtime >
                                       a given epoch
 #>
@@ -229,6 +232,267 @@ function Resolve-TcUnitXmlCandidates {
 }
 
 # ------------------------------------------------------------------
+# TcUnit JUnit XML parser
+# ------------------------------------------------------------------
+
+function ConvertTo-TcUnitFailureRecord {
+    <#
+    .SYNOPSIS
+        Map a JUnit <failure> element to the AssertFailure shape used by
+        the Python adapter: @{ message; expected; actual; line }.
+    #>
+    param([Parameter(Mandatory)]$Node)
+
+    $message = ''
+    try { $message = [string]$Node.message } catch { }
+    if (-not $message) { $message = [string]$Node.InnerText }
+    $body = [string]$Node.InnerText
+
+    $expected = ''
+    $actual   = ''
+    $line     = 0
+
+    $mexp = [regex]::Match($body, '(?i)expected\s*[:=]?\s*[''"]?([^\s,;''"]+)[''"]?')
+    if ($mexp.Success) { $expected = $mexp.Groups[1].Value.Trim() }
+    $mact = [regex]::Match($body, '(?i)(?:but\s*was|actual)\s*[:=]?\s*[''"]?([^\s,;''"]+)[''"]?')
+    if ($mact.Success) { $actual = $mact.Groups[1].Value.Trim() }
+
+    $ml = [regex]::Match($body, '(?i)\bline\s*[:=]?\s*(\d+)')
+    if ($ml.Success) {
+        $line = [int]$ml.Groups[1].Value
+    } else {
+        $mp = [regex]::Match($body, '\((\d+)(?:,\d+)?\)\s*:')
+        if ($mp.Success) { $line = [int]$mp.Groups[1].Value }
+    }
+
+    return @{
+        message  = $message
+        expected = $expected
+        actual   = $actual
+        line     = $line
+    }
+}
+
+function ConvertTo-TcUnitTestCaseRecord {
+    param([Parameter(Mandatory)]$Node)
+
+    $name = ''
+    try { $name = [string]$Node.name } catch { }
+
+    $duration = $null
+    try { $duration = [double]([string]$Node.time) } catch { }
+
+    $failureNodes = @()
+    if ($Node.HasChildNodes) {
+        foreach ($child in $Node.ChildNodes) {
+            if ($child.LocalName -eq 'failure' -or $child.LocalName -eq 'error') {
+                $failureNodes += $child
+            }
+        }
+    }
+    $failures = @($failureNodes | ForEach-Object { ConvertTo-TcUnitFailureRecord -Node $_ })
+
+    $asserts = 0
+    try {
+        if ($Node.HasAttribute('asserts')) {
+            $asserts = [int]([string]$Node.GetAttribute('asserts'))
+        }
+    } catch { }
+    if ($asserts -eq 0) { $asserts = [Math]::Max(1, $failures.Count) }
+
+    return @{
+        name             = $name
+        passed           = ($failures.Count -eq 0)
+        asserts          = $asserts
+        failures         = $failures
+        duration_seconds = $duration
+    }
+}
+
+function ConvertTo-TcUnitTestSuiteRecord {
+    param(
+        [Parameter(Mandatory)]$Node,
+        [bool]$FailuresOnly = $false
+    )
+
+    $name = ''
+    try { $name = [string]$Node.name } catch { }
+
+    $tests = @()
+    if ($Node.HasChildNodes) {
+        foreach ($child in $Node.ChildNodes) {
+            if ($child.LocalName -eq 'testcase') {
+                $record = ConvertTo-TcUnitTestCaseRecord -Node $child
+                if ($FailuresOnly -and $record.passed) { continue }
+                $tests += $record
+            }
+        }
+    }
+
+    return @{
+        name  = $name
+        tests = $tests
+    }
+}
+
+function Get-TcUnitIntAttribute {
+    param($Node, [string]$Name, [int]$Default = 0)
+    try {
+        if ($Node.HasAttribute($Name)) {
+            return [int]([string]$Node.GetAttribute($Name))
+        }
+    } catch { }
+    return $Default
+}
+
+function Get-TcUnitDoubleAttribute {
+    param($Node, [string]$Name, [double]$Default = 0.0)
+    try {
+        if ($Node.HasAttribute($Name)) {
+            return [double]([string]$Node.GetAttribute($Name))
+        }
+    } catch { }
+    return $Default
+}
+
+function ConvertFrom-TcUnitXml {
+    <#
+    .SYNOPSIS
+        Parse a TcUnit JUnit-style XML file into the structured shape
+        the Python adapter consumes.
+
+    .DESCRIPTION
+        Returns a hashtable with `suites`, `summary`, `failures`, and
+        `xml_path` (success path) or `success=false` plus `error` on
+        any parse failure. The shape matches what /results has always
+        returned, plus a top-level `failures` flat list for callers
+        that only want the lean view (e.g. /tcunit-run with
+        IncludeResults=true).
+
+        FailuresOnly:
+          - $false (default): suites contain every testcase (passing
+            and failing). Full per-test detail.
+          - $true:            suites contain only failing testcases.
+            Passing tests are omitted entirely. Use when the caller
+            is going to surface this inline (run_tests with
+            wait_for_results=True) and wants to keep payload bounded
+            on large green suites.
+
+        `summary` totals always reflect the *full* run; the suites
+        list narrows but the counts do not.
+
+        See ADR-0011.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$XmlPath,
+        [bool]$FailuresOnly = $false
+    )
+
+    if (-not (Test-Path -LiteralPath $XmlPath)) {
+        return @{ success = $false; error = "TcUnit results XML not found at $XmlPath."; xml_path = $XmlPath }
+    }
+
+    try {
+        [xml]$doc = Get-Content -LiteralPath $XmlPath -Raw
+
+        $root = $doc.DocumentElement
+        if ($null -eq $root) {
+            return @{ success = $false; error = "TcUnit results XML at $XmlPath has no root element."; xml_path = $XmlPath }
+        }
+
+        $suiteNodes = @()
+        if ($root.LocalName -eq 'testsuites') {
+            $suiteNodes = @($root.SelectNodes('testsuite'))
+        } elseif ($root.LocalName -eq 'testsuite') {
+            $suiteNodes = @($root)
+        } else {
+            return @{ success = $false; error = "Unexpected root element '$($root.LocalName)' in $XmlPath (expected testsuites or testsuite)."; xml_path = $XmlPath }
+        }
+
+        # Build the full suite/test tree first so summary totals always
+        # cover the whole run; then narrow to failures-only on the way
+        # out if requested.
+        $fullSuites = @($suiteNodes | ForEach-Object {
+            ConvertTo-TcUnitTestSuiteRecord -Node $_ -FailuresOnly $false
+        })
+
+        $summarySource = if ($root.LocalName -eq 'testsuites') { $root } else { $null }
+
+        $summary = @{
+            suites           = $fullSuites.Count
+            tests            = 0
+            asserts          = 0
+            failures         = 0
+            errors           = 0
+            duration_seconds = 0.0
+        }
+        if ($null -ne $summarySource) {
+            $summary.tests            = Get-TcUnitIntAttribute -Node $summarySource -Name 'tests'
+            $summary.failures         = Get-TcUnitIntAttribute -Node $summarySource -Name 'failures'
+            $summary.errors           = Get-TcUnitIntAttribute -Node $summarySource -Name 'errors'
+            $summary.duration_seconds = Get-TcUnitDoubleAttribute -Node $summarySource -Name 'time'
+        }
+        if ($summary.tests -eq 0) {
+            foreach ($s in $fullSuites) { $summary.tests += $s.tests.Count }
+        }
+        foreach ($s in $fullSuites) {
+            foreach ($t in $s.tests) { $summary.asserts += $t.asserts }
+        }
+        if ($summary.failures -eq 0) {
+            foreach ($s in $fullSuites) {
+                foreach ($t in $s.tests) { if (-not $t.passed) { $summary.failures += 1 } }
+            }
+        }
+
+        # Flat failures list for callers that want only the actionable
+        # signal (model in a test loop): one entry per failed testcase
+        # with its suite name. Lean shape — message only, no expected/
+        # actual/line — to keep the inline payload bounded on large
+        # red runs. The full per-test detail (including passes) stays
+        # reachable via /results.
+        $failuresFlat = @()
+        foreach ($s in $fullSuites) {
+            foreach ($t in $s.tests) {
+                if (-not $t.passed) {
+                    $msg = ''
+                    if ($t.failures.Count -gt 0) {
+                        $msg = [string]$t.failures[0].message
+                    }
+                    $failuresFlat += @{
+                        suite_name = $s.name
+                        test_name  = $t.name
+                        message    = $msg
+                    }
+                }
+            }
+        }
+
+        if ($FailuresOnly) {
+            $suitesOut = @()
+            foreach ($s in $fullSuites) {
+                $narrowed = $s.tests | Where-Object { -not $_.passed }
+                if ($narrowed -and @($narrowed).Count -gt 0) {
+                    $suitesOut += @{ name = $s.name; tests = @($narrowed) }
+                }
+            }
+        } else {
+            $suitesOut = $fullSuites
+        }
+
+        return @{
+            success  = $true
+            suites   = $suitesOut
+            summary  = $summary
+            failures = $failuresFlat
+            xml_path = $XmlPath
+        }
+    }
+    catch {
+        return @{ success = $false; error = $_.Exception.Message; xml_path = $XmlPath }
+    }
+}
+
+# ------------------------------------------------------------------
 # File freshness
 # ------------------------------------------------------------------
 
@@ -272,4 +536,5 @@ Export-ModuleMember -Function `
     Get-TcUnitDefaultXmlPath, `
     Get-TcUnitXmlResolveWarning, `
     Resolve-TcUnitXmlCandidates, `
+    ConvertFrom-TcUnitXml, `
     Wait-TcFileFresh

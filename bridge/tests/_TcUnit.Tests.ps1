@@ -98,6 +98,52 @@ Describe 'Get-TcUnitDefaultXmlPath' {
     }
 }
 
+Describe 'ConvertFrom-TcUnitXml' {
+    BeforeAll {
+        $script:FixturesDir = Join-Path $PSScriptRoot 'fixtures'
+    }
+
+    It 'parses a mixed fixture with FailuresOnly=$false and includes passing tests' {
+        $xml = Join-Path $script:FixturesDir 'tcunit-sample-mixed.xml'
+        $result = ConvertFrom-TcUnitXml -XmlPath $xml -FailuresOnly $false
+
+        $result.success | Should -BeTrue
+        $result.summary.tests | Should -Be 3
+        $result.summary.failures | Should -Be 1
+        # Both passing and failing suites present, with all testcases inside.
+        $allTests = $result.suites | ForEach-Object { $_.tests } | Where-Object { $_ }
+        @($allTests).Count | Should -Be 3
+        # Flat failures list always carries the failed cases regardless of mode.
+        $result.failures.Count | Should -Be 1
+        $result.failures[0].suite_name | Should -Be 'FB_Subtracter_Suite'
+        $result.failures[0].message | Should -Be 'AssertEquals_INT failed'
+    }
+
+    It 'with FailuresOnly=$true strips passing tests and drops empty suites' {
+        $xml = Join-Path $script:FixturesDir 'tcunit-sample-mixed.xml'
+        $result = ConvertFrom-TcUnitXml -XmlPath $xml -FailuresOnly $true
+
+        $result.success | Should -BeTrue
+        # Summary totals always reflect the FULL run, not the narrowed view.
+        $result.summary.tests | Should -Be 3
+        $result.summary.failures | Should -Be 1
+        # Suites narrowed: only suites with at least one failing test, only failing tests inside.
+        @($result.suites).Count | Should -Be 1
+        $result.suites[0].name | Should -Be 'FB_Subtracter_Suite'
+        @($result.suites[0].tests).Count | Should -Be 1
+        $result.suites[0].tests[0].passed | Should -BeFalse
+        # Flat failures list matches.
+        $result.failures.Count | Should -Be 1
+    }
+
+    It 'returns success=false for a missing file' {
+        $missing = Join-Path $script:FixturesDir 'does-not-exist.xml'
+        $result = ConvertFrom-TcUnitXml -XmlPath $missing -FailuresOnly $true
+        $result.success | Should -BeFalse
+        $result.error | Should -Match 'not found'
+    }
+}
+
 Describe 'Resolve-TcUnitXmlCandidates' {
     BeforeEach {
         $script:OriginalProgramData = $env:ProgramData

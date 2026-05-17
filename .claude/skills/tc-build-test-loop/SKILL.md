@@ -46,10 +46,11 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 
 1. Build → must succeed.
 2. Deploy (with the safety-gate handshake above).
-3. `run_tests()`, then `get_test_results()`.
-4. For each failure, read the failing test's body via `get_pou_item`, understand the assertion, fix the code under test (not the test, unless the test is wrong and the user agrees).
-5. Go back to step 1.
-6. **Five-iteration cap.** If tests are still failing on the 6th attempt, STOP and present:
+3. `run_tests()`. The response carries `summary` (totals for the whole run) and `failures` (one entry per failed test with `suite_name`, `test_name`, `message`) inline by default. **Do not** call `get_test_results()` on the happy path — it is for the full per-test list including passes, which you only need when the inline failure detail is insufficient.
+4. If `summary.failures == 0` you're done.
+5. For each failed test, read its body via `get_pou_item`, understand the assertion, fix the code under test (not the test, unless the test is wrong and the user agrees).
+6. Go back to step 1.
+7. **Five-iteration cap.** If tests are still failing on the 6th attempt, STOP and present:
    - What you tried (per-iteration summary).
    - Current failures with messages.
    - Your hypothesis.
