@@ -31,9 +31,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -60,11 +63,24 @@ def run_one(prompt: str, config: pathlib.Path, tcunit_path: str) -> dict[str, An
     Read/Grep prompts. The TcUnit directory is added via ``--add-dir``
     to grant explicit access independent of the working directory.
 
-    The child process is launched with cwd set to ``tcunit_path`` so the
-    model cannot browse the TcKit repo itself and discover the bridge
-    URL / harness contracts from the source. Without this isolation the
-    vanilla config can `curl` the bridge directly and the bench measures
-    the wrong thing.
+    The child process is launched with cwd set to ``tcunit_path``. Two
+    side-effects of that choice matter for benchmark isolation:
+
+    1. Claude Code's skill-discovery and ``CLAUDE.md`` ancestor walk
+       run from cwd up to filesystem root. If ``tcunit_path`` is
+       inside this repo, the walk picks up our project skills under
+       ``C:/tckit/.claude/skills/`` and our top-level ``CLAUDE.md``.
+       That biases the bench: the vanilla arm sees ``tc-write-st``
+       and ``tc-build-test-loop`` telling it to use TcKit's MCP tools
+       (which it doesn't have), wastes calls on ``ToolSearch``, and
+       generally inherits TcKit context that an installed-TcKit user
+       wouldn't pay for. The ``--isolate-cwd`` flag (see main()) pins
+       cwd to a temp directory outside the repo and copies the fixture
+       in, which makes the walk hit the filesystem root with nothing
+       to find.
+    2. cwd pinning also stops the model from browsing the TcKit repo
+       itself (the original W1-era rationale: vanilla can otherwise
+       ``Read`` harness scripts and discover the bridge URL).
     """
     # Resolve the config path before launch: cwd is pinned to the target
     # project below, so a relative --mcp-config would otherwise miss.
@@ -261,6 +277,157 @@ def open_solution(bridge_url: str, sln_path: str) -> dict[str, Any]:
         client.close()
 
 
+def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
+    """Copy a fixture tree into a fresh temp directory outside any repo,
+    stripping Claude Code metadata files so the vanilla arm doesn't
+    inherit them.
+
+    Returns the temp path. The caller passes this path as cwd for
+    ``claude -p``, which moves Claude Code's skill-discovery /
+    CLAUDE.md ancestor walk out of the project tree and into a
+    location with no ``.claude/`` or ``CLAUDE.md`` anywhere above it.
+
+    Excluded from the copy:
+
+    - ``CLAUDE.md`` / ``CLAUDE.local.md`` — would auto-load at cwd
+      and bias the vanilla arm. The B1 fixture's CLAUDE.md mentions
+      TcKit by name, which is precisely the contamination we're
+      isolating against.
+    - ``.claude/`` — any project skills, settings, agents the
+      fixture might ship.
+    - ``.mcp.json`` — would auto-add MCP servers that ``empty.json``
+      is supposed to prevent.
+    - XAE / Visual Studio build artefacts that the operator's
+      currently-attached XAE has open file handles on (which makes
+      shutil.copytree raise PermissionError), and which are
+      gitignored anyway because they're rebuilt per run:
+      ``.vs/``, ``_Boot/``, ``_CompileInfo*/``, ``_Deployment/``,
+      ``_Libraries/``, ``_Output/``, ``*.tmc``, ``*.suo``,
+      ``*.~u``, ``*.bak``, ``*.tpzip``, ``*.tszip``, ``*.tpy``,
+      ``*.library``.
+
+    The temp dir is created under ``$TEMP``/``/tmp`` (per-user) so a
+    credentials-grade isolation isn't needed; the cwd just has to be
+    outside the TcKit repo.
+    """
+    src = pathlib.Path(fixture_path).resolve()
+    tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="tckit-bench-"))
+    dest = tmp_root / src.name
+    ignore = shutil.ignore_patterns(
+        # Claude Code metadata — the contamination this flag exists for.
+        "CLAUDE.md",
+        "CLAUDE.local.md",
+        ".claude",
+        ".mcp.json",
+        # XAE / VS build artefacts: locked by an open XAE and
+        # gitignored. Skipping them avoids PermissionError on copy
+        # and keeps the temp tree close to a "freshly-cloned" shape.
+        ".vs",
+        "_Boot",
+        "_CompileInfo",
+        "_CompileInfo_Upload",
+        "_Deployment",
+        "_Libraries",
+        "_Output",
+        "*.tmc",
+        "*.suo",
+        "*.~u",
+        "*.bak",
+        "*.tpzip",
+        "*.tszip",
+        "*.tpy",
+        "*.library",
+    )
+    shutil.copytree(src, dest, ignore=ignore)
+    return dest
+
+
+def inject_skills_into_isolated(
+    temp_fixture: pathlib.Path, skills_dir: str
+) -> int:
+    """Copy a skills directory into a temp fixture's ``.claude/skills/``.
+
+    Used on the tckit arm to inject the shippable ``plugin/skills/``
+    surface into the isolated temp cwd. Without it, the tckit arm
+    has no skills at all when paired with --isolate-cwd (which
+    strips ``.claude/`` from the fixture copy); with it, the model
+    sees exactly the 6 user-facing TcKit skills, not the dev-only
+    `tc-adr` / `tc-docs-write` that live in this repo's
+    ``.claude/skills/``.
+
+    Returns the number of skills copied. Each skill must be a
+    directory under ``skills_dir`` with at least a ``SKILL.md``.
+    """
+    src = pathlib.Path(skills_dir).resolve()
+    if not src.is_dir():
+        raise FileNotFoundError(
+            f"--inject-skills path is not a directory: {src}"
+        )
+    dest = temp_fixture / ".claude" / "skills"
+    dest.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for skill in sorted(src.iterdir()):
+        if not skill.is_dir():
+            continue
+        shutil.copytree(skill, dest / skill.name)
+        count += 1
+    return count
+
+
+def sync_fixture_edits(tmp_fixture: pathlib.Path, real_fixture: str) -> None:
+    """Copy files modified inside ``tmp_fixture`` back to the real
+    fixture, preserving relative paths.
+
+    Conservative on two axes:
+
+    1. **Only mirrors files whose mtime is newer than the matching
+       path in the real fixture** (i.e. the model touched them).
+    2. **Only mirrors files that already exist in the real fixture.**
+       Injected metadata (e.g. ``.claude/skills/`` from
+       ``--inject-skills``) lives in the temp copy but never in the
+       real source tree; skipping non-existent destinations stops
+       the inject step from polluting the real fixture on sync-back.
+
+    Files deleted in the temp copy are NOT deleted from the real
+    tree; the bench harness's reset-cmd is authoritative for that.
+    Bug-hunting tasks are edits to existing code by construction, so
+    "new files don't sync" is not a real loss; if a future task
+    needs adds, this policy can be revisited.
+    """
+    real = pathlib.Path(real_fixture).resolve()
+    for src_path in tmp_fixture.rglob("*"):
+        if src_path.is_dir():
+            continue
+        rel = src_path.relative_to(tmp_fixture)
+        dest_path = real / rel
+        if not dest_path.exists():
+            continue
+        if dest_path.stat().st_mtime >= src_path.stat().st_mtime:
+            continue
+        shutil.copy2(src_path, dest_path)
+
+
+def close_solution(bridge_url: str) -> dict[str, Any]:
+    """POST /close to release the bridge's in-memory project model.
+
+    Used to bracket a ``claude -p`` invocation that may edit .plcproj /
+    .TcPOU XML directly (the vanilla arm, no MCP tools). With the
+    solution closed, XAE won't flag the disk edits as "modified
+    externally"; a subsequent ``/open`` re-reads from the new disk
+    state. Mirrors the close/edit/reopen pattern in
+    ``bridge/harness/Add-TcLibraryPlaceholder.ps1``.
+    """
+    from tckit.utils.bridge_client import BridgeClient, BridgeError, build_timeout
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
+    try:
+        return client.post("/close", {})
+    except BridgeError as exc:
+        return {"success": False, "error": str(exc)}
+    finally:
+        client.close()
+
+
 def build_project(bridge_url: str, sln_path: str) -> dict[str, Any]:
     """POST /build via the bridge and return the parsed response.
 
@@ -281,6 +448,202 @@ def build_project(bridge_url: str, sln_path: str) -> dict[str, Any]:
         return {"success": False, "error": str(exc)}
     finally:
         client.close()
+
+
+# ---------------------------------------------------------------------------
+# Closed-loop test cycle (bug-hunting bench)
+# ---------------------------------------------------------------------------
+#
+# The bug-hunting fixtures (ADR-0007) have two PLC projects in one sln:
+# a library under test and a tests project that references the library
+# as a compiled .library. The consumer build resolves against the
+# *installed* library, not source, so any edit to the library project
+# must be flushed through save_plc_as_library before rebuilding tests.
+# These helpers wrap that orchestration so a fresh seeded-bug state
+# (pre-run) and the model's edited state (post-run) both reach the
+# runtime via a freshly-installed .library.
+
+
+def _library_artefact_path(sln_path: str, library_plc: str) -> pathlib.Path:
+    """Conventional .library path next to the sln: ``<sln_dir>/<plc>.library``.
+
+    Mirrors ``smoke_B1.py``: the .library is gitignored and regenerated
+    from current source on each save_plc_as_library call.
+    """
+    return pathlib.Path(sln_path).resolve().parent / f"{library_plc}.library"
+
+
+def save_plc_library(
+    bridge_url: str, sln_path: str, library_plc: str
+) -> dict[str, Any]:
+    """Save the named PLC as a compiled .library and install it.
+
+    Returns ``{success, error, output_path}``. Deletes any stale .library
+    before saving; the underlying bridge route historically refused to
+    overwrite, and the artefact is gitignored anyway.
+    """
+    from tckit.adapters.writers.automation_writer import AutomationWriter
+    from tckit.utils.bridge_client import BridgeClient, build_timeout
+
+    output_path = _library_artefact_path(sln_path, library_plc)
+    try:
+        if output_path.exists():
+            output_path.unlink()
+    except OSError as exc:
+        return {
+            "success": False,
+            "error": f"could not remove stale .library at {output_path}: {exc}",
+            "output_path": str(output_path),
+        }
+
+    # PLC_PROJECT_PATH steers the bridge to the right sln; set it here so
+    # the writer adapter forwards it on the POST body. Mirrors smoke_B1.py.
+    os.environ["PLC_PROJECT_PATH"] = sln_path
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
+    writer = AutomationWriter(client=client)
+    try:
+        result = writer.save_plc_as_library(
+            library_plc, str(output_path), install=True
+        )
+        return {
+            "success": bool(result.success),
+            "error": result.error,
+            "output_path": str(output_path),
+        }
+    finally:
+        client.close()
+
+
+def run_test_cycle(
+    *,
+    bridge_url: str,
+    sln_path: str,
+    library_plc: str,
+    tests_plc: str,
+    target_ams_id: str,
+    probes: list[str],
+) -> dict[str, Any]:
+    """Drive the full post-session validation cycle for a bug-hunting fixture.
+
+    Order mirrors ``bench/fixtures/bug-hunting/_author/smoke_B1.py``'s
+    ``_cycle()``: save_plc_as_library (library) -> build (tests) -> deploy
+    (tests) -> start_runtime -> run_tests (tests, with probes). Each step
+    short-circuits on failure and the returned dict records what was
+    reached. The probe values land under ``probes``; the caller derives
+    pass/fail from ``*.TestIsFailed`` entries.
+    """
+    from tckit.adapters.builders.xae_com_builder import XaeComBuilder
+    from tckit.adapters.test_runners.tcunit_runner import TcUnitRunner
+    from tckit.adapters.writers.automation_writer import AutomationWriter
+    from tckit.utils.bridge_client import BridgeClient, build_timeout
+
+    os.environ["PLC_PROJECT_PATH"] = sln_path
+    out: dict[str, Any] = {
+        "library_saved": None,
+        "library_save_error": None,
+        "built": None,
+        "build_errors": [],
+        "deployed": None,
+        "deploy_error": None,
+        "runtime_started": None,
+        "start_error": None,
+        "tests_ran": None,
+        "tests_run_error": None,
+        "probes": {},
+        "probes_errors": {},
+    }
+
+    client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
+    writer = AutomationWriter(client=client)
+    builder = XaeComBuilder(client=client)
+    runner = TcUnitRunner(client=client)
+    try:
+        artefact = _library_artefact_path(sln_path, library_plc)
+        if artefact.exists():
+            try:
+                artefact.unlink()
+            except OSError as exc:
+                out["library_saved"] = False
+                out["library_save_error"] = (
+                    f"could not remove stale .library at {artefact}: {exc}"
+                )
+                return out
+        save = writer.save_plc_as_library(
+            library_plc, str(artefact), install=True
+        )
+        out["library_saved"] = bool(save.success)
+        out["library_save_error"] = save.error
+        if not save.success:
+            return out
+
+        build = builder.build(sln_path, plc_name=tests_plc)
+        out["built"] = bool(build.success)
+        out["build_errors"] = [
+            {"file": e.file, "line": e.line, "message": e.message}
+            for e in build.errors
+        ]
+        if not build.success:
+            return out
+
+        deploy = builder.deploy(target_ams_id, plc_name=tests_plc)
+        out["deployed"] = bool(deploy.success)
+        out["deploy_error"] = deploy.error
+        if not deploy.success:
+            return out
+
+        start = builder.start_runtime(target_ams_id)
+        out["runtime_started"] = bool(start.success)
+        out["start_error"] = start.error
+        if not start.success:
+            return out
+
+        run_result = runner.run_tests(
+            target_ams_id, plc_name=tests_plc, probes=probes or None,
+        )
+        out["tests_ran"] = bool(run_result.success)
+        out["tests_run_error"] = run_result.error
+        details = run_result.details or {}
+        probe_values = details.get("probes")
+        if isinstance(probe_values, dict):
+            out["probes"] = {str(k): str(v) for k, v in probe_values.items()}
+        probe_errors = details.get("probes_errors")
+        if isinstance(probe_errors, dict):
+            out["probes_errors"] = {str(k): str(v) for k, v in probe_errors.items()}
+        return out
+    finally:
+        client.close()
+
+
+def derive_pass_fail(probes: dict[str, str]) -> bool | None:
+    """Infer test pass/fail from ``*.TestIsFailed`` probe values.
+
+    Any probe whose key ends with ``.TestIsFailed`` and whose value is
+    "True" (case-insensitive) flips the result to failed. Returns
+    ``None`` if no such probes were collected, so the caller can
+    distinguish "tests didn't run" from "tests ran and passed".
+    """
+    failed_flags = [v for k, v in probes.items() if k.endswith(".TestIsFailed")]
+    if not failed_flags:
+        return None
+    return not any(str(v).strip().lower() == "true" for v in failed_flags)
+
+
+def check_tests_modified(repo_root: str, guard_path: str) -> list[str]:
+    """Return the list of paths under ``guard_path`` modified vs HEAD.
+
+    Tamper guard for the bug-hunting bench: a non-empty result means the
+    model edited test code to make the suite pass, which grades the run
+    as failed regardless of the test outcome (ADR-0007).
+    """
+    proc = subprocess.run(
+        ["git", "-C", repo_root, "diff", "--name-only", "--", guard_path],
+        capture_output=True, text=True, check=False,
+        encoding="utf-8", errors="replace",
+    )
+    if proc.returncode != 0:
+        return []
+    return [line for line in proc.stdout.splitlines() if line.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -368,11 +731,122 @@ def main() -> int:
                         ))
     parser.add_argument("--bridge-url", default="http://localhost:8765",
                         help="Bridge service URL. Default: http://localhost:8765")
+    parser.add_argument("--pre-save-as-library", default="",
+                        help=(
+                            "Name of the library PLC project to save+install "
+                            "before each run, so the consumer build resolves "
+                            "against the freshly-seeded source. Required for "
+                            "bug-hunting fixtures where one PLC project is "
+                            "consumed by another as a compiled .library. The "
+                            "output path is derived as <sln-dir>/<name>.library."
+                        ))
+    parser.add_argument("--post-run-tests", default="",
+                        help=(
+                            "Name of the tests PLC project to drive through "
+                            "build -> deploy -> start_runtime -> run_tests "
+                            "after each run. Re-saves the library first (so the "
+                            "model's edits land in the installed .library) and "
+                            "writes a .test-result.json sibling. Requires "
+                            "--sln-path, --pre-save-as-library, and TARGET_AMS_ID."
+                        ))
+    parser.add_argument("--tests-guard-path", default="",
+                        help=(
+                            "Repo-relative path to a tests directory. After "
+                            "each run, the harness diffs this path vs HEAD; "
+                            "a non-empty diff marks the run as tampered "
+                            "(passed=False) and records the modified files."
+                        ))
+    parser.add_argument("--test-probe", action="append", default=[],
+                        help=(
+                            "PLC symbol path read after run_tests; repeatable. "
+                            "Used to gauge pass/fail when the xUnit XML "
+                            "publisher is off. Defaults to the B1 probe set "
+                            "(MAIN.suite.NumberOfTests + MAIN.suite.Tests[1]"
+                            ".TestIsFailed) when --post-run-tests is set."
+                        ))
+    parser.add_argument("--repo-root", type=pathlib.Path,
+                        default=pathlib.Path(__file__).resolve().parent.parent,
+                        help=(
+                            "Repository root used by --tests-guard-path for "
+                            "the git diff call. Defaults to the parent of bench/."
+                        ))
+    parser.add_argument("--close-during-run", action="store_true",
+                        help=(
+                            "Close the bridge's loaded solution before each "
+                            "claude -p invocation and re-open it after. Required "
+                            "for the vanilla arm of bug-hunting benches: the "
+                            "model edits .plcproj / .TcPOU XML directly, which "
+                            "trips XAE's 'modified externally' guard. The pre-"
+                            "save-as-library still runs while the solution is "
+                            "open; the close fires only around the model session."
+                        ))
+    parser.add_argument("--isolate-cwd", action="store_true",
+                        help=(
+                            "Copy the fixture to a fresh temp directory "
+                            "outside this repo before each claude -p "
+                            "invocation, pin cwd there, then sync the "
+                            "model's edits back to the real fixture for "
+                            "post-run validation. CLAUDE.md / .claude/ / "
+                            ".mcp.json and XAE build artefacts are "
+                            "excluded from the copy. Use this on both arms "
+                            "to ensure neither inherits this repo's "
+                            "dev-side .claude/skills/ + CLAUDE.md via "
+                            "Claude Code's cwd-ancestor walk. Pair with "
+                            "--inject-skills on the tckit arm to give it "
+                            "the user-facing plugin/skills/ surface "
+                            "afterwards. Cheaper than --bare and keeps "
+                            "OAuth working (--bare requires API key)."
+                        ))
+    parser.add_argument("--inject-skills", default="",
+                        help=(
+                            "Path to a skills directory to copy into the "
+                            "isolated temp fixture's .claude/skills/ "
+                            "after --isolate-cwd has prepared it. Use "
+                            "this on the tckit arm with `plugin/skills` "
+                            "to inject the 6 user-facing TcKit skills, "
+                            "so the model sees the shippable plugin "
+                            "surface rather than this repo's dev-side "
+                            ".claude/skills/ (which adds tc-adr and "
+                            "tc-docs-write — dev-only). Requires "
+                            "--isolate-cwd."
+                        ))
     args = parser.parse_args()
 
     if args.build_after_each and not args.sln_path:
         print("--build-after-each requires --sln-path", file=sys.stderr)
         return 2
+
+    if args.inject_skills and not args.isolate_cwd:
+        print("--inject-skills requires --isolate-cwd", file=sys.stderr)
+        return 2
+
+    if args.post_run_tests:
+        if not args.sln_path:
+            print("--post-run-tests requires --sln-path", file=sys.stderr)
+            return 2
+        if not args.pre_save_as_library:
+            print(
+                "--post-run-tests requires --pre-save-as-library "
+                "(the library PLC name)",
+                file=sys.stderr,
+            )
+            return 2
+        if not os.getenv("TARGET_AMS_ID"):
+            print(
+                "--post-run-tests requires TARGET_AMS_ID env var "
+                "(the target runtime)",
+                file=sys.stderr,
+            )
+            return 2
+
+    test_probes: list[str] = list(args.test_probe)
+    if args.post_run_tests and not test_probes:
+        # B1's probe set as the default (matches smoke_B1.py). Operators
+        # of multi-test fixtures pass --test-probe explicitly.
+        test_probes = [
+            "MAIN.suite.NumberOfTests",
+            "MAIN.suite.Tests[1].TestIsFailed",
+        ]
 
     if not args.task.exists():
         print(f"task not found: {args.task}", file=sys.stderr)
@@ -412,8 +886,78 @@ def main() -> int:
     for n in range(1, args.runs + 1):
         print(f"  Run {n}/{args.runs}...", end=" ", flush=True)
         if args.reset_cmd:
+            # Close the solution around the reset so XAE doesn't catch
+            # the disk revert as an external modification and drop its
+            # in-memory project (which would wedge subsequent calls).
+            # /open is idempotent and re-reads from the now-reverted
+            # disk state. Only bother if we have a sln_path to reopen.
+            if args.sln_path:
+                close_solution(args.bridge_url)
             run_reset_cmd(args.reset_cmd)
-        result = run_one(prompt, args.config, args.tcunit_path)
+            if args.sln_path:
+                reopen_resp = open_solution(args.bridge_url, args.sln_path)
+                if not reopen_resp.get("success", False):
+                    print(
+                        f"\n  /open (post-reset reopen) failed: "
+                        f"{reopen_resp.get('error', reopen_resp)}",
+                        file=sys.stderr,
+                    )
+                    return 3
+        pre_save_result: dict[str, Any] | None = None
+        if args.pre_save_as_library:
+            print(" pre-save...", end="", flush=True)
+            pre_save_result = save_plc_library(
+                args.bridge_url, args.sln_path, args.pre_save_as_library
+            )
+            if not pre_save_result.get("success"):
+                # Abort the run: vanilla and tckit both rely on the consumer
+                # build resolving against the seeded-bug .library, and without
+                # this step the .library reflects whatever was last installed.
+                print(
+                    f"\n  pre-save-as-library failed: "
+                    f"{pre_save_result.get('error')}",
+                    file=sys.stderr,
+                )
+                return 4
+        if args.close_during_run:
+            print(" close-sln...", end="", flush=True)
+            close_resp = close_solution(args.bridge_url)
+            if not close_resp.get("success", False):
+                print(
+                    f"\n  /close failed: {close_resp.get('error', close_resp)}",
+                    file=sys.stderr,
+                )
+                return 5
+        run_cwd = args.tcunit_path
+        tmp_fixture: pathlib.Path | None = None
+        if args.isolate_cwd:
+            print(" isolate-cwd...", end="", flush=True)
+            tmp_fixture = isolate_fixture_to_tempdir(args.tcunit_path)
+            if args.inject_skills:
+                n_skills = inject_skills_into_isolated(
+                    tmp_fixture, args.inject_skills
+                )
+                print(f" inject-{n_skills}-skills...", end="", flush=True)
+            run_cwd = str(tmp_fixture)
+        try:
+            result = run_one(prompt, args.config, run_cwd)
+        finally:
+            if tmp_fixture is not None:
+                sync_fixture_edits(tmp_fixture, args.tcunit_path)
+                try:
+                    shutil.rmtree(tmp_fixture.parent, ignore_errors=True)
+                except OSError:
+                    pass
+        if args.close_during_run:
+            print(" reopen-sln...", end="", flush=True)
+            reopen_resp = open_solution(args.bridge_url, args.sln_path)
+            if not reopen_resp.get("success", False):
+                print(
+                    f"\n  /open (post-run reopen) failed: "
+                    f"{reopen_resp.get('error', reopen_resp)}",
+                    file=sys.stderr,
+                )
+                return 5
         metrics = extract_metrics(result)
 
         out = {
@@ -461,6 +1005,57 @@ def main() -> int:
             build_path = out_path.with_suffix(".build.json")
             build_path.write_text(
                 json.dumps(build_resp, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+        # Closed-loop test validation for bug-hunting fixtures: re-save the
+        # library (the model's edits need to reach the installed .library
+        # before the tests PLC is rebuilt), then build -> deploy -> start
+        # -> run_tests -> probe. The harness's reading is authoritative;
+        # ADR-0007 calls out the "model said pass, harness saw fail"
+        # discrepancy as a finding worth surfacing.
+        test_result: dict[str, Any] | None = None
+        if args.post_run_tests:
+            print(" tests...", end="", flush=True)
+            cycle = run_test_cycle(
+                bridge_url=args.bridge_url,
+                sln_path=args.sln_path,
+                library_plc=args.pre_save_as_library,
+                tests_plc=args.post_run_tests,
+                target_ams_id=os.environ["TARGET_AMS_ID"],
+                probes=test_probes,
+            )
+            passed = derive_pass_fail(cycle.get("probes") or {})
+            test_result = {
+                "pre_save_result": pre_save_result,
+                **cycle,
+                "passed": passed,
+                "tests_modified": False,
+                "tests_modified_files": [],
+            }
+
+        if args.tests_guard_path:
+            modified = check_tests_modified(
+                str(args.repo_root), args.tests_guard_path
+            )
+            if test_result is None:
+                test_result = {
+                    "tests_modified": bool(modified),
+                    "tests_modified_files": modified,
+                    "passed": None,
+                }
+            else:
+                test_result["tests_modified"] = bool(modified)
+                test_result["tests_modified_files"] = modified
+                if modified:
+                    # Tamper invalidates the run regardless of probe outcome
+                    # (per ADR-0007's tamper-guard rule).
+                    test_result["passed"] = False
+
+        if test_result is not None:
+            test_path = out_path.with_suffix(".test-result.json")
+            test_path.write_text(
+                json.dumps(test_result, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
 

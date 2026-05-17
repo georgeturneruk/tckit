@@ -14,11 +14,10 @@ END_VAR]]></Declaration>
       <ST><![CDATA[]]></ST>
     </Implementation>
     <Method Name="Step" Id="{e85e30ba-ddae-4fe4-95a8-6fa34d5910ee}">
-      <Declaration><![CDATA[METHOD Step : BOOL
-;
-]]></Declaration>
+      <Declaration><![CDATA[METHOD Step : BOOL]]></Declaration>
       <Implementation>
-        <ST><![CDATA[]]></ST>
+        <ST><![CDATA[;
+]]></ST>
       </Implementation>
     </Method>
   </POU>

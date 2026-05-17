@@ -13,6 +13,7 @@
       POST /runtime               -> harness\Invoke-TcRuntime.ps1
       POST /tcunit-run            -> harness\Invoke-TcUnitRun.ps1
       POST /open                  -> harness\Open-TcProject.ps1
+      POST /close                 -> harness\Close-TcProject.ps1
       POST /create                -> harness\New-TcProject.ps1
       POST /add-plc-project       -> harness\Add-TcPlcProject.ps1
       POST /save-as-library       -> harness\Save-TcPlcAsLibrary.ps1
@@ -303,6 +304,11 @@ try {
                 'POST /open' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Open-TcProject.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /close' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Close-TcProject.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /create' {
