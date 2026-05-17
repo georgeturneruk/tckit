@@ -269,6 +269,53 @@ consumer, never the suite + tests + MAIN. Whichever next.
   aren't noise. T1's 10× gap is large enough to be a real signal
   even at N=1, but B1's 0.65-0.89× could move ±20% on re-roll.
 
+## Hacked-around in this round (not done properly)
+
+Worth fixing properly before the next sweep:
+
+- **`author_T1.py` is out of sync with what's on disk.** The
+  suite FB, the 5 test methods, and MAIN's body were authored via
+  an ad-hoc Python heredoc this session — not added to
+  `author_T1.py`. Running `author_T1.py --force` today would wipe
+  the test infra and not re-create it. Same gap exists for B2-B5
+  whose author scripts also only know about the library + consumer.
+  Mirror `author_B1.py`'s shape (SUITE_FB_CODE, TEST_METHOD_CODE,
+  MAIN_DECL, MAIN_BODY constants + the corresponding add_pou /
+  add_method / update_pou_declaration / update_pou_implementation
+  calls) and the fixtures become regenerable from scratch.
+- **`xUnitEnablePublish` parameter was spliced in via a direct
+  PowerShell call to the internal `Set-TcPlcProjPlaceholderParameters`
+  function**, because `add_library_placeholder` errors with
+  "Placeholder 'TcUnit' already contained!" when called on an
+  existing placeholder. Future fix: either (a) make
+  `add_library_placeholder` idempotent on the AddPlaceholder COM
+  call so it falls through to the parameter splice on existing
+  placeholders, or (b) expose `Set-TcPlcProjPlaceholderParameters`
+  as a first-class bridge route + writer method
+  (`set_placeholder_parameters`). New fixtures authored from
+  scratch don't hit this — `scaffold_fixture` passes parameters on
+  the original placeholder add — so it only matters for
+  retrofitting old fixtures.
+- **T1's `.plcproj` Parameters block was added via a hand-edit
+  with the Edit tool** (minimal 6-line diff), not via the
+  bridge's close/edit/open dance. Equivalent on-disk shape, but
+  the next time XAE saves the project it'll rewrite the whole
+  file (BOM, `<None Include="...tmc">`, `<Data>`/`<TypeList>`
+  re-indentation in `XmlArchive`). The canonical path would have
+  produced that re-serialised form on commit and avoided the
+  noise re-appearing later.
+- **Tests 2 and 5 were authored once, then immediately rewritten
+  via `update_method_body`** because the initial bodies happened
+  to pass on the empty seed `Step` (default `BOOL FALSE` matched
+  the assertion targets). Should have written them as sequences
+  from the start. Cheap to fix in the regenerable `author_T1.py`
+  whenever that lands.
+- **`TCKIT_TCUNIT_XML_PATH` was set ad-hoc on the bridge launch
+  command** (`$env:TCKIT_TCUNIT_XML_PATH = '...'`). The proper
+  fixes are listed under finding 3: document the env var in
+  `config.toml.example`, and/or auto-detect UmRT runtimes inside
+  the bridge so the env var stops being load-bearing.
+
 ## Caveats
 
 - N=1, one model (Opus 4.7), one project, one machine. The 10×
