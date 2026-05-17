@@ -512,6 +512,52 @@ function Find-TcPlcProjFile {
     return $candidates[0].FullName
 }
 
+function Test-TcPlcProjHasPlaceholder {
+    <#
+    .SYNOPSIS
+        File-only check: does $PlcProjPath already declare a
+        <PlaceholderReference Include="$PlaceholderName"> element?
+
+    .DESCRIPTION
+        Mirrors the XPath probe at the top of
+        Set-TcPlcProjPlaceholderParameters. Lets
+        Add-TcLibraryPlaceholder.ps1 short-circuit the COM AddPlaceholder
+        call (which throws "already contained!" on a duplicate) and fall
+        straight through to the parameter splice. See ADR-0011.
+
+    .OUTPUTS
+        $true if the placeholder is present; $false otherwise.
+        Returns $false on a missing file (caller surfaces the real
+        error via the COM path).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$PlcProjPath,
+        [Parameter(Mandatory)][string]$PlaceholderName
+    )
+
+    if (-not (Test-Path -LiteralPath $PlcProjPath)) {
+        return $false
+    }
+
+    try {
+        [xml]$doc = Get-Content -LiteralPath $PlcProjPath -Raw -ErrorAction Stop
+    } catch {
+        return $false
+    }
+
+    $defaultNs = $doc.DocumentElement.NamespaceURI
+    $nsMgr = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+    if ($defaultNs) {
+        $nsMgr.AddNamespace('m', $defaultNs)
+        $xpath = "//m:PlaceholderReference[@Include='$PlaceholderName']"
+    } else {
+        $xpath = "//PlaceholderReference[@Include='$PlaceholderName']"
+    }
+
+    $node = $doc.SelectSingleNode($xpath, $nsMgr)
+    return ($null -ne $node)
+}
+
 function Set-TcPlcProjPlaceholderParameters {
     <#
     .SYNOPSIS
@@ -887,4 +933,5 @@ Export-ModuleMember -Function `
     Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
-    Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters
+    Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `
+    Test-TcPlcProjHasPlaceholder

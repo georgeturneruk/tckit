@@ -89,14 +89,27 @@ try {
     $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plc
 
-    # References node is the library manager via COM dispatch.
-    $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
-    $libManager.AddPlaceholder($PlaceholderName, $DefaultLibrary, $Version, $Distributor) | Out-Null
+    # Idempotency probe: ITcPlcLibraryManager.AddPlaceholder throws
+    # "Placeholder '<name>' already contained!" if the placeholder is
+    # already on the project, which forced earlier callers to hand-edit
+    # via Set-TcPlcProjPlaceholderParameters. Check the on-disk
+    # .plcproj before the COM call; on a hit, skip AddPlaceholder and
+    # fall through to the parameter splice. See ADR-0011.
+    $plcProjPath = Find-TcPlcProjFile -SolutionPath $ProjectPath -PlcName $plc
+    $alreadyPresent = Test-TcPlcProjHasPlaceholder `
+        -PlcProjPath $plcProjPath `
+        -PlaceholderName $PlaceholderName
 
-    # Persist the basic <PlaceholderReference> block to the consumer
-    # .plcproj before we splice in any parameter overrides; the override
-    # editor reads the on-disk XML, not the in-memory tree.
-    Save-TcSolution -Dte $dte
+    if (-not $alreadyPresent) {
+        # References node is the library manager via COM dispatch.
+        $libManager = $sm.LookupTreeItem("TIPC^$plc^$plc Project^References")
+        $libManager.AddPlaceholder($PlaceholderName, $DefaultLibrary, $Version, $Distributor) | Out-Null
+
+        # Persist the basic <PlaceholderReference> block to the consumer
+        # .plcproj before we splice in any parameter overrides; the override
+        # editor reads the on-disk XML, not the in-memory tree.
+        Save-TcSolution -Dte $dte
+    }
 
     if ($Parameters.Count -gt 0) {
         # The Automation Interface has no documented method for setting
@@ -116,7 +129,6 @@ try {
         # overrides. Reopening from disk afterwards re-hydrates the
         # in-memory model with the new state, so subsequent harness
         # calls in the same session see consistent data.
-        $plcProjPath = Find-TcPlcProjFile -SolutionPath $ProjectPath -PlcName $plc
         $dte.Solution.Close($false) | Out-Null
         Set-TcPlcProjPlaceholderParameters `
             -PlcProjPath $plcProjPath `
@@ -134,6 +146,7 @@ try {
             version          = $Version
             distributor      = $Distributor
             parameters       = $Parameters
+            already_present  = $alreadyPresent
         }
     }
 }
