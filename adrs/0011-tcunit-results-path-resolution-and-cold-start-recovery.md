@@ -1,7 +1,7 @@
 ---
 adr: 0011
 title: TcUnit results path resolution, run_tests inline failures, placeholder idempotency, save_plc_as_library cold-start retry
-status: Proposed
+status: Accepted
 created: 2026-05-17
 issue:
 pr:
@@ -212,5 +212,13 @@ reliable on-host disambiguation.
 
 ## Status notes
 
-- 2026-05-17: Drafted. Proposed. PR pending on the
-  `feat/tcunit-self-validation` branch.
+- 2026-05-17: Drafted. Proposed.
+- 2026-05-17: All six fixes landed on `feat/tcunit-self-validation`
+  (UmRT auto-detect, `tckit doctor` TcUnit section, `run_tests`
+  failure-first inline payload, `add_library_placeholder`
+  idempotency, `set_placeholder_parameters` route,
+  `save_plc_as_library` cold-start retry). 369 unit tests +
+  combined Pester suites green. Promoted to Accepted. Re-bench T1
+  pending (expected: tckit arm call count drops from 49 toward
+  vanilla's 7 once the UmRT auto-detect + inline failures land
+  together).
