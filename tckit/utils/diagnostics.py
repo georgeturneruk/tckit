@@ -112,6 +112,78 @@ def bridge_dependencies(url: str | None = None) -> dict[str, str | None]:
     return {str(k): (str(v) if v is not None else None) for k, v in deps.items()}
 
 
+def tcunit_xml_status(url: str | None = None) -> tuple[bool, bool, list[str]]:
+    """Check whether the bridge can resolve a TcUnit XML output path.
+
+    Calls the bridge's ``/tcunit-xml-resolve`` route which mirrors
+    ``Get-TcUnitDefaultXmlPath``'s ladder. Returns
+    ``(ok, warn, lines)``:
+
+    - ``ok=True, warn=False``: env override resolves, or exactly one
+      candidate (kernel or single UmRT) is present.
+    - ``ok=True, warn=True``: multiple UmRT candidates; freshest will
+      be used. Operator should pin via ``TCKIT_TCUNIT_XML_PATH`` if
+      ambiguous.
+    - ``ok=False``: zero candidates; tests will not be readable.
+
+    ``lines`` is the human-readable detail for ``tckit doctor`` to
+    print. Older bridges that don't have the route return
+    ``(True, False, ["route not available; upgrade bridge"])`` so the
+    doctor doesn't fail closed on the version skew. See ADR-0011.
+    """
+    client = BridgeClient(base_url=url) if url else BridgeClient()
+    try:
+        try:
+            resp = client.post("/tcunit-xml-resolve", {}, timeout=5.0)
+        except Exception as exc:  # noqa: BLE001
+            return False, False, [f"error contacting bridge: {exc}"]
+    finally:
+        client.close()
+
+    if not resp.get("success", True):
+        err = resp.get("error") or "unknown error"
+        if "not found" in str(err).lower() or "unknown" in str(err).lower():
+            return True, False, ["route not available; upgrade bridge"]
+        return False, False, [str(err)]
+
+    env_override = resp.get("env_override")
+    env_exists = bool(resp.get("env_exists", False))
+    kernel_path = resp.get("kernel_path", "")
+    kernel_exists = bool(resp.get("kernel_exists", False))
+    umrt = resp.get("umrt_candidates") or []
+
+    if env_override and env_exists:
+        return True, False, [f"env override resolves: {env_override}"]
+    if env_override and not env_exists:
+        return False, False, [
+            f"env override TCKIT_TCUNIT_XML_PATH set to {env_override} "
+            "but file does not exist"
+        ]
+    if kernel_exists:
+        return True, False, [f"kernel-RT path resolves: {kernel_path}"]
+    if len(umrt) == 1:
+        return True, False, [f"UmRT path resolves: {umrt[0].get('path')}"]
+    if len(umrt) > 1:
+        paths = [str(c.get("path", "")) for c in umrt]
+        lines = [
+            f"multiple UmRT candidates ({len(paths)}); freshest will be used:",
+            f"  freshest: {paths[0]}",
+        ]
+        lines.extend(f"  alt:      {p}" for p in paths[1:])
+        lines.append(
+            "  pin via TCKIT_TCUNIT_XML_PATH in ~/.tckit/config.toml if ambiguous."
+        )
+        return True, True, lines
+    return False, False, [
+        f"no TcUnit XML found. Searched: {kernel_path}",
+        (
+            "and %ProgramData%\\Beckhoff\\TwinCAT\\3.1\\Runtimes\\*\\3.1\\Boot\\"
+            "tcunit_xunit_testresults.xml"
+        ),
+        "Run TcUnit tests once to populate, or set TCKIT_TCUNIT_XML_PATH.",
+    ]
+
+
 def install_bridge_dependency(
     name: str, url: str | None = None
 ) -> tuple[bool, str]:

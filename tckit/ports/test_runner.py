@@ -21,7 +21,11 @@ class TestRunner(ABC):
 
     @abstractmethod
     def run_tests(
-        self, target_ams_id: str, *, plc_name: str | None = None
+        self,
+        target_ams_id: str,
+        *,
+        plc_name: str | None = None,
+        wait_for_results: bool = True,
     ) -> Result:
         """Trigger TcUnit test execution and block until completion.
 
@@ -29,6 +33,13 @@ class TestRunner(ABC):
             tests (e.g. ``192.168.1.100.1.1``).
         :param plc_name: PLC project hosting the TcUnit suites; ``None``
             follows the standard resolution order.
+        :param wait_for_results: When ``True`` (default), the bridge parses
+            the TcUnit XML and returns ``summary`` + ``failures`` (failed
+            tests only, with suite_name / test_name / message) inline in
+            ``Result.details``. Passing tests are not inlined; call
+            :meth:`get_results` for the full per-test list. When ``False``,
+            only the run handle is returned; callers must call
+            :meth:`get_results` themselves. See ADR-0011.
         """
         ...
 

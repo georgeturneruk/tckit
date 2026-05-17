@@ -44,6 +44,7 @@ class TcUnitRunner(TestRunner):
         *,
         plc_name: str | None = None,
         probes: list[str] | None = None,
+        wait_for_results: bool = True,
     ) -> Result:
         extra: dict[str, Any] = {}
         if probes:
@@ -57,6 +58,12 @@ class TcUnitRunner(TestRunner):
             # ReadSymbols rather than Probes because PowerShell's
             # parameter binding garbles a key literally named "Probes".
             extra["ReadSymbols"] = "\n".join(probes)
+        # IncludeResults toggles the bridge's inline parse step. Default
+        # True so the model sees summary + failed tests on the first
+        # run_tests call without a follow-up /results round trip; see
+        # ADR-0011. PowerShell boolean bind is robust here because
+        # ConvertTo-HashtableDeep coerces JSON booleans cleanly.
+        extra["IncludeResults"] = bool(wait_for_results)
         payload = self._with_target_and_plc(extra, target_ams_id, plc_name)
         try:
             resp = self._client.post("/tcunit-run", payload)
@@ -116,7 +123,8 @@ def _parse_test_results(resp: dict[str, Any]) -> TestResults:
     suites_raw = resp.get("suites") or []
     suites = [_parse_suite(s) for s in suites_raw if isinstance(s, dict)]
     summary = _parse_summary(resp.get("summary"))
-    return TestResults(suites=suites, summary=summary)
+    warning = str(resp.get("resolve_warning") or "")
+    return TestResults(suites=suites, summary=summary, warning=warning)
 
 
 def _parse_suite(raw: dict[str, Any]) -> TestSuite:

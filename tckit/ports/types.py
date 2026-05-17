@@ -240,6 +240,10 @@ class TestResultsSummary:
 class TestResults:
     suites: list[TestSuite] = field(default_factory=list)
     summary: TestResultsSummary = field(default_factory=TestResultsSummary)
+    # Populated when the bridge's XML-path resolver picked between
+    # multiple UmRT candidates; empty otherwise. Surfaces ambiguity so
+    # operators can pin via TCKIT_TCUNIT_XML_PATH. See ADR-0011.
+    warning: str = ""
 
     @property
     def total_passed(self) -> int:

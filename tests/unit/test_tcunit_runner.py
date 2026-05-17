@@ -58,6 +58,9 @@ def test_run_tests_posts_to_tcunit_run_with_target_and_plc(
         "ProjectPath": "C:/proj/foo.sln",
         "TargetAmsId": "1.2.3.4.1.1",
         "PlcName": "TestPlc",
+        # IncludeResults defaults to True so the bridge inlines failure
+        # detail on the first call (ADR-0011).
+        "IncludeResults": True,
     }
     # Timeouts now resolve in BridgeClient.post via the central
     # route_timeout map; the adapter no longer overrides per-call.
@@ -111,6 +114,79 @@ def test_run_tests_timeout_respects_env_override(
 
     monkeypatch.setenv("TCKIT_TEST_RUN_TIMEOUT", "300")
     assert route_timeout("/tcunit-run") == 300.0
+
+
+def test_run_tests_wait_for_results_false_opts_out_of_inline_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """External callers that hand-roll polling pass wait_for_results=False."""
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    runner = TcUnitRunner(client=client)  # type: ignore[arg-type]
+
+    runner.run_tests("1.2.3.4.1.1", wait_for_results=False)
+
+    _, payload, _ = client.calls[0]
+    assert payload["IncludeResults"] is False
+
+
+def test_run_tests_inline_results_pass_through_as_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the bridge inlines suites + failures, both reach Result.details."""
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient(
+        {
+            "success": True,
+            "results_included": True,
+            "summary": {
+                "suites": 2,
+                "tests": 6,
+                "asserts": 6,
+                "failures": 1,
+                "errors": 0,
+                "duration_seconds": 0.5,
+            },
+            "suites": [
+                {
+                    "name": "FB_Foo_Suite",
+                    "tests": [
+                        {
+                            "name": "MisbehavesOnBoundary",
+                            "passed": False,
+                            "asserts": 1,
+                            "failures": [
+                                {"message": "expected 1 got 2", "expected": "1", "actual": "2"}
+                            ],
+                            "duration_seconds": 0.04,
+                        }
+                    ],
+                }
+            ],
+            "failures": [
+                {
+                    "suite_name": "FB_Foo_Suite",
+                    "test_name": "MisbehavesOnBoundary",
+                    "message": "expected 1 got 2",
+                }
+            ],
+        }
+    )
+    runner = TcUnitRunner(client=client)  # type: ignore[arg-type]
+
+    result = runner.run_tests("1.2.3.4.1.1")
+
+    assert result.details["results_included"] is True
+    assert result.details["summary"]["failures"] == 1
+    assert result.details["failures"][0]["test_name"] == "MisbehavesOnBoundary"
+    # Passing tests deliberately not present in the inlined suites.
+    assert all(
+        t["passed"] is False
+        for suite in result.details["suites"]
+        for t in suite["tests"]
+    )
 
 
 def test_get_results_parses_full_structured_shape() -> None:

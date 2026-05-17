@@ -112,24 +112,52 @@ try {
     $effectiveTitle   = $Title
     $effectiveCompany = $Company
     $effectiveVersion = $LibraryVersion
-    try {
-        [xml]$projXml = $plcProject.ProduceXml(0)
+
+    function Invoke-MetadataAndSave {
+        param($PlcProject)
+        [xml]$projXml = $PlcProject.ProduceXml(0)
         $info = $projXml.SelectSingleNode('//ProjectInfo')
         if ($null -eq $info) {
-            return @{ success = $false; error = "ProjectInfo node not found in PLC project XML for '$plc'." }
+            throw "ProjectInfo node not found in PLC project XML for '$plc'."
         }
         $info.SelectSingleNode('Title').InnerText   = $effectiveTitle
         $info.SelectSingleNode('Company').InnerText = $effectiveCompany
         $info.SelectSingleNode('Version').InnerText = $effectiveVersion
-        $plcProject.ConsumeXml($projXml.OuterXml) | Out-Null
-    } catch {
-        return @{ success = $false; error = "Failed to set library metadata: $($_.Exception.Message)" }
+        $PlcProject.ConsumeXml($projXml.OuterXml) | Out-Null
+        # COM dispatch resolves SaveAsLibrary against ITcPlcIECProject
+        # without an explicit cast.
+        $PlcProject.SaveAsLibrary($OutputPath, [bool]$Install) | Out-Null
     }
 
-    # COM dispatch resolves SaveAsLibrary against ITcPlcIECProject without
-    # an explicit cast — same pattern as Set-TcItemSource for the
-    # ITcPlcDeclaration / ITcPlcImplementation interfaces.
-    $plcProject.SaveAsLibrary($OutputPath, [bool]$Install) | Out-Null
+    # Cold-start recovery: on a fresh XAE, the placeholder resolver
+    # hasn't run yet so PlaceholderReference/EffectiveResolution is
+    # null and ProduceXml chokes with an XmlAutomationException
+    # pointing at that path. Triggering CheckAllObjects (an in-process
+    # PLC compile that runs the resolver as a side effect) lets the
+    # second attempt land. Any other exception rethrows unchanged.
+    # See ADR-0011.
+    $coldStartWarmup = $false
+    try {
+        Invoke-MetadataAndSave -PlcProject $plcProject
+    } catch {
+        $msg = [string]$_.Exception.Message
+        if ($msg -match 'PlaceholderReference.*EffectiveResolution|EffectiveResolution.*PlaceholderReference') {
+            try {
+                # Trigger placeholder resolution via an in-process build.
+                # If we're in XAE_MODE=headless and SyncLock is wedging
+                # the build subsystem (see ADR-0010 status notes), this
+                # will throw and we rethrow with the headless-mode hint.
+                $plcProject.CheckAllObjects() | Out-Null
+            } catch {
+                throw "save_plc_as_library cold-start retry failed during warm-up build: $($_.Exception.Message). Headless XAE mode is known-incompatible with cold-start save (Microsoft Visual Studio Appid Stub SyncLock); use XAE_MODE=attach."
+            }
+            Invoke-MetadataAndSave -PlcProject $plcProject
+            $coldStartWarmup = $true
+        } else {
+            throw
+        }
+    }
+
     # The ProduceXml/ConsumeXml round-trip above wrote new ProjectInfo
     # values into the in-memory model; SaveAll flushes them so the
     # .plcproj on disk matches what SaveAsLibrary just emitted.
@@ -138,13 +166,14 @@ try {
     return @{
         success = $true
         details = @{
-            plc          = $plc
-            output_path  = $OutputPath
-            installed    = [bool]$Install
-            repository   = if ($Install) { $Repository } else { $null }
-            title        = $effectiveTitle
-            company      = $effectiveCompany
-            version      = $effectiveVersion
+            plc                = $plc
+            output_path        = $OutputPath
+            installed          = [bool]$Install
+            repository         = if ($Install) { $Repository } else { $null }
+            title              = $effectiveTitle
+            company            = $effectiveCompany
+            version            = $effectiveVersion
+            cold_start_warmup  = $coldStartWarmup
         }
     }
 }

@@ -250,6 +250,46 @@ Describe 'Set-TcPlcProjPlaceholderParameters' {
     }
 }
 
+Describe 'Test-TcPlcProjHasPlaceholder' {
+    BeforeEach {
+        $script:tempFile = New-TempPlcProj -Content $script:SampleSkeleton
+    }
+
+    AfterEach {
+        Remove-Item -LiteralPath $script:tempFile -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'returns $true when the placeholder is present' {
+        (Test-TcPlcProjHasPlaceholder -PlcProjPath $script:tempFile -PlaceholderName 'TcUnit') | Should -BeTrue
+    }
+
+    It 'returns $false when the placeholder is absent' {
+        (Test-TcPlcProjHasPlaceholder -PlcProjPath $script:tempFile -PlaceholderName 'NotThere') | Should -BeFalse
+    }
+
+    It 'returns $false when the .plcproj does not exist (no throw)' {
+        (Test-TcPlcProjHasPlaceholder -PlcProjPath 'C:\nope.plcproj' -PlaceholderName 'TcUnit') | Should -BeFalse
+    }
+
+    It 'works against a .plcproj that does not declare an MSBuild namespace' {
+        $plain = @"
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <PlaceholderReference Include="Tc2_System" />
+  </ItemGroup>
+</Project>
+"@
+        $path = New-TempPlcProj -Content $plain
+        try {
+            (Test-TcPlcProjHasPlaceholder -PlcProjPath $path -PlaceholderName 'Tc2_System') | Should -BeTrue
+            (Test-TcPlcProjHasPlaceholder -PlcProjPath $path -PlaceholderName 'Other') | Should -BeFalse
+        } finally {
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Describe 'Find-TcPlcProjFile' {
     BeforeEach {
         $script:tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("findplcproj-{0}" -f ([Guid]::NewGuid()))

@@ -397,6 +397,35 @@ def add_library_placeholder(
         return _err(str(exc))
 
 
+def set_placeholder_parameters(
+    consumer_plc_name: str,
+    placeholder_name: str,
+    parameters: dict[str, dict[str, str]],
+) -> str:
+    """Set / update library parameter overrides on an existing placeholder.
+
+    Narrower verb than ``add_library_placeholder`` for tuning runs: takes
+    the placeholder name and the parameter mapping only;
+    ``default_library`` / ``version`` / ``distributor`` are not changed.
+    The placeholder must already exist (use ``add_library_placeholder``
+    for the initial add). See ADR-0011.
+
+    :param consumer_plc_name: PLC project hosting the placeholder.
+    :param placeholder_name: Placeholder name to target.
+    :param parameters: Nested mapping ``{list_name: {key: value, ...}, ...}``.
+        Both list and key names are uppercased on disk; values written
+        verbatim, so TwinCAT booleans need ``"TRUE"`` / ``"FALSE"``.
+        Example: ``{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}``.
+    """
+    try:
+        result = _cfg.writer().set_placeholder_parameters(
+            consumer_plc_name, placeholder_name, parameters
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
@@ -772,22 +801,36 @@ def read_symbols(target_ams_id: str, paths: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def run_tests(target_ams_id: str, plc_name: str = "") -> str:
+def run_tests(
+    target_ams_id: str,
+    plc_name: str = "",
+    wait_for_results: bool = True,
+) -> str:
     """Trigger TcUnit test execution on the target runtime.
 
-    Mirrors the IDE workflow where you pick both the target route and the
-    PLC project before running tests. Both arguments are explicit because
-    implicit "last deployed target" state would be brittle across MCP calls.
+    Blocks until the suites finish (or the bridge timeout fires). By
+    default the response carries parsed pass/fail inline:
+    ``details.summary`` (totals across the full run) and
+    ``details.failures`` (one entry per failed test with ``suite_name``,
+    ``test_name``, ``message``). Passing tests are NOT inlined to keep
+    the payload bounded on large green suites; call get_test_results to
+    fetch the full per-test list including passes.
 
     :param target_ams_id: AMS Net ID of the target runtime (e.g.
         ``192.168.1.100.1.1``).
     :param plc_name: PLC project hosting the TcUnit suites. Leave empty
         for single-project solutions or to use the ``PLC_PROJECT_NAME``
         env default.
+    :param wait_for_results: When True (default), the bridge parses the
+        TcUnit XML and inlines summary + failures. Set False only when
+        you need to issue your own get_test_results call (e.g. an
+        external orchestrator hand-rolling polling). See ADR-0011.
     """
     try:
         result = _cfg.test_runner().run_tests(
-            target_ams_id, plc_name=_plc(plc_name)
+            target_ams_id,
+            plc_name=_plc(plc_name),
+            wait_for_results=wait_for_results,
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -795,10 +838,12 @@ def run_tests(target_ams_id: str, plc_name: str = "") -> str:
 
 
 def get_test_results(target_ams_id: str, plc_name: str = "") -> str:
-    """Return parsed TcUnit test results after tests have completed.
+    """Return the full per-test TcUnit results (passes + fails).
 
-    Call run_tests() first, then wait for tests to finish, then call this.
-    Returns structured JSON: suite → test → pass/fail/message.
+    Use this when run_tests was called with wait_for_results=False, or
+    when you need the green tests too (run_tests inlines failures only
+    to keep payload bounded). Returns structured JSON: suite -> test ->
+    pass/fail/message.
 
     :param target_ams_id: AMS Net ID of the target runtime the tests were
         executed on.
@@ -917,6 +962,7 @@ _TOOLS = (
     save_plc_as_library,
     add_library_reference,
     add_library_placeholder,
+    set_placeholder_parameters,
     add_pou,
     add_gvl,
     add_method,

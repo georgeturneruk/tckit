@@ -36,6 +36,7 @@ from tckit.utils.diagnostics import (
     bridge_health,
     config_file_status,
     install_bridge_dependency,
+    tcunit_xml_status,
     validate_config,
 )
 
@@ -319,6 +320,17 @@ def _doctor(no_install: bool = False) -> int:
                 else:
                     dep_lines.append(f"{name}: {version}")
         sections.append(("Bridge dependencies", dep_section_ok, dep_lines))
+
+        # TcUnit XML path resolution. Catches the kernel-vs-UmRT mismatch
+        # that paid 9x on the T1 bench. WARN on ambiguity is treated as
+        # OK overall (the freshest candidate is still the right one) but
+        # surfaced so operators can pin via TCKIT_TCUNIT_XML_PATH.
+        # See ADR-0011.
+        xml_ok, xml_warn, xml_lines = tcunit_xml_status(bridge_url)
+        section_label = "TcUnit results path"
+        if xml_warn:
+            xml_lines = ["[WARN] multiple candidates"] + xml_lines
+        sections.append((section_label, xml_ok, xml_lines))
 
     print("TcKit doctor")
     print("=" * 50)

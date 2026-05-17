@@ -31,6 +31,8 @@
       POST /add-variable          -> harness\Add-TcVariable.ps1
       POST /symbols               -> harness\Read-TcSymbol.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
+      POST /tcunit-xml-resolve    -> harness\Resolve-TcUnitXmlPath.ps1
+      POST /set-placeholder-parameters -> harness\Set-TcLibraryPlaceholderParameters.ps1
       POST /install-dependency    -> Install-Module (allow-listed modules only)
       GET  /health                -> {"status": "ok", "dependencies": {...}}
 
@@ -406,6 +408,16 @@ try {
                 'POST /results' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Get-TcUnitResults.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /tcunit-xml-resolve' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Resolve-TcUnitXmlPath.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /set-placeholder-parameters' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Set-TcLibraryPlaceholderParameters.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 default {

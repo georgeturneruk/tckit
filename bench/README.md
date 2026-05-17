@@ -179,6 +179,32 @@ to measure.
 
 ## Running bug-hunting tasks (B-series)
 
+### Quick path: `run-pair.ps1`
+
+The full invocation has eight task-specific flags, so `bench/run-pair.ps1`
+wraps it for the two fixtures we re-run most:
+
+```powershell
+# Both arms of T1, self-validating (model can deploy, dev machine only).
+.\bench\run-pair.ps1 -Task T1 -SelfValidate
+
+# Just the tckit arm of B1 with the deploy safety gate engaged.
+.\bench\run-pair.ps1 -Task B1 -Arm tckit
+```
+
+The bench owns the MCP server lifecycle per run with `PLC_PROJECT_PATH`
+pointing at the temp fixture path when `--isolate-cwd` is on. Without
+that, the model's MCP writer calls would land in the operator's
+long-lived MCP env path while Read sees the temp copy — the model
+cannot observe its own writes (see the 2026-05-17 finding). Port 8000
+must be free; the script aborts if anything is listening there.
+
+`Get-Help .\bench\run-pair.ps1 -Detailed` for the full parameter list
+and the self-validate trade-off. The long-form invocation below is
+what the script expands to.
+
+### Long-form
+
 Closed-loop debugging fixtures live under `bench/fixtures/bug-hunting/<id>-<slug>/`
 and follow the layout in [ADR-0007](../adrs/0007-bug-hunting-bench.md): one
 `.sln` with two PLC projects (a library under test and a tests project that

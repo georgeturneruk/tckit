@@ -313,33 +313,57 @@ def isolate_fixture_to_tempdir(fixture_path: str) -> pathlib.Path:
     src = pathlib.Path(fixture_path).resolve()
     tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="tckit-bench-"))
     dest = tmp_root / src.name
-    ignore = shutil.ignore_patterns(
-        # Claude Code metadata — the contamination this flag exists for.
-        "CLAUDE.md",
-        "CLAUDE.local.md",
-        ".claude",
-        ".mcp.json",
-        # XAE / VS build artefacts: locked by an open XAE and
-        # gitignored. Skipping them avoids PermissionError on copy
-        # and keeps the temp tree close to a "freshly-cloned" shape.
-        ".vs",
-        "_Boot",
-        "_CompileInfo",
-        "_CompileInfo_Upload",
-        "_Deployment",
-        "_Libraries",
-        "_Output",
-        "*.tmc",
-        "*.suo",
-        "*.~u",
-        "*.bak",
-        "*.tpzip",
-        "*.tszip",
-        "*.tpy",
-        "*.library",
-    )
+    ignore = shutil.ignore_patterns(*_TEMP_FIXTURE_EXCLUDES)
     shutil.copytree(src, dest, ignore=ignore)
     return dest
+
+
+# Patterns excluded from both isolate_fixture_to_tempdir (outbound copy)
+# AND sync_fixture_edits (inbound mirror). The outbound case avoids
+# locked-file PermissionError when XAE has handles open; the inbound
+# case avoids the same problem in reverse when the bench's own
+# per-run MCP opens the temp fixture in DTE and XAE creates
+# .vs/.suo/_Boot etc inside the temp tree — those must not be mirrored
+# back over the operator's live versions in the real fixture.
+_TEMP_FIXTURE_EXCLUDES = (
+    # Claude Code metadata — the contamination --isolate-cwd exists for.
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    ".claude",
+    ".mcp.json",
+    # XAE / VS build artefacts: locked by an open XAE and gitignored.
+    ".vs",
+    "_Boot",
+    "_CompileInfo",
+    "_CompileInfo_Upload",
+    "_Deployment",
+    "_Libraries",
+    "_Output",
+    "*.tmc",
+    "*.suo",
+    "*.~u",
+    "*.bak",
+    "*.tpzip",
+    "*.tszip",
+    "*.tpy",
+    "*.library",
+)
+
+
+def _is_excluded_path(rel: pathlib.PurePath) -> bool:
+    """Match a relative path against _TEMP_FIXTURE_EXCLUDES.
+
+    Pattern semantics mirror shutil.ignore_patterns: any path segment
+    that matches a pattern excludes the path. Used by
+    sync_fixture_edits to skip files that should not be mirrored back
+    to the real fixture (locked artefacts, dev metadata).
+    """
+    import fnmatch
+    for part in rel.parts:
+        for pat in _TEMP_FIXTURE_EXCLUDES:
+            if fnmatch.fnmatch(part, pat):
+                return True
+    return False
 
 
 def inject_skills_into_isolated(
@@ -399,12 +423,161 @@ def sync_fixture_edits(tmp_fixture: pathlib.Path, real_fixture: str) -> None:
         if src_path.is_dir():
             continue
         rel = src_path.relative_to(tmp_fixture)
+        # Skip XAE build artefacts and dev metadata: those may exist in
+        # the temp tree because the bench's per-run MCP opened the temp
+        # sln in DTE (XAE creates .vs/.suo etc inside the loaded
+        # solution dir), but the operator's live XAE has handles open
+        # on the real-fixture versions and shutil.copy2 would fail with
+        # PermissionError. Same pattern list isolate_fixture_to_tempdir
+        # excludes on the outbound copy.
+        if _is_excluded_path(rel):
+            continue
         dest_path = real / rel
         if not dest_path.exists():
             continue
         if dest_path.stat().st_mtime >= src_path.stat().st_mtime:
             continue
         shutil.copy2(src_path, dest_path)
+
+
+def _port_in_use(host: str, port: int) -> bool:
+    """Best-effort socket check: return True if something is listening.
+
+    Used to refuse-and-explain rather than silently double-spawn when an
+    operator already has the MCP server running on the bench's port.
+    """
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        s.connect((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def _wait_mcp_ready(mcp_url: str, timeout_s: int) -> bool:
+    """Poll the MCP SSE endpoint until it responds, or timeout.
+
+    The /sse handshake returns 200 with an event stream; we abandon the
+    connection immediately, we just need to know the server is up. Any
+    transient error (URLError, timeout) means not ready yet.
+    """
+    import urllib.error
+    import urllib.request
+
+    sse = mcp_url.rstrip("/") + "/sse"
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            req = urllib.request.Request(sse, headers={"Accept": "text/event-stream"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    return True
+        except (urllib.error.URLError, OSError, TimeoutError):
+            pass
+        time.sleep(0.5)
+    return False
+
+
+def start_mcp_subprocess(
+    mcp_cmd: str,
+    plc_project_path: str,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.Popen:
+    """Spawn an MCP server pointed at ``plc_project_path``.
+
+    The bench runs MCP per-run so PLC_PROJECT_PATH can switch between
+    the isolated temp fixture (during the model session) and the real
+    fixture (during post-run-tests). Inherits the parent process env
+    plus the overrides; ``extra_env`` is for safety knobs like
+    ``ALLOWED_NETIDS`` / ``SAFETY_CONFIRMATIONS`` that the operator
+    set on the bench's own env. Stdout/stderr go to DEVNULL — the
+    server is noisy and we are not debugging it from here.
+
+    On Windows the spawn goes through a CREATE_NEW_PROCESS_GROUP so
+    stop_mcp_subprocess can terminate the whole tree (otherwise the
+    python child of a shell wrapper survives ``terminate()`` and
+    keeps the port held). The command is shlex-split rather than
+    shell=True so we keep a direct handle on the python process.
+    """
+    import shlex
+
+    env = dict(os.environ)
+    env["PLC_PROJECT_PATH"] = plc_project_path
+    if extra_env:
+        env.update(extra_env)
+
+    creation_flags = 0
+    if os.name == "nt":
+        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
+
+    return subprocess.Popen(
+        shlex.split(mcp_cmd),
+        shell=False,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=creation_flags,
+    )
+
+
+def stop_mcp_subprocess(proc: subprocess.Popen) -> None:
+    """Terminate the per-run MCP server tree. Force-kill if needed.
+
+    On Windows ``terminate`` only kills the immediate process and any
+    children spawned via ``uv run`` survive (the actual python -m
+    tckit.server). We try the polite signal first, then fall back to
+    ``taskkill /T`` which walks the process tree.
+    """
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=3)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    # Walk the tree. On Windows taskkill /T /F is the cleanest way to
+    # nuke `uv run python ...` children. On POSIX kill -- -pgid works
+    # via the new-process-group flag.
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), 9)
+        except (OSError, ProcessLookupError):
+            pass
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _temp_sln_path(
+    tmp_fixture: pathlib.Path | None, tcunit_path: str, sln_path: str
+) -> str:
+    """Resolve the sln path the MCP server should point at for this run.
+
+    With ``--isolate-cwd`` the model session sees the temp copy, so the
+    MCP server must too — otherwise the writer's MCP calls write to the
+    real fixture while the model's Read tools see the temp copy and
+    cannot observe their own writes. Without isolate-cwd both paths
+    coincide.
+    """
+    if tmp_fixture is None:
+        return sln_path
+    rel = pathlib.Path(sln_path).resolve().relative_to(
+        pathlib.Path(tcunit_path).resolve()
+    )
+    return str(tmp_fixture / rel).replace("\\", "/")
 
 
 def close_solution(bridge_url: str) -> dict[str, Any]:
@@ -810,6 +983,24 @@ def main() -> int:
                             "tc-docs-write — dev-only). Requires "
                             "--isolate-cwd."
                         ))
+    parser.add_argument("--mcp-cmd", default="",
+                        help=(
+                            "If set, the bench manages a per-run MCP "
+                            "server with PLC_PROJECT_PATH pointing at "
+                            "the active fixture sln (the temp copy "
+                            "under --isolate-cwd, else the real "
+                            "fixture). Without this, the model's MCP "
+                            "writer calls write to the operator's "
+                            "long-lived MCP env path while Read sees "
+                            "the temp copy — the model cannot observe "
+                            "its own writes. Recommended for the tckit "
+                            "arm. Example: "
+                            "'uv run python -m tckit.server --transport sse'."
+                        ))
+    parser.add_argument("--mcp-url", default="http://localhost:8000",
+                        help="MCP SSE base URL the spawned server listens on.")
+    parser.add_argument("--mcp-startup-timeout", type=int, default=30,
+                        help="Seconds to wait for /sse to respond after MCP spawn.")
     args = parser.parse_args()
 
     if args.build_after_each and not args.sln_path:
@@ -871,6 +1062,25 @@ def main() -> int:
     if args.sln_path:
         print(f"Sln path: {args.sln_path}")
     print()
+
+    # Pre-flight: refuse-and-explain if --mcp-cmd is set but the port is
+    # already taken. Otherwise the spawn would silently fail and the
+    # claude -p arm would hit whatever MCP the operator had running with
+    # its own (probably stale) PLC_PROJECT_PATH.
+    if args.mcp_cmd:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(args.mcp_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 8000
+        if _port_in_use(host, port):
+            print(
+                f"  --mcp-cmd given but {host}:{port} already in use. Stop the "
+                "existing MCP server (or omit --mcp-cmd to use it as-is, at "
+                "the cost of the isolate-cwd staleness bug).",
+                file=sys.stderr,
+            )
+            return 7
 
     # One-off pre-bench /open so XAE is on the right solution before any run.
     # Cheap and idempotent on the bridge side; the operator can rely on a
@@ -939,9 +1149,30 @@ def main() -> int:
                 )
                 print(f" inject-{n_skills}-skills...", end="", flush=True)
             run_cwd = str(tmp_fixture)
+        # MCP server lifecycle: per-run spawn with PLC_PROJECT_PATH pointing
+        # at the active sln (temp under --isolate-cwd, else the real
+        # fixture). Without this, the model's MCP writer calls would land
+        # in the operator's long-lived MCP env path while Read sees the
+        # temp copy — the model cannot observe its own writes.
+        mcp_proc: subprocess.Popen | None = None
+        if args.mcp_cmd:
+            mcp_plc_path = _temp_sln_path(tmp_fixture, args.tcunit_path, args.sln_path)
+            print(" mcp-start...", end="", flush=True)
+            mcp_proc = start_mcp_subprocess(args.mcp_cmd, mcp_plc_path)
+            if not _wait_mcp_ready(args.mcp_url, args.mcp_startup_timeout):
+                stop_mcp_subprocess(mcp_proc)
+                print(
+                    f"\n  MCP did not become ready at {args.mcp_url} within "
+                    f"{args.mcp_startup_timeout}s",
+                    file=sys.stderr,
+                )
+                return 6
         try:
             result = run_one(prompt, args.config, run_cwd)
         finally:
+            if mcp_proc is not None:
+                print(" mcp-stop...", end="", flush=True)
+                stop_mcp_subprocess(mcp_proc)
             if tmp_fixture is not None:
                 sync_fixture_edits(tmp_fixture, args.tcunit_path)
                 try:
