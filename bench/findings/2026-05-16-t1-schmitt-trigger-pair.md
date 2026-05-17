@@ -122,23 +122,81 @@ confident from the spec alone, skip the runtime loop" off-ramp,
 or the test-loop should fire only when the *user* asks for it,
 not as a default convergence pattern.
 
-### 3. Model-vs-harness discrepancy reproduces (and isn't an artefact)
+### 3. The `tests: 0` blind-spot was a bridge config bug, not a fixture problem
 
-The tckit arm's `final_text` says its `run_tests` returned
-`tests: 0` (no results visible to the model), but the harness's
-post-run validation shows all 5 tests GREEN. ADR-0007
-specifically flagged this discrepancy class. The model lacked
-confidence its impl worked because TcUnit's xUnit XML publisher
-isn't enabled by default, so `get_test_results` returned an
-empty parsed shape. The harness reads pass/fail from PLC symbols
-directly via probes, sidestepping the publisher question — and
-that's the authoritative reading.
+Root-caused after the run: the model's empty `get_test_results`
+returns weren't because the xUnit publisher was off; they were
+because the **bridge was looking in the wrong directory for the
+published XML**.
 
-The model's response was reasonable given its information ("my
-test runs returned 0 results, so I'm not sure if the impl
-worked"). The wasteful behaviour was the *deploy+run* iteration
-that produced those empty results, not the model's caution about
-them.
+Chain of evidence:
+
+1. The fixture's TcUnit placeholder had no parameter overrides,
+   so I added `GVL_Param_TcUnit.xUnitEnablePublish := TRUE` via
+   the bridge's canonical `Set-TcPlcProjPlaceholderParameters`
+   PowerShell function (close/edit/open dance).
+2. After deploy, ADS reads `GVL_Param_TcUnit.xUnitEnablePublish`
+   = "True" and `xUnitFilePath` = "%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml"
+   on the live runtime — confirming the override is honoured.
+3. `/tcunit-run` still returned `xml_published: false`. But the
+   XML file *does* exist, at
+   `C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default\3.1\Boot\tcunit_xunit_testresults.xml`,
+   containing full per-test detail (test name, pass/fail, failure
+   message).
+4. The bridge's `_TcUnit.psm1::Get-TcUnitDefaultXmlPath`
+   hardcodes `C:\TwinCAT\3.1\Boot\Plc\Port_$Port\` — that path
+   is correct for kernel-mode TcRTime runtimes but **wrong for
+   UmRT** (user-mode runtimes), whose boot folder lives under
+   `%ProgramData%\Beckhoff\TwinCAT\3.1\Runtimes\<RuntimeName>\3.1\Boot\`
+   (no `Plc\Port_<port>\` subdirectory). The function's docstring
+   actually describes both layouts but the implementation only
+   handles the kernel case and falls back to an env-var override
+   (`TCKIT_TCUNIT_XML_PATH`) for everything else.
+5. `TCKIT_TCUNIT_XML_PATH` wasn't set in the bridge's environment
+   this session.
+
+After setting that env var on the bridge (pointing at the actual
+UmRT path) and re-running `/results`, the bridge returns:
+
+```json
+{
+    "summary": { "suites": 1, "tests": 5, "failures": 5 },
+    "suites": [{
+        "name": "MAIN.suite",
+        "tests": [
+            { "name": "LatchesHighAboveHighThreshold", "passed": false,
+              "failures": [{ "message": "trigger.Step() with fInput := 0.9 should latch HIGH" }] },
+            ... (4 more)
+        ]
+    }]
+}
+```
+
+The full per-test detail the model needed all along, present in
+the published XML the whole time, just at a path the bridge
+didn't know to look at.
+
+**This is the real cause of T1 tckit's 9× cost.** The model saw
+empty results from `get_test_results`, couldn't confirm whether
+its first implementation worked, and iterated through deploy+run
+cycles trying to get useful feedback. With the env var set, the
+bench would have read the XML on the first cycle, the model would
+have seen the failure messages (or all-pass after its first
+edit), and converged in something close to vanilla's call/token
+budget.
+
+Two follow-ups worth flagging:
+
+- **`TCKIT_TCUNIT_XML_PATH` isn't documented in `config.toml.example`.**
+  It's only referenced inside the bridge harness, with no
+  user-facing surface. Adding it to the config template would let
+  operators set it once during `tckit init`. (Even better: have
+  `tckit doctor` autodetect UmRT and offer to set it.)
+- **The bridge could auto-detect** rather than relying on an env
+  var. Try the kernel path; if not found, glob
+  `%ProgramData%\Beckhoff\TwinCAT\3.1\Runtimes\*\3.1\Boot\<filename>`.
+  That removes the operator-side knob entirely for the UmRT case,
+  which is the default development setup on most TwinCAT installs.
 
 ### 4. Both arms wrote essentially identical hysteresis logic
 
@@ -233,11 +291,13 @@ consumer, never the suite + tests + MAIN. Whichever next.
 
 **Under symmetric hardened isolation, vanilla beat tckit by ~10×
 on every metric (0.14× calls, 0.11× tokens, 0.10× wall) on the T1
-TDD task because both arms landed the correct hysteresis impl on
-their first write, but tckit then followed the `tc-build-test-loop`
-skill into a multi-cycle deploy+test verification loop that vanilla
-(no skill, no TcKit MCP tools) didn't have the option to do —
-showing that the skill's iteration discipline is net-negative on
-tasks where the spec is fully constraining, and that the writer
-thesis is invisible when both arms can land the fix in one write
-regardless of which tool they use.**
+TDD task — but the bulk of that gap is a bridge config bug
+(`TCKIT_TCUNIT_XML_PATH` unset, bridge looking at the kernel-runtime
+boot folder instead of the UmRT one), which made `get_test_results`
+return nothing and pushed the model into multiple deploy+test
+cycles to try to find ground truth; with the env var set the
+bridge returns the full per-test detail from the published XML
+that was there the whole time. The "writer thesis is invisible
+on one-line text edits" conclusion still holds, but the *size* of
+the gap on T1 should be heavily discounted until we re-bench
+under the fixed config.**
