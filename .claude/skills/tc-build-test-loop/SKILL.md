@@ -8,13 +8,17 @@ allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime,
 
 ## Build-fix loop
 
-1. Call `build(project_path)`.
+1. Call `build(project_path)` with an absolute path to the `.sln` (or `.tsproj`). For multi-PLC solutions, pass `plc_name=<consumer>` on the same call; see "Multi-PLC builds with library references" below.
 2. If `success: true`:
    - If a `docs_warning` field is present, this is non-fatal — note it for the user but do NOT loop on it.
    - Proceed to deploy/test as the user requested.
 3. If `success: false`, take the **first** error in the JSON list. Read the offending file via `get_pou_item` if needed. Fix that one file only.
 4. Rebuild. Do not batch fixes across files.
 5. **Two-strikes rule.** If the same error message on the same file/line persists after a second fix attempt, STOP. Present the error, your two attempts, your hypothesis, and ask the user.
+
+## Where `target_ams_id` comes from
+
+`deploy`, `start_runtime`, and `run_tests` default `target_ams_id` from the `TARGET_AMS_ID` env var or the same field in `~/.tckit/config.toml`. If neither is set the tool returns a clear "target_ams_id is required" error — ask the user for the target rather than guessing or hunting through the filesystem.
 
 ## Deploy and start_runtime — the safety-gate handshake
 
