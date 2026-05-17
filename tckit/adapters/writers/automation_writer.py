@@ -314,6 +314,23 @@ class AutomationWriter(ProjectWriter):
             self._with_project(payload, plc_name=consumer_plc_name),
         )
 
+    def set_placeholder_parameters(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+        parameters: dict[str, dict[str, str]],
+    ) -> Result:
+        payload: dict[str, Any] = {
+            "PlaceholderName": placeholder_name,
+            "Parameters": {
+                list_name: dict(keys) for list_name, keys in parameters.items()
+            },
+        }
+        return self._call(
+            "/set-placeholder-parameters",
+            self._with_project(payload, plc_name=consumer_plc_name),
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

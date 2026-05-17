@@ -322,3 +322,52 @@ def test_add_library_placeholder_parameters_omitted_by_default(
 
     _, payload = client.calls[0]
     assert "Parameters" not in payload
+
+
+# ---------------------------------------------------------------------------
+# set_placeholder_parameters
+# ---------------------------------------------------------------------------
+
+
+def test_set_placeholder_parameters_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.set_placeholder_parameters(
+        "Tests",
+        "TcUnit",
+        {"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}},
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/set-placeholder-parameters"
+    assert payload == {
+        "ProjectPath": "C:/work/B1.sln",
+        "PlcName": "Tests",
+        "PlaceholderName": "TcUnit",
+        "Parameters": {"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}},
+    }
+
+
+def test_set_placeholder_parameters_surfaces_missing_placeholder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
+    client = FakeBridgeClient(
+        {
+            "success": False,
+            "error": "PlaceholderReference 'NotThere' not found in C:/x.plcproj. Use add_library_placeholder to add it first.",
+        }
+    )
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    result = writer.set_placeholder_parameters(
+        "Tests", "NotThere", {"L": {"k": "v"}}
+    )
+
+    assert result.success is False
+    assert "NotThere" in (result.error or "")

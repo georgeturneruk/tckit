@@ -397,6 +397,35 @@ def add_library_placeholder(
         return _err(str(exc))
 
 
+def set_placeholder_parameters(
+    consumer_plc_name: str,
+    placeholder_name: str,
+    parameters: dict[str, dict[str, str]],
+) -> str:
+    """Set / update library parameter overrides on an existing placeholder.
+
+    Narrower verb than ``add_library_placeholder`` for tuning runs: takes
+    the placeholder name and the parameter mapping only;
+    ``default_library`` / ``version`` / ``distributor`` are not changed.
+    The placeholder must already exist (use ``add_library_placeholder``
+    for the initial add). See ADR-0011.
+
+    :param consumer_plc_name: PLC project hosting the placeholder.
+    :param placeholder_name: Placeholder name to target.
+    :param parameters: Nested mapping ``{list_name: {key: value, ...}, ...}``.
+        Both list and key names are uppercased on disk; values written
+        verbatim, so TwinCAT booleans need ``"TRUE"`` / ``"FALSE"``.
+        Example: ``{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}``.
+    """
+    try:
+        result = _cfg.writer().set_placeholder_parameters(
+            consumer_plc_name, placeholder_name, parameters
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
@@ -933,6 +962,7 @@ _TOOLS = (
     save_plc_as_library,
     add_library_reference,
     add_library_placeholder,
+    set_placeholder_parameters,
     add_pou,
     add_gvl,
     add_method,

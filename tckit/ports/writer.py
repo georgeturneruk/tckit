@@ -393,3 +393,31 @@ class ProjectWriter(ABC):
             ``parameters={"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}``.
         """
         ...
+
+    @abstractmethod
+    def set_placeholder_parameters(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+        parameters: dict[str, dict[str, str]],
+    ) -> Result:
+        """Set / update library parameter overrides on an existing placeholder.
+
+        Narrower verb than re-calling ``add_library_placeholder`` for tuning
+        runs: takes the placeholder name and the parameter mapping only;
+        ``default_library`` / ``version`` / ``distributor`` are not changed.
+        The placeholder must already exist in the consumer ``.plcproj``
+        (raises an error if it does not — use ``add_library_placeholder``
+        for the initial add).
+
+        Parameters use the same nested mapping shape as
+        ``add_library_placeholder``: ``{list_name: {key: value, ...}, ...}``.
+        Both the list name and inner keys are uppercased on disk; values
+        are written verbatim. Existing entries for the same (list, key)
+        are replaced; other entries are preserved. See ADR-0011.
+
+        :param consumer_plc_name: PLC project hosting the placeholder.
+        :param placeholder_name: Placeholder name to target.
+        :param parameters: Nested mapping of list -> key -> value.
+        """
+        ...

@@ -82,6 +82,7 @@ def test_tool_tuple_contains_all_known_tools() -> None:
         "save_plc_as_library",
         "add_library_reference",
         "add_library_placeholder",
+        "set_placeholder_parameters",
         "add_pou",
         "add_gvl",
         "add_method",
