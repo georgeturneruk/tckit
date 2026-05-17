@@ -59,58 +59,66 @@ Against the running UmRT_Default on this machine, before the bench:
 
 Same invocation shape as the 2026-05-16 round (`--isolate-cwd
 --inject-skills plugin/skills --close-during-run` plus the
-post-run-tests harness).
+post-run-tests harness) but with the additional bench-side fix
+below.
 
-| | Old tckit T1 (2026-05-16) | **New tckit T1** | Vanilla T1 (unchanged) |
-|---|---:|---:|---:|
-| Calls | 49 | **14** | 7 |
-| Tokens | 17,667 | **4,110** | 2,014 |
-| Wall (s) | 385.1 | **88.2** | 36.7 |
-| Test | PASSED | PASSED | PASSED |
-| Build | green | green | green |
+Three rounds of measurement before the result stuck:
 
-vs old tckit: 0.29x calls / 0.23x tokens / 0.23x wall.
-vs vanilla: dropped from 7.0x / 8.8x / 10.5x to **2.0x / 2.0x /
-2.4x**.
+| Round | Calls | Tokens | Wall (s) | Notes |
+|---|---:|---:|---:|---|
+| Old tckit (2026-05-16) | 49 | 17,667 | 385.1 | UmRT XML missing, empty `get_test_results` drove a retry loop |
+| After ADR-0011, hand-off mode | 14 | 4,110 | 88.2 | Empty-results loop gone; model handed off to harness, did not self-validate |
+| After ADR-0011, self-validate attempt | 48 | 15,188 | 427.2 | `--isolate-cwd` + MCP path mismatch surfaced; model couldn't see its own writes, fell back to raw Edit + four full validation cycles |
+| **After bench MCP-lifecycle fix** | **11** | **2,349** | **68.3** | Clean. Model used MCP reader+writer, single `update_method_body` |
+| Vanilla (reference) | 7 | 1,904 | 42.0 | |
 
-Tool breakdown shifted dramatically:
+vs old tckit: **0.22x calls, 0.13x tokens, 0.18x wall.**
+vs vanilla: **1.57x calls, 1.23x tokens, 1.63x wall** (down from
+7.0x / 8.8x / 10.5x).
 
-| Old | New |
-|---|---|
-| `Bash×1, Glob×5, PowerShell×8, Read×13` | (none — model used MCP reader surface throughout) |
-| `build×2, deploy×2, start_runtime×2, run_tests×4, get_test_results×3` | (none — see caveat below) |
-| `update_method_body×1` | `update_method_body×1` |
-| `get_pou_interface×1, get_pou_item×1, get_structure×3, open_project×1` | `get_pou_interface×2, get_pou_item×6, get_structure×1` |
+Final tool breakdown: `Skill×2, ToolSearch×1,
+mcp__tckit__get_pou_interface×2, mcp__tckit__get_pou_item×4,
+mcp__tckit__get_structure×1, mcp__tckit__update_method_body×1`. No
+Bash/Glob/Read exploration churn, no test-loop iteration, single
+canonical writer call. Same 5-line Schmitt-trigger logic on the
+diff as every prior round.
 
-Same canonical 5-line Schmitt-trigger implementation. The Bash /
-Glob / Read exploration churn that drove the old run's cost is gone:
-the model went straight to the MCP reader+writer surface.
+## What needed fixing on the bench side
 
-## Caveat: the bench arm did NOT self-validate
+The first ADR-0011 re-bench (14 calls, hand-off mode) looked
+impressive but the model never called build/deploy/start_runtime/
+run_tests itself — its final message was *"the harness re-runs ...
+so I'll hand off there rather than trigger a deploy that would
+need your safety-gate approval."* Trying to remeasure with
+`SAFETY_CONFIRMATIONS=false` exposed a more interesting bug: the
+`--isolate-cwd` mechanism copies the fixture to a temp dir and pins
+`claude -p`'s cwd there, but the long-lived MCP server's
+`PLC_PROJECT_PATH` still pointed at the real fixture. The model's
+`update_method_body` calls went to the real fixture via the bridge
+while the model's `Read` calls saw the temp copy — the model could
+not observe its own writes and (reasonably) concluded the writer
+was broken. It fell back to raw `Edit` on the temp copy, retried
+build/deploy/test four times, and eventually found the right
+sequence (manual `save_plc_as_library` after editing) to get the
+tests green. 48 calls of fighting structural staleness, not a real
+self-validation cost.
 
-The model never called `build`, `deploy`, `start_runtime`, or
-`run_tests` itself. Its final message: *"Per the prompt, the harness
-re-runs save_plc_as_library and the test loop, so I'll hand off
-there rather than trigger a deploy that would need your safety-gate
-approval."* The PASSED status came from the bench's `--post-run-tests
-SchmittTriggerTests` harness step, not the model.
+The fix is in `bench/run.py`: the bench now manages the MCP server
+lifecycle per run, spawning a fresh `python -m tckit.server` with
+`PLC_PROJECT_PATH` pointing at the temp fixture during the model
+session, then killing it before sync-back. `run-pair.ps1`
+drops `-StartMcp` (the bench owns lifecycle now) and refuses if
+port 8000 is occupied. The bench also extended its sync-back
+exclude list to cover `.vs/`, `*.suo`, `_Boot/` etc, which now
+appear inside the temp fixture because the bench's own DTE attach
+creates them there.
 
-Two factors pushed the model to hand-off rather than self-validate:
-
-- The fixture's TASK.md tells the model the harness validates.
-- The `tc-build-test-loop` skill's safety-gate language *"wait for
-  explicit approval in chat"* is doing its job: in a `claude -p`
-  non-interactive session there is no chat approval available, so
-  the conservative path is hand-off. `ALLOWED_NETIDS=127.0.0.1.1.1`
-  was set on the MCP server's env, which would have bypassed the
-  gate, but the model didn't know and didn't probe.
-
-So the 9x -> 2x drop is real and partly comes from fixing the
-empty-results retry loop, but it's measured under conditions where
-the model isn't self-validating. To answer "does the new tckit
-self-validate cheaper than the old one?", the bench needs to either
-disable the safety gate explicitly for the headless arm or tell the
-model in the task / skill that the local target is pre-approved.
+With those fixes the 48-call self-validate run collapsed to 11
+calls. The model still hands off rather than self-validating in
+this measurement, because the TASK.md tells it the harness handles
+validation and the skill's safety-gate language reinforces deferral
+in a non-interactive context. But the cost is now genuine writer-
+surface cost, not staleness fight.
 
 ## What this validates and invalidates
 
@@ -129,13 +137,19 @@ model in the task / skill that the local target is pre-approved.
   safety gate. In an interactive session that's fine; in `claude -p`
   it isn't. The skill's caution is correct but needs a per-context
   escape hatch the bench can use without disabling safety globally.
+- `--isolate-cwd` is structurally incompatible with a shared MCP
+  server if the MCP env points at the real fixture: the model reads
+  from temp, writes go to real, and the model can't see its own
+  edits. Bench now spawns MCP per-run with the temp path; documented
+  in this finding's "What needed fixing" section.
 
 **Open:**
 
-- Re-bench with the model actually deploying (set `ALLOWED_NETIDS`
-  in the env the model session inherits, plus a TASK.md tweak
-  telling the model the local target is pre-approved) to measure
-  self-validating cost vs the old 49-call baseline.
+- Get the model to actually self-validate inside the bench (TASK.md
+  tweak or skill-level "if you have safety-gate approval, run the
+  test loop yourself" off-ramp). Once that lands, the 11-call number
+  will rise toward genuine self-validating cost; useful comparison
+  point to the 49-call original.
 - N=3 sweep once the self-validating shape is stable.
 
 ## Caveats
