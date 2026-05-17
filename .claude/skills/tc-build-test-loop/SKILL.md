@@ -32,6 +32,8 @@ When you receive `awaiting_confirmation`:
 4. Only then call again with `confirmed=True`.
 5. Never auto-confirm. ALLOWED_NETIDS and SAFETY_CONFIRMATIONS are the user's env config — do not assume them, do not edit `.env` to bypass the gate.
 
+**When the gate doesn't fire.** If `deploy` or `start_runtime` returns a plain success with no `awaiting_confirmation` status, the server-side gate was bypassed because the target is in `ALLOWED_NETIDS` or `SAFETY_CONFIRMATIONS=false`. That is the user's standing pre-authorisation for this target — treat it as cleared and continue the cycle (start_runtime, run_tests) rather than handing off. You are not auto-confirming; the user already did when they configured the bypass.
+
 If the response is `error` mentioning BLOCKED_NETIDS, the target is permanently blacklisted. Do not retry — surface the error to the user.
 
 ## Build-before-deploy
@@ -49,7 +51,7 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 ## Test loop
 
 1. Build → must succeed.
-2. Deploy (with the safety-gate handshake above).
+2. Deploy (with the safety-gate handshake above; if the gate doesn't fire, proceed directly).
 3. `run_tests()`. The response carries `summary` (totals for the whole run) and `failures` (one entry per failed test with `suite_name`, `test_name`, `message`) inline by default. **Do not** call `get_test_results()` on the happy path — it is for the full per-test list including passes, which you only need when the inline failure detail is insufficient.
 4. If `summary.failures == 0` you're done.
 5. For each failed test, read its body via `get_pou_item`, understand the assertion, fix the code under test (not the test, unless the test is wrong and the user agrees).
@@ -60,9 +62,11 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
    - Your hypothesis.
    - A specific question for the user.
 
+**Report the actual outcome.** Once the loop terminates (all green, error escalation, or iteration cap), report the test results from the final `run_tests` call. Don't stop after editing and assume the harness will validate — if the gate cleared you, you own the cycle through to results.
+
 ## Never
 
 - Deploy without a green build.
-- Auto-confirm a deploy or start_runtime.
+- Auto-confirm a deploy or start_runtime that returned `awaiting_confirmation` without explicit user approval in chat. (A plain success means the gate was bypassed by the user's config — that's not auto-confirming.)
 - Continue past test iteration 5.
 - Modify safety-critical code in a fix loop without escalating to `tc-write-st` for the human-review check.
