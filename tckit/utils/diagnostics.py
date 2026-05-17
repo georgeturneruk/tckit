@@ -176,7 +176,10 @@ def tcunit_xml_status(url: str | None = None) -> tuple[bool, bool, list[str]]:
         return True, True, lines
     return False, False, [
         f"no TcUnit XML found. Searched: {kernel_path}",
-        "and %ProgramData%\\Beckhoff\\TwinCAT\\3.1\\Runtimes\\*\\3.1\\Boot\\tcunit_xunit_testresults.xml",
+        (
+            "and %ProgramData%\\Beckhoff\\TwinCAT\\3.1\\Runtimes\\*\\3.1\\Boot\\"
+            "tcunit_xunit_testresults.xml"
+        ),
         "Run TcUnit tests once to populate, or set TCKIT_TCUNIT_XML_PATH.",
     ]
 
