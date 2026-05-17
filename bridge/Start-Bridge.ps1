@@ -408,6 +408,11 @@ try {
                     $result = Invoke-Harness -Script 'Get-TcUnitResults.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
+                'POST /tcunit-xml-resolve' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Resolve-TcUnitXmlPath.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
                 default {
                     Send-JsonResponse -Response $res -Body @{ error = 'Not found' } -StatusCode 404
                 }

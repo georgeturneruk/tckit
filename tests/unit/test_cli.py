@@ -206,6 +206,14 @@ def _stub_doctor_deps(monkeypatch: pytest.MonkeyPatch, deps: dict) -> None:
     monkeypatch.setattr(
         "tckit.cli.bridge_dependencies", lambda url=None: deps
     )
+    # tcunit_xml_status fires after dependencies whenever the bridge is up.
+    # Default to an OK kernel-RT resolve so the existing dep-focused tests
+    # don't have to thread this through every call. Tests targeting the
+    # TcUnit section override this stub explicitly.
+    monkeypatch.setattr(
+        "tckit.cli.tcunit_xml_status",
+        lambda url=None: (True, False, ["kernel-RT path resolves: C:\\TwinCAT\\..."]),
+    )
 
 
 def _stub_config_file_present(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -394,6 +402,67 @@ def test_doctor_warns_but_passes_when_file_present_but_target_unset(
     output = buf.getvalue()
     assert rc == 0
     assert "TARGET_AMS_ID is unset" in output
+
+
+def test_doctor_tcunit_section_passes_with_ambiguity_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Multiple UmRT candidates: WARN line surfaces but overall stays OK."""
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    monkeypatch.setattr(
+        "tckit.cli.bridge_dependencies", lambda url=None: {"TcXaeMgmt": "6.2.127"}
+    )
+    monkeypatch.setattr(
+        "tckit.cli.tcunit_xml_status",
+        lambda url=None: (
+            True,
+            True,
+            [
+                "multiple UmRT candidates (2); freshest will be used:",
+                "  freshest: C:\\ProgramData\\...\\UmRT_A\\...",
+                "  alt:      C:\\ProgramData\\...\\UmRT_B\\...",
+            ],
+        ),
+    )
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    output = buf.getvalue()
+    assert rc == 0
+    assert "TcUnit results path" in output
+    assert "[WARN]" in output
+    assert "multiple UmRT candidates" in output
+
+
+def test_doctor_tcunit_section_fails_when_no_xml_resolves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zero candidates: section is FAIL and overall doctor returns 1."""
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    monkeypatch.setattr(
+        "tckit.cli.bridge_dependencies", lambda url=None: {"TcXaeMgmt": "6.2.127"}
+    )
+    monkeypatch.setattr(
+        "tckit.cli.tcunit_xml_status",
+        lambda url=None: (False, False, ["no TcUnit XML found. Searched: ..."]),
+    )
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    output = buf.getvalue()
+    assert rc == 1
+    assert "TcUnit results path" in output
+    assert "[FAIL] TcUnit results path" in output
 
 
 # ---------------------------------------------------------------------------

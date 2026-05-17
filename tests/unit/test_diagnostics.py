@@ -13,6 +13,7 @@ from tckit.utils.diagnostics import (
     config_file_status,
     install_bridge_dependency,
     is_valid_ams_netid,
+    tcunit_xml_status,
     validate_config,
 )
 
@@ -359,3 +360,163 @@ def test_install_bridge_dependency_handles_bridge_unreachable(
     ok, msg = install_bridge_dependency("TcXaeMgmt")
     assert ok is False
     assert "bridge" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# tcunit_xml_status — kernel / UmRT / env / ambiguous / missing branches
+# ---------------------------------------------------------------------------
+
+
+def _patch_xml_resolve(
+    monkeypatch: pytest.MonkeyPatch,
+    response: dict,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/tcunit-xml-resolve"
+        return httpx.Response(200, json=response)
+
+    fake = _build_with_mock(handler)
+    monkeypatch.setattr(
+        "tckit.utils.diagnostics.BridgeClient",
+        lambda *a, **kw: fake,
+    )
+
+
+def test_tcunit_xml_status_env_override_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": "D:\\pinned.xml",
+            "env_exists": True,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": False,
+            "umrt_candidates": [],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is True
+    assert warn is False
+    assert any("D:\\pinned.xml" in line for line in lines)
+
+
+def test_tcunit_xml_status_env_override_missing_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": "D:\\nope.xml",
+            "env_exists": False,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": False,
+            "umrt_candidates": [],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is False
+    assert warn is False
+    assert any("TCKIT_TCUNIT_XML_PATH" in line for line in lines)
+
+
+def test_tcunit_xml_status_kernel_path_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": None,
+            "env_exists": False,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": True,
+            "umrt_candidates": [],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is True
+    assert warn is False
+    assert any("kernel-RT" in line for line in lines)
+
+
+def test_tcunit_xml_status_single_umrt_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": None,
+            "env_exists": False,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": False,
+            "umrt_candidates": [
+                {"path": "C:\\ProgramData\\...\\UmRT_Default\\...\\tcunit_xunit_testresults.xml"}
+            ],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is True
+    assert warn is False
+    assert any("UmRT_Default" in line for line in lines)
+
+
+def test_tcunit_xml_status_multiple_umrt_warns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": None,
+            "env_exists": False,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": False,
+            "umrt_candidates": [
+                {"path": "C:\\ProgramData\\...\\UmRT_A\\...\\tcunit_xunit_testresults.xml"},
+                {"path": "C:\\ProgramData\\...\\UmRT_B\\...\\tcunit_xunit_testresults.xml"},
+            ],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is True
+    assert warn is True
+    assert any("freshest" in line for line in lines)
+    assert any("TCKIT_TCUNIT_XML_PATH" in line for line in lines)
+
+
+def test_tcunit_xml_status_no_candidates_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_xml_resolve(
+        monkeypatch,
+        {
+            "success": True,
+            "env_override": None,
+            "env_exists": False,
+            "kernel_path": "C:\\TwinCAT\\3.1\\Boot\\Plc\\Port_851\\tcunit_xunit_testresults.xml",
+            "kernel_exists": False,
+            "umrt_candidates": [],
+        },
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is False
+    assert warn is False
+    assert any("no TcUnit XML found" in line for line in lines)
+
+
+def test_tcunit_xml_status_older_bridge_skips_gracefully(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Older bridge without the route returns success=false; treat as informational."""
+    _patch_xml_resolve(
+        monkeypatch,
+        {"success": False, "error": "Not found"},
+    )
+    ok, warn, lines = tcunit_xml_status()
+    assert ok is True
+    assert warn is False
+    assert any("upgrade bridge" in line for line in lines)
