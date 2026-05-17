@@ -70,3 +70,19 @@ PLC_PROJECT_NAME = ""
 # Defaults: Release / "TwinCAT RT (x64)".
 # TC_BUILD_CONFIG = "Release"
 # TC_BUILD_PLATFORM = "TwinCAT RT (x64)"
+
+# ---------------------------------------------------------------------------
+# TcUnit results path (optional override)
+# ---------------------------------------------------------------------------
+
+# Absolute path to TcUnit's xUnit XML output. Leave unset for auto-detect.
+#
+# The bridge tries, in order:
+#   1. This env var, if set.
+#   2. Kernel-RT path: C:\TwinCAT\3.1\Boot\Plc\Port_<port>\tcunit_xunit_testresults.xml
+#   3. UmRT glob:     %ProgramData%\Beckhoff\TwinCAT\3.1\Runtimes\<name>\3.1\Boot\tcunit_xunit_testresults.xml
+#
+# Auto-detect handles the common case. Only set this override if you have
+# multiple UmRT runtimes installed and want to pin which one the bench
+# reads from. `tckit doctor` will WARN when auto-detect is ambiguous.
+# TCKIT_TCUNIT_XML_PATH = "C:/ProgramData/Beckhoff/TwinCAT/3.1/Runtimes/UmRT_Default/3.1/Boot/tcunit_xunit_testresults.xml"

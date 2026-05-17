@@ -83,7 +83,8 @@ try {
     # Resolve the xUnit publisher's default output path. No DTE attach
     # needed — the path is a known function of the PLC runtime port.
     # ----------------------------------------------------------------
-    $xmlPath = Get-TcUnitDefaultXmlPath
+    $xmlPath        = Get-TcUnitDefaultXmlPath
+    $resolveWarning = Get-TcUnitXmlResolveWarning
 
     # ----------------------------------------------------------------
     # Stale-XML mitigation: delete + record start epoch
@@ -201,6 +202,7 @@ try {
             xml_published    = $xmlPublished
             probes           = $probes
             probes_errors    = $probesErrors
+            resolve_warning  = $resolveWarning
         }
     }
     finally {

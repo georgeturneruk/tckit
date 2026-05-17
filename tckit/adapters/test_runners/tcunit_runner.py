@@ -116,7 +116,8 @@ def _parse_test_results(resp: dict[str, Any]) -> TestResults:
     suites_raw = resp.get("suites") or []
     suites = [_parse_suite(s) for s in suites_raw if isinstance(s, dict)]
     summary = _parse_summary(resp.get("summary"))
-    return TestResults(suites=suites, summary=summary)
+    warning = str(resp.get("resolve_warning") or "")
+    return TestResults(suites=suites, summary=summary, warning=warning)
 
 
 def _parse_suite(raw: dict[str, Any]) -> TestSuite:

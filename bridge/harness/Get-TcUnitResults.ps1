@@ -192,8 +192,10 @@ try {
         $XmlPath = Get-TcUnitDefaultXmlPath
     }
 
+    $resolveWarning = Get-TcUnitXmlResolveWarning
+
     if (-not (Test-Path -LiteralPath $XmlPath)) {
-        return @{ success = $false; error = "TcUnit results XML not found at $XmlPath."; xml_path = $XmlPath }
+        return @{ success = $false; error = "TcUnit results XML not found at $XmlPath."; xml_path = $XmlPath; resolve_warning = $resolveWarning }
     }
 
     [xml]$doc = Get-Content -LiteralPath $XmlPath -Raw
@@ -251,10 +253,11 @@ try {
     }
 
     return @{
-        success  = $true
-        suites   = $suites
-        summary  = $summary
-        xml_path = $XmlPath
+        success         = $true
+        suites          = $suites
+        summary         = $summary
+        xml_path        = $XmlPath
+        resolve_warning = $resolveWarning
     }
 }
 catch {

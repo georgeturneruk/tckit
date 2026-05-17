@@ -215,3 +215,16 @@ point leaves partial state better than today.
     kernel-RT vs UmRT bench setups; the hard-coded kernel-RT default
     in `Get-TcUnitDefaultXmlPath` was wrong on UmRT. Per-machine
     override via `TCKIT_TCUNIT_XML_PATH` (documented in `.env.example`).
+- 2026-05-17: Section C's TcUnit cascade shipped, but the path-resolution
+  side was incomplete. T1 surfaced this as `tests: 0` from
+  `get_test_results` plus a 9x cost on the bench (49 vs 7 calls, 17,667
+  vs 2,014 tokens) because the model iterated through deploy + run
+  cycles trying to find ground truth. The `TCKIT_TCUNIT_XML_PATH`
+  override existed but wasn't documented anywhere and the bridge
+  defaulted to the kernel-RT path even when only a UmRT runtime was
+  installed. The four follow-on fixes in
+  [ADR-0011](0011-tcunit-results-path-resolution-and-cold-start-recovery.md)
+  close that loop: UmRT auto-detect with mtime tiebreak, `run_tests`
+  failure-first inline payload, `add_library_placeholder` idempotency,
+  and `save_plc_as_library` cold-start retry. See bench finding
+  [2026-05-16-t1-schmitt-trigger-pair](../bench/findings/2026-05-16-t1-schmitt-trigger-pair.md).

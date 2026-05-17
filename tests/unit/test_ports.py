@@ -90,6 +90,7 @@ def test_test_results_default_shape_round_trips() -> None:
     assert results.success is False
 
     payload = asdict(results)
-    assert set(payload) == {"suites", "summary"}
+    assert set(payload) == {"suites", "summary", "warning"}
+    assert payload["warning"] == ""
     assert payload["summary"]["failures"] == 1
     assert payload["suites"][0]["tests"][1]["failures"][0]["expected"] == "1"

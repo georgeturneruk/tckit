@@ -12,12 +12,16 @@
     New-TcSession from TcXaeMgmt and pass it to Wait-TcSymbolEquals here.
 
     Exported functions:
-      Wait-TcSymbolEquals       — poll a PLC symbol on a TcSession until it
-                                   equals a value or times out
-      Get-TcUnitDefaultXmlPath  — return the xUnit publisher's default
-                                   output path for a given PLC port
-      Wait-TcFileFresh          — wait for a file to appear with mtime > a
-                                   given epoch
+      Wait-TcSymbolEquals          - poll a PLC symbol on a TcSession until
+                                      it equals a value or times out
+      Get-TcUnitDefaultXmlPath     - return the xUnit publisher's default
+                                      output path for a given PLC port
+      Get-TcUnitXmlResolveWarning  - last ambiguity warning recorded by
+                                      Get-TcUnitDefaultXmlPath, or empty
+      Resolve-TcUnitXmlCandidates  - enumerate all candidate XML paths
+                                      (env override, kernel-RT, UmRT glob)
+      Wait-TcFileFresh             - wait for a file to appear with mtime >
+                                      a given epoch
 #>
 
 Set-StrictMode -Version Latest
@@ -92,6 +96,14 @@ function Wait-TcSymbolEquals {
 # xUnit publisher default output path
 # ------------------------------------------------------------------
 
+# Side-channel for Get-TcUnitDefaultXmlPath ambiguity warnings.
+# A returned path is always a single string; when the resolver finds
+# multiple UmRT candidates, the chosen path is the freshest by
+# LastWriteTime and a human-readable warning is stashed here so the
+# caller can include it in the response payload. Cleared at the start
+# of each Get-TcUnitDefaultXmlPath call.
+$script:LastResolveWarning = ''
+
 function Get-TcUnitDefaultXmlPath {
     <#
     .SYNOPSIS
@@ -110,22 +122,110 @@ function Get-TcUnitDefaultXmlPath {
               C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\<name>\3.1\Boot\
             (no Plc\Port_<port>\ subdirectory)
 
-        Env var override: TCKIT_TCUNIT_XML_PATH points at the absolute
-        file path on this machine. Set as a real env var (or in a local
-        .env) — the kernel-runtime default below is wrong on a UmRT
-        bench, so the operator must declare the path explicitly per
-        machine.
+        Resolution order (first hit wins):
 
-        Callers that also override xUnitFilePath via library parameters
-        must pass the resolved path to /tcunit-run / /results
-        explicitly; the bridge does not read xUnitFilePath off the
-        running runtime today.
+          1. $env:TCKIT_TCUNIT_XML_PATH if set (operator escape hatch).
+          2. Kernel-RT path if the file exists.
+          3. UmRT glob under %ProgramData%\Beckhoff\TwinCAT\3.1\Runtimes\.
+             - 1 candidate: returned.
+             - >1: most-recently-modified returned; alternatives reported
+               via Get-TcUnitXmlResolveWarning.
+          4. Fallback: kernel-RT path string (even if missing) so the
+             downstream "not found at <path>" error in Get-TcUnitResults
+             still fires with a stable shape.
+
+        The AMS Net ID cannot narrow UmRT candidates; the local route
+        127.0.0.1.1.1 is per-host, not per-runtime, and the runtime
+        name lives only in the on-disk path. mtime is the only reliable
+        freshness signal on the host side; the just-run XML is always
+        the freshest match because Invoke-TcUnitRun waits on its mtime.
     #>
     param([int]$Port = $script:TcUnitDefaultPlcPort)
+
+    $script:LastResolveWarning = ''
+
     if ($env:TCKIT_TCUNIT_XML_PATH) {
         return $env:TCKIT_TCUNIT_XML_PATH
     }
-    return "C:\TwinCAT\3.1\Boot\Plc\Port_$Port\$script:TcUnitDefaultXmlFileName"
+
+    $kernelPath = "C:\TwinCAT\3.1\Boot\Plc\Port_$Port\$script:TcUnitDefaultXmlFileName"
+    if (Test-Path -LiteralPath $kernelPath) {
+        return $kernelPath
+    }
+
+    if ($env:ProgramData) {
+        $umrtGlob = Join-Path $env:ProgramData "Beckhoff\TwinCAT\3.1\Runtimes\*\3.1\Boot\$script:TcUnitDefaultXmlFileName"
+        $candidates = @(Get-ChildItem -Path $umrtGlob -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+        if ($candidates.Count -eq 1) {
+            return $candidates[0].FullName
+        }
+        if ($candidates.Count -gt 1) {
+            $others = ($candidates | Select-Object -Skip 1 | ForEach-Object { $_.FullName }) -join '; '
+            $script:LastResolveWarning = "Multiple UmRT runtimes published TcUnit XML; using freshest. Set TCKIT_TCUNIT_XML_PATH to pin. Alternatives: $others"
+            return $candidates[0].FullName
+        }
+    }
+
+    return $kernelPath
+}
+
+function Get-TcUnitXmlResolveWarning {
+    <#
+    .SYNOPSIS
+        Last ambiguity warning recorded by Get-TcUnitDefaultXmlPath, or
+        empty string if the last call was unambiguous. Read-only.
+    #>
+    if ($null -eq $script:LastResolveWarning) { return '' }
+    return $script:LastResolveWarning
+}
+
+function Resolve-TcUnitXmlCandidates {
+    <#
+    .SYNOPSIS
+        Enumerate all candidate TcUnit XML paths considered by
+        Get-TcUnitDefaultXmlPath, with existence info. Used by
+        tckit doctor's TcUnit section and the /tcunit-xml-resolve
+        bridge route.
+
+    .OUTPUTS
+        @{
+            env_override    = <string or $null>
+            env_exists      = <bool>
+            kernel_path     = <string>
+            kernel_exists   = <bool>
+            umrt_candidates = @(@{ path = <string>; mtime = <DateTime> }, ...)
+              # sorted by mtime descending
+        }
+    #>
+    param([int]$Port = $script:TcUnitDefaultPlcPort)
+
+    $envOverride = $null
+    $envExists   = $false
+    if ($env:TCKIT_TCUNIT_XML_PATH) {
+        $envOverride = $env:TCKIT_TCUNIT_XML_PATH
+        $envExists   = [bool](Test-Path -LiteralPath $envOverride)
+    }
+
+    $kernelPath   = "C:\TwinCAT\3.1\Boot\Plc\Port_$Port\$script:TcUnitDefaultXmlFileName"
+    $kernelExists = [bool](Test-Path -LiteralPath $kernelPath)
+
+    $umrtCandidates = @()
+    if ($env:ProgramData) {
+        $umrtGlob = Join-Path $env:ProgramData "Beckhoff\TwinCAT\3.1\Runtimes\*\3.1\Boot\$script:TcUnitDefaultXmlFileName"
+        $umrtCandidates = @(
+            Get-ChildItem -Path $umrtGlob -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                ForEach-Object { @{ path = $_.FullName; mtime = $_.LastWriteTime } }
+        )
+    }
+
+    return @{
+        env_override    = $envOverride
+        env_exists      = $envExists
+        kernel_path     = $kernelPath
+        kernel_exists   = $kernelExists
+        umrt_candidates = $umrtCandidates
+    }
 }
 
 # ------------------------------------------------------------------
@@ -170,4 +270,6 @@ function Wait-TcFileFresh {
 Export-ModuleMember -Function `
     Wait-TcSymbolEquals, `
     Get-TcUnitDefaultXmlPath, `
+    Get-TcUnitXmlResolveWarning, `
+    Resolve-TcUnitXmlCandidates, `
     Wait-TcFileFresh
