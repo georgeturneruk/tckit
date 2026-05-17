@@ -179,6 +179,29 @@ to measure.
 
 ## Running bug-hunting tasks (B-series)
 
+### Quick path: `run-pair.ps1`
+
+The full invocation has eight task-specific flags, so `bench/run-pair.ps1`
+wraps it for the two fixtures we re-run most:
+
+```powershell
+# Both arms of T1, MCP server auto-started, self-validating (dev machine only).
+.\bench\run-pair.ps1 -Task T1 -StartMcp -SelfValidate
+
+# Just the tckit arm of B1 against an already-running MCP server.
+.\bench\run-pair.ps1 -Task B1 -Arm tckit
+
+# Both arms of B1 without self-validate (model hands off to harness for the
+# build/deploy/test cycle — that is what the 2026-05-17 T1 re-bench measured).
+.\bench\run-pair.ps1 -Task B1 -StartMcp
+```
+
+`Get-Help .\bench\run-pair.ps1 -Detailed` for the full parameter list and
+the self-validate trade-off. The long-form invocation below is what the
+script expands to.
+
+### Long-form
+
 Closed-loop debugging fixtures live under `bench/fixtures/bug-hunting/<id>-<slug>/`
 and follow the layout in [ADR-0007](../adrs/0007-bug-hunting-bench.md): one
 `.sln` with two PLC projects (a library under test and a tests project that
