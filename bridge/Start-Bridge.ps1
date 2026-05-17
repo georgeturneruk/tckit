@@ -31,6 +31,8 @@
       POST /add-variable          -> harness\Add-TcVariable.ps1
       POST /symbols               -> harness\Read-TcSymbol.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
+      POST /tcunit-xml-resolve    -> harness\Resolve-TcUnitXmlPath.ps1
+      POST /set-placeholder-parameters -> harness\Set-TcLibraryPlaceholderParameters.ps1
       POST /install-dependency    -> Install-Module (allow-listed modules only)
       GET  /health                -> {"status": "ok", "dependencies": {...}}
 
