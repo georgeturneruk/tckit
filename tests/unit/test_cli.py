@@ -565,3 +565,181 @@ def test_init_parser_force_flag() -> None:
 def test_init_parser_print_flag() -> None:
     args = cli._build_parser().parse_args(["init", "--print"])
     assert args.print_only is True
+
+
+def test_init_parser_with_claude_md_flag() -> None:
+    args = cli._build_parser().parse_args(["init", "--with-claude-md"])
+    assert args.with_claude_md is True
+
+
+def test_init_with_claude_md_writes_template_into_cwd(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    monkeypatch.setenv("TCKIT_HOME", str(home))
+    monkeypatch.chdir(cwd)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init(with_claude_md=True)
+    assert rc == 0
+    assert (cwd / "CLAUDE.md").exists()
+    assert (cwd / "twincat" / "cyclic-in-method.md").exists()
+    assert (home / "config.toml").exists()  # user-global also written
+    out = buf.getvalue()
+    assert "CLAUDE.md" in out
+    assert "twincat" in out
+
+
+def test_init_with_claude_md_proceeds_when_user_global_exists(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An existing ~/.tckit/config.toml must NOT block --with-claude-md."""
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "config.toml").write_text("# pre-existing\n", encoding="utf-8")
+
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    monkeypatch.setenv("TCKIT_HOME", str(home))
+    monkeypatch.chdir(cwd)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init(with_claude_md=True)
+    assert rc == 0
+    assert (home / "config.toml").read_text(encoding="utf-8") == "# pre-existing\n"
+    assert (cwd / "CLAUDE.md").exists()
+    out = buf.getvalue()
+    assert "skipping user-global config" in out
+
+
+def test_init_without_with_claude_md_still_fails_when_user_global_exists(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Existing pre-existing behaviour: bare `tckit init` fails if config exists."""
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "config.toml").write_text("# pre-existing\n", encoding="utf-8")
+    monkeypatch.setenv("TCKIT_HOME", str(home))
+
+    rc = cli._init()
+    assert rc == 1
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_init_with_claude_md_skips_existing_linker_without_force(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    (cwd / "CLAUDE.md").write_text("# my own CLAUDE.md\n", encoding="utf-8")
+    monkeypatch.setenv("TCKIT_HOME", str(home))
+    monkeypatch.chdir(cwd)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init(with_claude_md=True)
+    assert rc == 0
+    # Linker preserved, but topic files still laid down.
+    assert (cwd / "CLAUDE.md").read_text(encoding="utf-8") == "# my own CLAUDE.md\n"
+    assert (cwd / "twincat" / "cyclic-in-method.md").exists()
+
+
+def test_init_with_claude_md_force_overwrites_linker(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    (cwd / "CLAUDE.md").write_text("# stale\n", encoding="utf-8")
+    monkeypatch.setenv("TCKIT_HOME", str(home))
+    monkeypatch.chdir(cwd)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._init(with_claude_md=True, force=True)
+    assert rc == 0
+    body = (cwd / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "TwinCAT conventions" in body
+
+
+# ---------------------------------------------------------------------------
+# _claude_md_nudge — doctor's CLAUDE.md hint
+# ---------------------------------------------------------------------------
+
+
+def test_claude_md_nudge_silent_when_no_sln_present(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert cli._claude_md_nudge() is None
+
+
+def test_claude_md_nudge_silent_when_claude_md_alongside_sln(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "Solution.sln").write_text("", encoding="utf-8")
+    (tmp_path / "CLAUDE.md").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert cli._claude_md_nudge() is None
+
+
+def test_claude_md_nudge_fires_when_sln_present_without_claude_md(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "Solution.sln").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    nudge = cli._claude_md_nudge()
+    assert nudge is not None
+    assert "Solution.sln" in nudge
+    assert "tckit init --with-claude-md" in nudge
+
+
+def test_claude_md_nudge_walks_up_to_find_sln(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nested = tmp_path / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+    (tmp_path / "Solution.sln").write_text("", encoding="utf-8")
+    monkeypatch.chdir(nested)
+
+    nudge = cli._claude_md_nudge()
+    assert nudge is not None
+    assert "Solution.sln" in nudge
+
+
+def test_doctor_surfaces_claude_md_nudge_when_applicable(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "Solution.sln").write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (True, "reachable at http://x")
+    )
+    _stub_doctor_deps(monkeypatch, {"TcXaeMgmt": "6.2.127"})
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    out = buf.getvalue()
+    assert rc == 0
+    assert "[INFO] CLAUDE.md" in out
+    assert "tckit init --with-claude-md" in out

@@ -28,6 +28,7 @@ if str(REPO_ROOT) not in sys.path:
 from tckit.adapters.builders.xae_com_builder import XaeComBuilder  # noqa: E402
 from tckit.adapters.writers.automation_writer import AutomationWriter  # noqa: E402
 from tckit.ports.types import POUType, Result  # noqa: E402
+from tckit.templates import install_twincat_claude_md  # noqa: E402
 from tckit.utils.bridge_client import BridgeClient  # noqa: E402
 
 
@@ -149,6 +150,13 @@ def scaffold_fixture(
             parameters={"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}},
         ),
     )
+
+    # Drop the TwinCAT CLAUDE.md template tree into the fixture root.
+    # Existing CLAUDE.md (e.g. fixture-specific notes from older fixtures)
+    # is preserved; topic files are written underneath unconditionally.
+    template_written = install_twincat_claude_md(fixture_dir, overwrite=force)
+    if template_written:
+        print(f"OK   install_twincat_claude_md ({len(template_written)} files)")
 
     return FixtureScaffold(
         writer=writer,

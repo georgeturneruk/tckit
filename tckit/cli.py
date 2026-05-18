@@ -2,14 +2,15 @@
 
 Dispatches subcommands:
 
-- ``tckit`` (no args)         start the MCP server on stdio.
-- ``tckit --transport sse``   start the MCP server on SSE (CI / containers).
-- ``tckit init``              write ``~/.tckit/config.toml`` from the bundled template.
-- ``tckit init --print``      emit the template to stdout (no file I/O).
-- ``tckit config show``       print resolved config and its sources.
-- ``tckit config validate``   check config for missing or malformed values.
-- ``tckit doctor``            run health checks (config + bridge).
-- ``tckit docgen SRC OUT``    render HTML docs from a TwinCAT solution.
+- ``tckit`` (no args)              start the MCP server on stdio.
+- ``tckit --transport sse``        start the MCP server on SSE (CI / containers).
+- ``tckit init``                   write ``~/.tckit/config.toml`` from the bundled template.
+- ``tckit init --with-claude-md``  also drop the TwinCAT CLAUDE.md template into cwd.
+- ``tckit init --print``           emit the template to stdout (no file I/O).
+- ``tckit config show``            print resolved config and its sources.
+- ``tckit config validate``        check config for missing or malformed values.
+- ``tckit doctor``                 run health checks (config + bridge).
+- ``tckit docgen SRC OUT``         render HTML docs from a TwinCAT solution.
 
 The console script ``tckit`` is wired to :func:`main` via ``pyproject.toml``.
 ``python -m tckit.server`` keeps working for the bare-server invocation.
@@ -22,6 +23,7 @@ import json
 import os
 import sys
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from tckit.config import (
@@ -100,6 +102,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit the template to stdout without touching the filesystem.",
     )
+    init_parser.add_argument(
+        "--with-claude-md",
+        dest="with_claude_md",
+        action="store_true",
+        help=(
+            "Also drop the TwinCAT CLAUDE.md template into the current "
+            "directory (linker file + twincat/ topic files). Existing "
+            "files are not overwritten unless --force is also passed."
+        ),
+    )
 
     # `tckit docgen <project_path> <output_path>`
     docgen_parser = sub.add_parser(
@@ -135,7 +147,11 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor(no_install=args.no_install)
 
     if args.command == "init":
-        return _init(force=args.force, print_only=args.print_only)
+        return _init(
+            force=args.force,
+            print_only=args.print_only,
+            with_claude_md=args.with_claude_md,
+        )
 
     if args.command == "docgen":
         return _docgen(args.project_path, args.output_path)
@@ -214,11 +230,21 @@ def _read_template() -> str:
     )
 
 
-def _init(force: bool = False, print_only: bool = False) -> int:
+def _init(
+    force: bool = False,
+    print_only: bool = False,
+    with_claude_md: bool = False,
+) -> int:
     """Scaffold ``~/.tckit/config.toml`` from the bundled template.
 
     ``--print`` returns the template content to stdout, used by the
     ``tc-config`` skill so it has one source of truth for the template.
+
+    ``--with-claude-md`` additionally drops the TwinCAT CLAUDE.md
+    template into the current directory (linker + topic files). If
+    the user-global config already exists, ``--with-claude-md`` lets
+    the command proceed for the CLAUDE.md side rather than failing
+    on the already-present config.
     """
     template = _read_template()
 
@@ -231,8 +257,9 @@ def _init(force: bool = False, print_only: bool = False) -> int:
 
     home = _user_home()
     target = home / "config.toml"
+    user_global_exists = target.exists()
 
-    if target.exists() and not force:
+    if user_global_exists and not force and not with_claude_md:
         print(
             f"{target} already exists. Re-run with --force to overwrite, or "
             "edit it directly.",
@@ -240,13 +267,32 @@ def _init(force: bool = False, print_only: bool = False) -> int:
         )
         return 1
 
-    home.mkdir(parents=True, exist_ok=True)
-    target.write_text(template, encoding="utf-8")
-    print(f"Wrote {target}")
-    print(
-        "Next: edit the file to set TARGET_AMS_ID (and any other values), "
-        "then run `tckit doctor`."
-    )
+    if not user_global_exists or force:
+        home.mkdir(parents=True, exist_ok=True)
+        target.write_text(template, encoding="utf-8")
+        print(f"Wrote {target}")
+        print(
+            "Next: edit the file to set TARGET_AMS_ID (and any other values), "
+            "then run `tckit doctor`."
+        )
+    else:
+        print(f"{target} already exists; skipping user-global config.")
+
+    if with_claude_md:
+        from tckit.templates import install_twincat_claude_md
+
+        cwd = Path.cwd()
+        written = install_twincat_claude_md(cwd, overwrite=force)
+        if written:
+            print(f"Wrote TwinCAT CLAUDE.md template into {cwd}:")
+            for path in written:
+                print(f"  {path.relative_to(cwd)}")
+        else:
+            print(
+                f"TwinCAT CLAUDE.md template already present in {cwd}; "
+                "re-run with --force to overwrite."
+            )
+
     return 0
 
 
@@ -360,6 +406,11 @@ def _doctor(no_install: bool = False) -> int:
                     f"    Install-Module -Name {dep} -Scope CurrentUser -Force"
                 )
 
+    nudge = _claude_md_nudge()
+    if nudge:
+        print("\n[INFO] CLAUDE.md")
+        print(f"  {nudge}")
+
     print("\n" + "=" * 50)
     print(f"Overall: {'PASS' if overall else 'FAIL'}")
     if not overall:
@@ -387,6 +438,28 @@ def _prompt_yes(question: str) -> bool:
     except EOFError:
         return False
     return answer in ("", "y", "yes")
+
+
+def _claude_md_nudge() -> str | None:
+    """Return a one-line nudge if a `.sln` is in the cwd tree without a sibling CLAUDE.md.
+
+    Walks from the cwd upward looking for the first directory that
+    contains a `.sln`. If that directory has no `CLAUDE.md`, returns
+    a nudge string; otherwise returns ``None``.
+    """
+    cwd = Path.cwd()
+    for parent in (cwd, *cwd.parents):
+        slns = sorted(parent.glob("*.sln"))
+        if not slns:
+            continue
+        if (parent / "CLAUDE.md").exists():
+            return None
+        return (
+            f"No CLAUDE.md alongside {slns[0].name} in {parent}. "
+            "To drop in tckit's TwinCAT conventions template, run "
+            "`tckit init --with-claude-md`."
+        )
+    return None
 
 
 if __name__ == "__main__":
