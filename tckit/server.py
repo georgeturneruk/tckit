@@ -133,6 +133,11 @@ def get_structure(project_path: str, plc_name: str = "") -> str:
     Returns names and metadata only, no code bodies; use
     get_pou_interface / get_pou_item for those.
 
+    The returned ``solution_path`` is the resolved absolute path to the
+    .sln; use it as ``project_path`` on the follow-up ``build()`` call.
+    If ``plcs`` has more than one entry, pass ``plc_name`` on that same
+    first ``build()`` call to skip the multi-PLC disambiguation step.
+
     :param project_path: Absolute path to the solution root.
     :param plc_name: Optional PLC project to restrict the walk to. Leave
         empty to scan every ``.plcproj``.

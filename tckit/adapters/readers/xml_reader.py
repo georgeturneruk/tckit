@@ -96,6 +96,9 @@ class XmlReader(ProjectReader):
         if not root.exists():
             raise FileNotFoundError(f"Project path not found: {project_path}")
 
+        sln_paths = sorted(root.rglob("*.sln"))
+        solution_path = str(sln_paths[0].resolve()) if sln_paths else ""
+
         plcproj_paths = sorted(root.rglob("*.plcproj"))
 
         # Reset the index. Even on a scoped (plc_name=...) walk we rebuild
@@ -143,6 +146,7 @@ class XmlReader(ProjectReader):
 
         return ProjectStructure(
             project_path=project_path,
+            solution_path=solution_path,
             plcs=plcs,
             tasks=tasks,
         )

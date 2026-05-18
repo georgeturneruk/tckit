@@ -72,6 +72,46 @@ def test_scoped_get_structure_unknown_plc_raises(
 
 
 # ---------------------------------------------------------------------------
+# solution_path resolution — the reader surfaces the .sln so a follow-up
+# build() call can pull from a known-good field instead of guessing the
+# path from cwd.
+# ---------------------------------------------------------------------------
+
+
+def test_solution_path_resolves_to_absolute_sln(
+    multi_project_sln_path: Path,
+) -> None:
+    structure = XmlReader().get_structure(str(multi_project_sln_path))
+    expected = str((multi_project_sln_path / "multi_project_sln.sln").resolve())
+    assert structure.solution_path == expected
+
+
+def test_solution_path_empty_when_no_sln(tmp_path: Path) -> None:
+    """Bare .plcproj layout (no .sln) leaves solution_path empty."""
+    plcproj = tmp_path / "Lonely.plcproj"
+    plcproj.write_text(
+        "<?xml version=\"1.0\"?><Project xmlns=\"http://schemas.microsoft.com/"
+        "developer/msbuild/2003\"><ItemGroup/></Project>"
+    )
+    structure = XmlReader().get_structure(str(tmp_path))
+    assert structure.solution_path == ""
+
+
+def test_solution_path_picks_first_alphabetically_when_multiple(
+    tmp_path: Path,
+) -> None:
+    """Multiple .sln is rare in TwinCAT but the picker must be deterministic."""
+    (tmp_path / "ZZ_Other.sln").write_text("")
+    (tmp_path / "AA_First.sln").write_text("")
+    (tmp_path / "Lonely.plcproj").write_text(
+        "<?xml version=\"1.0\"?><Project xmlns=\"http://schemas.microsoft.com/"
+        "developer/msbuild/2003\"><ItemGroup/></Project>"
+    )
+    structure = XmlReader().get_structure(str(tmp_path))
+    assert structure.solution_path == str((tmp_path / "AA_First.sln").resolve())
+
+
+# ---------------------------------------------------------------------------
 # Symbol resolution
 # ---------------------------------------------------------------------------
 
