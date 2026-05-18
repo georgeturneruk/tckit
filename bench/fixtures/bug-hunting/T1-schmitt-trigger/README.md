@@ -1,6 +1,6 @@
 # T1 Schmitt-trigger TDD fixture
 
-ADR-0007 task T1 TDD. Unlike B1-B5 there is no seeded bug; the
+ADR-0007 task T1 TDD. Unlike B1 there is no seeded bug; the
 implementation is intentionally empty and the model must write it.
 
 ## What the fixture provides

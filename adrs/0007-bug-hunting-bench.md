@@ -19,13 +19,13 @@ tckit) + `--inject-skills plugin/skills` (tckit only) so each arm sees only
 the surface a real plugin install ships. `--close-during-run` wraps `claude -p`
 so XAE's external-mod guard doesn't wedge on reset or raw XML edits.
 
-**Where it lives:** `bench/run.py`, `bench/fixtures/bug-hunting/`. B1
-(off-by-one) and T1 (Schmitt-trigger TDD) green end-to-end on N=1. T2-pid
-authored, awaiting bench run. B2-B5 fixture test-infra still to author.
+**Where it lives:** `bench/run.py`, `bench/fixtures/bug-hunting/`. Active
+set is B1 (off-by-one), T1 (Schmitt-trigger TDD), and T2 (PID anti-windup
+TDD). B1 and T1 green end-to-end on N=1. T2 authored, awaiting first
+paired bench run. B2-B5 dropped 2026-05-18 (see Status notes); the
+bug-category descriptions below remain as priors for anyone re-authoring.
 
 **Open questions:**
-- B2-B5 author scripts only seed the library FB + consumer; suite + tests +
-  MAIN need adding before bench rounds can run on them.
 - N=3 sweep on B1 + T1 + T2 once author scripts are regenerable from scratch.
 - Whether the `tc-build-test-loop` skill iterates too eagerly on tasks where
   the spec is fully constraining (T1 lesson, partially addressed by ADR-0011
@@ -83,22 +83,27 @@ entry point; the compiled-library path produces equivalent build behaviour
 using only documented methods.) The generated `.library` file is
 gitignored and regenerated per build.
 
-### Task set (initial six)
+### Task set
 
-Six tasks cover a graded set of bug categories on realistic domain code.
-FB names are illustrative.
+Six bug categories on realistic domain code, drafted as the initial
+graded set. The active set narrowed to B1 + T1 (+ T2, added post-draft)
+on 2026-05-18; B2-B5 are kept here as bug-category priors for anyone
+re-authoring later. FB names are illustrative.
 
 - **B1 off-by-one.** `FB_RollingAverage.Step` with a
   `FOR i := 1 TO Count DO` that should be `FOR i := 0 TO Count-1 DO`.
-- **B2 sign / type.** `FB_Counter.GetSignedDelta` returns a `UDINT` where
-  it should be `DINT`; subtraction past zero underflows to 4 billion.
-- **B3 state-machine wrong transition.** `FB_TrafficLight.Step` with a
-  `CASE` where `Green -> Yellow` accidentally jumps to `Red`.
-- **B4 missing bError propagation.** `FB_PipelineStage` wraps an inner FB
-  whose `bError` is set on a known input; the outer FB never reads
-  `bInnerFB.bError`.
-- **B5 wrong default initialisation.** `FB_PIDController.VAR` initialises
-  `fGain := 0.0` (should be `1.0`); first call returns zero.
+- **B2 sign / type** _(dropped 2026-05-18)_. `FB_Counter.GetSignedDelta`
+  returns a `UDINT` where it should be `DINT`; subtraction past zero
+  underflows to 4 billion.
+- **B3 state-machine wrong transition** _(dropped 2026-05-18)_.
+  `FB_TrafficLight.Step` with a `CASE` where `Green -> Yellow`
+  accidentally jumps to `Red`.
+- **B4 missing bError propagation** _(dropped 2026-05-18)_.
+  `FB_PipelineStage` wraps an inner FB whose `bError` is set on a known
+  input; the outer FB never reads `bInnerFB.bError`.
+- **B5 wrong default initialisation** _(dropped 2026-05-18)_.
+  `FB_PIDController.VAR` initialises `fGain := 0.0` (should be `1.0`);
+  first call returns zero.
 - **T1 TDD.** `FB_SchmittTrigger.Step` is fully declared but its method
   body is `;`. The suite has five assertions across thresholds, hysteresis
   hold, transitions, and boundary values. No hardcoded return value
@@ -264,3 +269,10 @@ harness changes are additive; the W-series surface is unaffected.
     names that collide with PS built-in vocabulary.
 - 2026-05-15: xUnit publisher enabled via library parameters; full
   schema retelling is in ADR-0010 section A.2.
+- 2026-05-18: B2-B5 dropped from the active set. The author scripts only
+  ever seeded a library FB plus a build-smoke consumer; none of them grew
+  the TcUnit suite, MAIN, or probe wiring needed to run as paired benches.
+  Maintenance cost of carrying four half-built fixtures outweighed signal
+  value while B1 covers the bug-hunting category and T1 / T2 cover TDD.
+  Fixture directories and `author_B{2,3,4,5}.py` removed; bug-category
+  descriptions retained in the Task set block as priors.
