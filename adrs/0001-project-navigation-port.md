@@ -22,8 +22,9 @@ without that pull.
 is parked at `bench/tasks/_parked/02-find-callers.md` until this lands.
 
 **Open questions:**
-- Will closed-loop bench rounds (B3-B5 bug-hunts that walk callgraphs)
-  produce the concrete pull this ADR is gated on?
+- Will a closed-loop bench round on a callgraph-walking bug
+  (a future B-series fixture, or T-series spec that forces cross-FB
+  navigation) produce the concrete pull this ADR is gated on?
 - If yes, blark + pytmc spike to confirm the parser composition before
   committing to a build.
 
