@@ -54,7 +54,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 2. **Pick the smallest write that does the job** using the Tool selection table above. Small edit on a method -> `update_method_body_patch`. Small edit on the FB-level decl / cyclic body -> `update_pou_declaration_patch` / `update_pou_implementation_patch`. Single new variable -> `add_variable`. Full method-body rewrite -> `update_method_body`. Full POU declaration / implementation rewrite -> `update_pou_declaration` / `update_pou_implementation`. New unit -> `add_pou` / `add_method` / `create_project`.
 3. For patch-based edits, fetch the current item with `get_pou_item` (or `get_pou_declaration` if only the FB-level VAR block matters) so the anchor you choose is grounded in the real text, not your memory of it.
 4. NEVER edit `.TcPOU` or `.plcproj` XML directly. GUIDs and cross-references go through the automation interface.
-5. After the writer returns success, summarise what changed (POU, item, lines). The writer's success response is the confirmation; do not read the change back to "verify" it landed and do not call `build` to "check it builds". The operator and harness verify the artefact. Re-read or rebuild only if the user explicitly asks you to check something specific.
+5. After the writer returns success, summarise what changed (POU, item, lines). The writer's success response is the confirmation; do not read the change back to "verify" it landed. Whether to build / deploy / test next is driven by the user's request: if they asked for tests to pass, a behaviour to be verified, or the project to build, hand off to `tc-build-test-loop` and run the cycle through to actual results. If they only asked for the edit, stop here.
 
 ## Anti-patterns
 
@@ -64,8 +64,8 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 - Calling a full-body rewrite (`update_method_body` / `update_pou_declaration` / `update_pou_implementation`) for a one-line change. Use the matching `_patch` variant instead.
 - Reading the full FB declaration, hand-editing the VAR block, and writing it back. Use `add_variable` instead.
 - Concluding "TcKit isn't working" because a reader tool succeeded but a writer tool failed. Writer tools require the bridge; reader tools do not. Surface the bridge error to the user rather than reaching for stock-tool edits.
-- Re-reading the changed item with `get_pou_item` / `get_pou_declaration` / `Read` immediately after a successful writer call to confirm it landed. The writer already told you it succeeded. Self-verification reads (and verification builds) are bench-noise; the operator and harness verify the artefact.
+- Re-reading the changed item with `get_pou_item` / `get_pou_declaration` / `Read` immediately after a successful writer call to confirm it landed. The writer already told you it succeeded. (This is about verifying the *write itself*, not about running the build / test cycle the user asked for — that's a hand-off to `tc-build-test-loop`, not a re-read.)
 
 ## Next
 
-After successful writes, hand off to `tc-build-test-loop` for build → deploy → test.
+If the user asked for tests to pass, a behaviour to be verified, or the project to build, the work is not done after the write — hand off to `tc-build-test-loop` for build → deploy → test and report the actual outcome. If the user only asked for the edit, stop here and report what changed.

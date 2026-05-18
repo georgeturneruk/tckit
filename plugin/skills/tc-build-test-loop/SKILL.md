@@ -8,13 +8,17 @@ allowed-tools: mcp__tckit__build, mcp__tckit__deploy, mcp__tckit__start_runtime,
 
 ## Build-fix loop
 
-1. Call `build(project_path)`.
+1. Call `build(project_path)` with an absolute path to the `.sln` (or `.tsproj`). For multi-PLC solutions, pass `plc_name=<consumer>` on the same call; see "Multi-PLC builds with library references" below.
 2. If `success: true`:
    - If a `docs_warning` field is present, this is non-fatal — note it for the user but do NOT loop on it.
    - Proceed to deploy/test as the user requested.
 3. If `success: false`, take the **first** error in the JSON list. Read the offending file via `get_pou_item` if needed. Fix that one file only.
 4. Rebuild. Do not batch fixes across files.
 5. **Two-strikes rule.** If the same error message on the same file/line persists after a second fix attempt, STOP. Present the error, your two attempts, your hypothesis, and ask the user.
+
+## Where `target_ams_id` comes from
+
+`deploy`, `start_runtime`, and `run_tests` default `target_ams_id` from the `TARGET_AMS_ID` env var or the same field in `~/.tckit/config.toml`. If neither is set the tool returns a clear "target_ams_id is required" error — ask the user for the target rather than guessing or hunting through the filesystem.
 
 ## Deploy and start_runtime — the safety-gate handshake
 
@@ -27,6 +31,8 @@ When you receive `awaiting_confirmation`:
 3. Wait for explicit approval in chat ("yes", "go ahead", "confirmed").
 4. Only then call again with `confirmed=True`.
 5. Never auto-confirm. ALLOWED_NETIDS and SAFETY_CONFIRMATIONS are the user's env config — do not assume them, do not edit `.env` to bypass the gate.
+
+**When the gate doesn't fire.** If `deploy` or `start_runtime` returns a plain success with no `awaiting_confirmation` status, the server-side gate was bypassed because the target is in `ALLOWED_NETIDS` or `SAFETY_CONFIRMATIONS=false`. That is the user's standing pre-authorisation for this target — treat it as cleared and continue the cycle (start_runtime, run_tests) rather than handing off. You are not auto-confirming; the user already did when they configured the bypass.
 
 If the response is `error` mentioning BLOCKED_NETIDS, the target is permanently blacklisted. Do not retry — surface the error to the user.
 
@@ -45,7 +51,7 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 ## Test loop
 
 1. Build → must succeed.
-2. Deploy (with the safety-gate handshake above).
+2. Deploy (with the safety-gate handshake above; if the gate doesn't fire, proceed directly).
 3. `run_tests()`. The response carries `summary` (totals for the whole run) and `failures` (one entry per failed test with `suite_name`, `test_name`, `message`) inline by default. **Do not** call `get_test_results()` on the happy path — it is for the full per-test list including passes, which you only need when the inline failure detail is insufficient.
 4. If `summary.failures == 0` you're done.
 5. For each failed test, read its body via `get_pou_item`, understand the assertion, fix the code under test (not the test, unless the test is wrong and the user agrees).
@@ -56,9 +62,11 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
    - Your hypothesis.
    - A specific question for the user.
 
+**Report the actual outcome.** Once the loop terminates (all green, error escalation, or iteration cap), report the test results from the final `run_tests` call. Don't stop after editing and assume the harness will validate — if the gate cleared you, you own the cycle through to results.
+
 ## Never
 
 - Deploy without a green build.
-- Auto-confirm a deploy or start_runtime.
+- Auto-confirm a deploy or start_runtime that returned `awaiting_confirmation` without explicit user approval in chat. (A plain success means the gate was bypassed by the user's config — that's not auto-confirming.)
 - Continue past test iteration 5.
 - Modify safety-critical code in a fix loop without escalating to `tc-write-st` for the human-review check.
