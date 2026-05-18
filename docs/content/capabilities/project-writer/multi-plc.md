@@ -70,7 +70,7 @@ A TwinCAT solution holds several named tree items that the IDE keeps separate. S
 
 A compiled library reference resolves against the *installed* library, not the source. After editing the library's source, you must `save_plc_as_library(install=True)` before rebuilding the consumer; otherwise the consumer build picks up stale code.
 
-The `tc-build-test-loop` skill documents this rule for the model side. The bench harness automates it on the validation side. Operators outside TcKit's loaded-skill scope read the rule via the [portable CLAUDE.md template](https://github.com/georgeturneruk/tckit/blob/main/templates/twincat-claude.md).
+The `tc-build-test-loop` skill documents this rule for the model side. The bench harness automates it on the validation side. Operators outside TcKit's loaded-skill scope read the rule via the [TwinCAT CLAUDE.md template](https://github.com/georgeturneruk/tckit/blob/main/tckit/templates/twincat/multi-plc-libraries.md), installed into a project by `tckit init --with-claude-md`.
 
 If the solution uses Source-Only references instead (resolved automatically by TwinCAT's build), this step is unnecessary. The save+install path is idempotent — running it on a Source-Only project is harmless.
 
