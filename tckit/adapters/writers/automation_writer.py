@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 from typing import Any, Literal
 
-from tckit.ports.types import POUType, Result
+from tckit.ports.types import DUTKind, POUType, Result
 from tckit.ports.writer import ProjectWriter
 from tckit.utils.bridge_client import BridgeClient, BridgeError
 from tckit.utils.results import to_result
@@ -74,6 +74,26 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
+    def add_dut(
+        self,
+        name: str,
+        code: str,
+        *,
+        dut_kind: DUTKind = DUTKind.STRUCT,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/dut",
+            self._with_project(
+                {
+                    "Name": name,
+                    "DutKind": dut_kind.value,
+                    "Code": code,
+                },
+                plc_name=plc_name,
+            ),
+        )
+
     def add_method(
         self,
         pou_name: str,
@@ -92,6 +112,38 @@ class AutomationWriter(ProjectWriter):
                 },
                 plc_name=plc_name,
             ),
+        )
+
+    def add_property(
+        self,
+        pou_name: str,
+        property_name: str,
+        return_type: str,
+        *,
+        getter_code: str | None = None,
+        setter_code: str | None = None,
+        plc_name: str | None = None,
+    ) -> Result:
+        if getter_code is None and setter_code is None:
+            return Result(
+                success=False,
+                error=(
+                    "add_property requires at least one of "
+                    "getter_code or setter_code."
+                ),
+            )
+        payload: dict[str, Any] = {
+            "PouName": pou_name,
+            "PropertyName": property_name,
+            "ReturnType": return_type,
+        }
+        if getter_code is not None:
+            payload["GetterCode"] = getter_code
+        if setter_code is not None:
+            payload["SetterCode"] = setter_code
+        return self._call(
+            "/property",
+            self._with_project(payload, plc_name=plc_name),
         )
 
     def update_pou_declaration(

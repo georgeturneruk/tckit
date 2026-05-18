@@ -30,7 +30,9 @@ For each MCP write operation, the adapter posts to a bridge endpoint:
 | `create_project`                   | `POST /create`                     | `New-TcProject.ps1` |
 | `add_pou`                          | `POST /pou`                        | `Add-TcPou.ps1` |
 | `add_gvl`                          | `POST /gvl`                        | `Add-TcGvl.ps1` |
+| `add_dut`                          | `POST /dut`                        | `Add-TcDut.ps1` |
 | `add_method`                       | `POST /method`                     | `Add-TcMethod.ps1` |
+| `add_property`                     | `POST /property`                   | `Add-TcProperty.ps1` |
 | `update_pou_declaration`           | `POST /pou-declaration`            | `Update-TcPouDeclaration.ps1` |
 | `update_pou_implementation`        | `POST /pou-implementation`         | `Update-TcPouImplementation.ps1` |
 | `update_method_body`               | `POST /method-body`                | `Update-TcMethodBody.ps1` |

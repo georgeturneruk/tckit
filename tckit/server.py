@@ -509,6 +509,93 @@ def add_method(
         return _err(str(exc))
 
 
+def add_dut(
+    name: str,
+    code: str,
+    dut_kind: str = "struct",
+    plc_name: str = "",
+) -> str:
+    """Add a new Data Unit Type (struct, enum, or union) to a PLC project.
+
+    DUTs live in their own tree folder under the PLC project, separate
+    from POUs and GVLs. The kind discriminator picks the TwinCAT item
+    type:
+
+      ``struct`` -> ``TYPE Foo : STRUCT ... END_STRUCT END_TYPE``
+      ``enum``   -> ``TYPE Foo : ( ... ) END_TYPE``
+      ``union``  -> ``TYPE Foo : UNION ... END_UNION END_TYPE``
+
+    The TwinCAT ALIAS type (``TYPE x : LREAL; END_TYPE``) is not yet
+    supported.
+
+    :param name: Name of the new DUT (e.g. ``ST_Config``, ``E_State``).
+    :param code: Full ST source text including the ``TYPE`` /
+        ``END_TYPE`` wrapper.
+    :param dut_kind: One of ``"struct"`` (default), ``"enum"``,
+        ``"union"``.
+    :param plc_name: PLC project to write to. Leave empty for
+        single-project solutions or to use the ``PLC_PROJECT_NAME`` env
+        default.
+    """
+    try:
+        from tckit.ports.types import DUTKind
+
+        try:
+            kind = DUTKind(dut_kind.lower())
+        except ValueError:
+            return _err(
+                f"dut_kind must be one of struct/enum/union, got {dut_kind!r}."
+            )
+        result = _cfg.writer().add_dut(
+            name, code, dut_kind=kind, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def add_property(
+    pou_name: str,
+    property_name: str,
+    return_type: str,
+    getter_code: str = "",
+    setter_code: str = "",
+    plc_name: str = "",
+) -> str:
+    """Add a new property to an existing POU.
+
+    Creates the property parent (declaration ``PROPERTY <name> : <return_type>``)
+    plus a Get accessor when ``getter_code`` is non-empty, a Set accessor
+    when ``setter_code`` is non-empty, or both. At least one accessor must
+    be supplied.
+
+    Each accessor's code is the body of that accessor (just the ST
+    statements) optionally preceded by a local ``VAR`` block. No
+    ``METHOD``/``PROPERTY`` header is needed in the accessor code; the
+    kind of accessor is implicit from the tree-item type.
+
+    :param pou_name: Name of the containing POU.
+    :param property_name: Name of the new property (PascalCase, no prefix).
+    :param return_type: TwinCAT type the property exposes (e.g. ``LREAL``).
+    :param getter_code: Body of the Get accessor. Empty string skips it.
+    :param setter_code: Body of the Set accessor. Empty string skips it.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().add_property(
+            pou_name,
+            property_name,
+            return_type,
+            getter_code=getter_code or None,
+            setter_code=setter_code or None,
+            plc_name=_plc(plc_name),
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def update_pou_declaration(pou_name: str, code: str, plc_name: str = "") -> str:
     """Replace the POU-level declaration block (VAR sections, signature).
 
@@ -1003,7 +1090,9 @@ _TOOLS = (
     set_placeholder_parameters,
     add_pou,
     add_gvl,
+    add_dut,
     add_method,
+    add_property,
     update_pou_declaration,
     update_pou_implementation,
     update_method_body,

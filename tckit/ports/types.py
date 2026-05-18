@@ -38,6 +38,20 @@ class POUType(StrEnum):
     INTERFACE = "interface"
 
 
+class DUTKind(StrEnum):
+    """Kind discriminator for Data Unit Type creation.
+
+    Backs ``ProjectWriter.add_dut``. ALIAS (``TYPE x : LREAL; END_TYPE``)
+    is intentionally absent in v1: the TwinCAT automation interface kind
+    constant for it is undocumented in our spike notes and is not needed
+    by any current bench. Add it when a use case appears.
+    """
+
+    STRUCT = "struct"
+    ENUM = "enum"
+    UNION = "union"
+
+
 @dataclass
 class POURef:
     name: str

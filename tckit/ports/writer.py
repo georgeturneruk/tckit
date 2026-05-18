@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Literal
 
-from tckit.ports.types import POUType, Result
+from tckit.ports.types import DUTKind, POUType, Result
 
 
 class ProjectWriter(ABC):
@@ -57,6 +57,36 @@ class ProjectWriter(ABC):
         ...
 
     @abstractmethod
+    def add_dut(
+        self,
+        name: str,
+        code: str,
+        *,
+        dut_kind: DUTKind = DUTKind.STRUCT,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Add a new Data Unit Type (struct, enum, or union) to the project.
+
+        DUTs live in their own tree folder under the PLC project
+        (``TIPC^<plc>^<plc> Project^DUTs``), separate from POUs and GVLs.
+        The kind discriminator controls which TwinCAT item type is
+        created (``Struct``=606, ``Enum``=605, ``Union``=607). The
+        TwinCAT ALIAS type (``TYPE x : LREAL; END_TYPE``) is not yet
+        supported.
+
+        :param name: Name of the new DUT (e.g. ``ST_Config``,
+            ``E_State``).
+        :param code: Full ST source text. For a struct, the
+            ``TYPE x : STRUCT ... END_STRUCT END_TYPE`` block. For an
+            enum, the ``TYPE x : ( ... ) END_TYPE`` block. For a union,
+            the ``TYPE x : UNION ... END_UNION END_TYPE`` block.
+        :param dut_kind: Discriminator. Defaults to ``STRUCT``.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
     def add_gvl(
         self,
         name: str,
@@ -93,6 +123,46 @@ class ProjectWriter(ABC):
         :param pou_name: Name of the containing POU.
         :param method_name: Name of the new method.
         :param code: Full ST source text including declaration block.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def add_property(
+        self,
+        pou_name: str,
+        property_name: str,
+        return_type: str,
+        *,
+        getter_code: str | None = None,
+        setter_code: str | None = None,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Add a new property to an existing POU.
+
+        Creates the property parent (with declaration
+        ``PROPERTY <property_name> : <return_type>``) plus a Get
+        accessor when ``getter_code`` is provided, a Set accessor
+        when ``setter_code`` is provided, or both. At least one
+        accessor must be supplied.
+
+        Each accessor's code is the body of that accessor (just the
+        ST statements) optionally preceded by a local ``VAR`` block.
+        The bridge splits at the last ``END_VAR`` (or treats the
+        whole input as implementation when no ``VAR`` block is
+        present). No ``METHOD``/``PROPERTY`` header should appear in
+        the accessor code — the kind of accessor is implicit from
+        the tree-item type.
+
+        :param pou_name: Name of the containing POU.
+        :param property_name: Name of the new property (PascalCase, no prefix).
+        :param return_type: TwinCAT type the property exposes
+            (e.g. ``LREAL``, ``BOOL``, ``E_MyEnum``).
+        :param getter_code: Body of the Get accessor, optionally with
+            a local ``VAR`` block. ``None`` skips the Get accessor.
+        :param setter_code: Body of the Set accessor, optionally with
+            a local ``VAR`` block. ``None`` skips the Set accessor.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
         """
