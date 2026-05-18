@@ -94,6 +94,38 @@ class AutomationWriter(ProjectWriter):
             ),
         )
 
+    def add_property(
+        self,
+        pou_name: str,
+        property_name: str,
+        return_type: str,
+        *,
+        getter_code: str | None = None,
+        setter_code: str | None = None,
+        plc_name: str | None = None,
+    ) -> Result:
+        if getter_code is None and setter_code is None:
+            return Result(
+                success=False,
+                error=(
+                    "add_property requires at least one of "
+                    "getter_code or setter_code."
+                ),
+            )
+        payload: dict[str, Any] = {
+            "PouName": pou_name,
+            "PropertyName": property_name,
+            "ReturnType": return_type,
+        }
+        if getter_code is not None:
+            payload["GetterCode"] = getter_code
+        if setter_code is not None:
+            payload["SetterCode"] = setter_code
+        return self._call(
+            "/property",
+            self._with_project(payload, plc_name=plc_name),
+        )
+
     def update_pou_declaration(
         self,
         pou_name: str,

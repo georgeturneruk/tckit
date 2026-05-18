@@ -22,6 +22,7 @@
       POST /pou                   -> harness\Add-TcPou.ps1
       POST /gvl                   -> harness\Add-TcGvl.ps1
       POST /method                -> harness\Add-TcMethod.ps1
+      POST /property              -> harness\Add-TcProperty.ps1
       POST /pou-declaration       -> harness\Update-TcPouDeclaration.ps1
       POST /pou-implementation    -> harness\Update-TcPouImplementation.ps1
       POST /method-body           -> harness\Update-TcMethodBody.ps1
@@ -368,6 +369,11 @@ try {
                 'POST /method' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Add-TcMethod.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /property' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcProperty.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /pou-declaration' {

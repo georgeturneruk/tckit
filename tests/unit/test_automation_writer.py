@@ -103,6 +103,102 @@ def test_add_method_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
+def test_add_property_with_getter_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_property(
+        "FB_Pid", "Kp", "LREAL", getter_code="Kp := fKp;"
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/property"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_Pid",
+        "PropertyName": "Kp",
+        "ReturnType": "LREAL",
+        "GetterCode": "Kp := fKp;",
+    }
+    assert "SetterCode" not in payload
+
+
+def test_add_property_with_setter_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_property(
+        "FB_Pid", "Kp", "LREAL", setter_code="IF Kp >= 0 THEN fKp := Kp; END_IF"
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/property"
+    assert payload["SetterCode"] == "IF Kp >= 0 THEN fKp := Kp; END_IF"
+    assert "GetterCode" not in payload
+
+
+def test_add_property_with_both_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_property(
+        "FB_Pid",
+        "Kp",
+        "LREAL",
+        getter_code="Kp := fKp;",
+        setter_code="fKp := Kp;",
+    )
+
+    _, payload = client.calls[0]
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "PouName": "FB_Pid",
+        "PropertyName": "Kp",
+        "ReturnType": "LREAL",
+        "GetterCode": "Kp := fKp;",
+        "SetterCode": "fKp := Kp;",
+    }
+
+
+def test_add_property_rejects_when_no_accessors_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    result = writer.add_property("FB_Pid", "Kp", "LREAL")
+
+    assert result.success is False
+    assert "at least one" in result.error.lower()
+    assert client.calls == []
+
+
+def test_add_property_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_property(
+        "FB_Pid",
+        "Kp",
+        "LREAL",
+        getter_code="Kp := 0;",
+        plc_name="LibPlc",
+    )
+
+    _, payload = client.calls[0]
+    assert payload["PlcName"] == "LibPlc"
+
+
 def test_update_pou_declaration_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)

@@ -56,7 +56,7 @@ function Get-TcKind {
         Map a logical type name to its CreateChild kind constant.
 
         Accepts: function_block, function, program, interface, method, action,
-        property, gvl, folder.
+        property, property_get, property_set, gvl, folder.
     #>
     param([Parameter(Mandatory)][string]$Type)
     switch ($Type.ToLowerInvariant()) {
@@ -67,6 +67,8 @@ function Get-TcKind {
         'method'         { return $script:TcKind.Method }
         'action'         { return $script:TcKind.Action }
         'property'       { return $script:TcKind.Property }
+        'property_get'   { return $script:TcKind.PropertyGet }
+        'property_set'   { return $script:TcKind.PropertySet }
         'gvl'            { return $script:TcKind.GVL }
         'folder'         { return $script:TcKind.Folder }
         default {
