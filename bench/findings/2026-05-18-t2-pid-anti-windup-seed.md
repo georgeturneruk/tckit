@@ -1,3 +1,9 @@
+---
+date: 2026-05-18
+status: Current
+related_adrs: [0007, 0008, 0012]
+---
+
 # 2026-05-18 — T2 PID anti-windup TDD pair (seed)
 
 Third bug-hunting fixture authored. Same harness shape as the T1

@@ -3,187 +3,91 @@ adr: 0002
 title: Project orientation — extend get_structure with subsystem context
 status: Implemented
 created: 2026-05-10
+last_reviewed: 2026-05-18
 issue:
 pr:
+related: [0001, 0004, 0005]
 ---
+
+## Current state
+
+**Decision (live):** `ProjectReader.get_structure` returns task layout (cycle
+in microseconds, priority, bound programs), library refs, and a `folder` per
+`POURef`. Implementation uses stdlib `xml.etree.ElementTree` against
+`.plcproj` / `.tsproj` / `.TcTTO` (no pytmc dependency); `.TcTTO` is
+authoritative for task data when present, `.tsproj` is the fallback.
+`get_pou_summary` deferred (not needed by the orientation flow). Once
+ADR-0005 landed, the return shape became
+`plcs: dict[str, PLCSection]` with `libraries` per-PLC and `tasks` at
+solution level.
+
+**Where it lives:** `tckit/adapters/readers/xml_reader.py:get_structure`,
+`tckit/ports/types.py` (`TaskInfo`, `LibraryRef`, `POURef`,
+`ProjectStructure`). `tc-orient-project` skill at
+`.claude/skills/tc-orient-project/SKILL.md`.
 
 ## Context
 
-When Claude opens a TwinCAT project for the first time, the current
-`ProjectReader.get_structure` returns a flat list of POU names, GVL
-names, DUT names, and a `tasks: list[str]` field that the existing
-adapter does not populate. Three pieces of project-shaping context
-that the project files already encode are not surfaced:
+When Claude opens a TwinCAT project for the first time, the original
+`get_structure` returned a flat list of POU/GVL/DUT names and an unpopulated
+`tasks: list[str]`. Three pieces of project shape were missing: folder
+hierarchy (subsystem meaning), task layout (cycle times, priorities,
+bindings), library references. Without these, Claude crawled interface
+declarations to reconstruct shape the project file already encodes.
 
-- **Folder hierarchy.** `POUs/Axes/`, `POUs/Sequences/`, `POUs/IO/`
-  carry subsystem meaning. A flat list flattens that meaning away
-  and forces Claude to infer subsystems from name prefixes (which
-  works on disciplined projects, fails on messy ones).
-- **Task layout.** What runs in which task, at what cycle time, in
-  what priority order. Lives in `.tsproj` and `.plcproj`. Critical
-  for "what does this project do" and "what is the timing".
-- **Library references.** Which Beckhoff or third-party libraries
-  the project depends on. Lives in `.plcproj`. Anchors `find_fb`
-  searches and explains where unfamiliar FB names come from.
+ADR-0001 deferred the search question; orientation is the higher-leverage
+navigation investment because the data lives in files `ProjectReader`
+already opens.
 
-Without these, Claude has to crawl interface declarations to
-reconstruct shape that the project file already tells you in one
-read. That is wasted context window and slow.
+## Decision
 
-ADR-0001 (`Exploring`) captured the related search question and
-parked it. The orientation gap is more load-bearing for the
-workflows that actually matter on TwinCAT (understand, debug,
-add feature) and is much cheaper to address: pytmc parses
-`.tsproj`/`.plcproj` instantly (0.07s on TcUnit, 0.37s on TcOpen
-TcoCore per the 0001 spike) and exposes everything we need.
+Extend `tckit/ports/types.py` with `TaskInfo`, `LibraryRef`, a `folder` field
+on `POURef`, and a richer `ProjectStructure`. `ProjectReader.get_structure`
+signature unchanged; return-type richness grows. Adapters that cannot populate
+the new fields return empty lists.
 
-## Goals
+Ship `tc-orient-project` as a directive skill that loads on first encounter:
+one `get_structure`, sample one FB per subsystem, stop. The skill is what
+turns the new fields into a consistent navigation behaviour.
 
-- Surface task layout, library refs, and folder grouping in a
-  single call so Claude can frame a project's shape without N
-  follow-up reads.
-- Keep the layered-read pattern (`get_structure` →
-  `get_pou_interface` → `get_pou_item`) intact. Orientation is a
-  richer `get_structure`, not a new layer.
-- Codify the orientation playbook as a skill (`tc-orient-project`)
-  so Claude reaches for these new fields consistently rather than
-  reverting to its Python-project default of jumping into specific
-  files.
-
-## Decision (provisional sketch)
-
-### Port-shape changes
-
-Extend `tckit/ports/types.py`:
-
-```python
-@dataclass
-class TaskInfo:
-    name: str
-    cycle_time_us: int | None
-    priority: int | None
-    programs: list[str]   # POU names invoked in this task
-
-@dataclass
-class LibraryRef:
-    name: str
-    version: str
-    placeholder: str | None = None  # e.g. "Tc2_Standard"
-
-@dataclass
-class POURef:
-    name: str
-    pou_type: POUType
-    path: str
-    folder: str           # NEW: "POUs/Axes" relative to PLC project root
-
-@dataclass
-class ProjectStructure:
-    project_path: str
-    pous: list[POURef]
-    gvls: list[str]
-    duts: list[str]
-    tasks: list[TaskInfo]              # CHANGED: was list[str]
-    libraries: list[LibraryRef]        # NEW
-```
-
-`ProjectReader.get_structure` signature is unchanged; only its
-return-type richness grows. Adapters that cannot populate the new
-fields return empty lists.
-
-### New skill
-
-`tc-orient-project` (loads on the first project encounter in a
-session). Walks Claude through:
-
-1. `get_structure` → identify subsystems by `folder` grouping;
-   surface task list and library refs.
-2. Read `MAIN` (or whichever POU is bound to the primary cyclic
-   task per `TaskInfo.programs`).
-3. For each subsystem, sample one top-level FB at the
-   `get_pou_interface` level to learn naming and error-handling
-   conventions.
-4. Stop. Do not crawl further until the user's request demands it.
-
-The skill is the surface that turns the new fields into a
-consistent navigation behaviour.
-
-### Optional sibling: `get_pou_summary`
-
-```python
-def get_pou_summary(self, pou_name: str) -> POUSummary: ...
-```
-
-Returns declaration plus parsed `// :Description:` text. No method
-list, no method bodies. Used for "what is this FB for" without
-pulling the full interface. Smaller scope than the core 0002 work;
-ship after the core lands if orientation flow demands it.
+`get_pou_summary` (declaration + parsed `:Description:` text) considered as
+an optional sibling; gated on real demand.
 
 ## Alternatives considered
 
-- **Keep flat `get_structure`, codify orientation in skill alone.**
-  The skill could call `get_structure` plus N `get_pou_interface`
-  calls to build the same picture. Wastes context and is slow on
-  large projects (200+ POUs). Loses on every dimension.
-- **Pull orientation into a separate port** (e.g.
-  `ProjectInspector`). Architecturally clean but premature; the
-  data lives in the same project files `ProjectReader` already
-  opens, and a second port doubles wiring for a single read. Reader
-  is the right home until a cross-port concern justifies splitting.
-- **Surface task and library data via raw `.tsproj`/`.plcproj`
-  reads exposed as MCP tools.** Adapter-level concern bleeding into
-  the port surface; brittle to vendor-format change. Reject.
+- Keep flat `get_structure`, codify orientation in the skill alone (loses on
+  context cost; N follow-up `get_pou_interface` calls per subsystem).
+- New `ProjectInspector` port (premature; data lives in files
+  `ProjectReader` already opens).
+- Raw `.tsproj`/`.plcproj` MCP tools (adapter detail bleeding into the port).
 
 ## Consequences
 
-**Enables:** meaningful project orientation in two-three calls
-instead of twenty-plus; future debug tooling that needs task and
-library context; `tc-orient-project` as a stable skill that
-codifies "first-touch" navigation.
+**Enables:** orientation in two-three calls instead of twenty-plus; future
+debug tooling needing task/library context; a stable first-touch skill.
 
-**Costs:** `ProjectStructure` becomes a richer dataclass (mild MCP
-serialisation overhead); adapter implementations need a
-`.tsproj`/`.plcproj` parser (pytmc is the obvious choice and
-already adapter-isolated).
+**Costs:** richer dataclass (mild MCP serialisation overhead); adapter needs
+a `.tsproj`/`.plcproj` parser. Type changes are breaking on pre-1.0; no
+compatibility shims.
 
-**Type changes:** `tasks` moves from `list[str]` to
-`list[TaskInfo]`; `POURef` gains a `folder` field; `libraries` is
-new. TcKit is pre-1.0 with no external consumers to protect, so
-make the type changes cleanly without backward-compatibility
-shims.
-
-**Locks out:** nothing structural. The new fields are additive
-where possible; if a future adapter cannot fill them, returning
-empty lists or `None`s degrades the orientation skill gracefully
-without breaking the contract.
+**Locks out:** nothing structural.
 
 ## Status notes
 
-- 2026-05-10: Drafted as `Exploring` after ADR-0001 framing review
-  concluded that search was not the highest-leverage navigation
-  investment. Validation steps before promoting to `Proposed`:
-    1. Spike pytmc on TcUnit and TcOpen to confirm `TaskInfo`,
-       `LibraryRef`, and folder data are extractable as proposed.
-    2. Draft the `tc-orient-project` skill flow against a real
-       project and confirm the orientation completes in
-       under five tool calls on a 50+ POU project.
-- 2026-05-11: Implemented. Skipped pytmc; stdlib
-  `xml.etree.ElementTree` parses `.plcproj` / `.tsproj` / `.TcTTO`
-  directly and matches `XmlReader`'s existing dependency posture.
-  `.TcTTO` (which the spike found on the TcUnit-Verifier project)
-  turned out to be the authoritative task source - cycle time is
-  already in microseconds and the `<PouCall><Name>` element binds a
-  POU to the task. `.tsproj` task data is used as a fallback when no
-  `.TcTTO` is present. `get_pou_summary` deferred per plan; no
-  current need on the orientation flow.
-  Bench validation (see `bench/findings/2026-05-11-adr-0002-post-impl.md`):
-  Task A token spend dropped from a 24-call / 8.5k-token vanilla
-  baseline to 5 calls / 4.0k tokens on TcKit, 6 calls / 4.9k tokens
-  on vanilla. TcKit is 1.24× more efficient than vanilla on this
-  N=1 run; the remaining gap to the 1.5× target was held back by
-  issue #42 (XmlReader file_index not persisted across MCP
-  requests).
-- 2026-05-15: Issue #42 closed (2026-05-11). The reader cache is
-  now persisted across MCP requests, so the bench-validation gap
-  noted above no longer applies; a fresh measurement should be
-  worth taking next time the orientation flow gets a benching pass.
+- 2026-05-11: Implementation outcome.
+  - Skipped pytmc; stdlib `xml.etree.ElementTree` matches `XmlReader`'s
+    existing dependency posture. `.TcTTO` is the authoritative task source;
+    `.tsproj` is the fallback when no `.TcTTO` exists.
+  - Bench validation
+    (`bench/findings/2026-05-11-adr-0002-post-impl.md`): Task A vanilla
+    24 calls / 8.5k tokens -> tckit 5 calls / 4.0k tokens; vanilla also
+    improved to 6 calls / 4.9k tokens because the same directive skill loaded
+    on the vanilla arm (fallback path uses stock tools). 1.24x token ratio
+    held back at the time by issue #42 (reader not cached across MCP
+    requests).
+  - Subjective-quality review
+    (`bench/findings/2026-05-11-subjective-quality-review.md`): TcKit caught
+    a multi-PLC task the vanilla arm missed under the same token budget; a
+    correctness win the numeric ratio hid.
+- 2026-05-15: Issue #42 closed. Reader cache now persists; the bench-validation
+  gap noted above no longer applies. ADR-0004 covers the staleness signal.

@@ -1,3 +1,9 @@
+---
+date: 2026-05-12
+status: Current
+related_adrs: [0003]
+---
+
 # 2026-05-12 — Writer-bench harness + W1 smoke
 
 First write-path bench. ADR-0003's patch primitives landed in #52; the bench harness was extended in #53 to cover writer tasks (reset between runs, pre-bench `/open`, `git diff` capture, post-run build via the bridge). W1 is the smoke task: change one comment line on `FB_TestSuite.AssertEquals_INT`. Same target as the reader benches (TcUnit), same model (Opus 4.7), native bridge + tckit MCP server on Windows, N=1.

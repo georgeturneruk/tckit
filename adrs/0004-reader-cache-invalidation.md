@@ -3,9 +3,27 @@ adr: 0004
 title: Reader cache invalidation strategy
 status: Exploring
 created: 2026-05-11
+last_reviewed: 2026-05-18
 issue: 42
 pr:
+related: [0005]
 ---
+
+## Current state
+
+**Decision (live):** Use `.plcproj` mtime as the staleness signal. One
+`stat()` per read on the warm path; full `get_structure` rebuild on the cold
+path. With multi-PLC support (ADR-0005), the reader tracks one mtime per
+`.plcproj` (`dict[plc_name, float]`) and rebuilds the whole index if any of
+them moves. No explicit invalidation hook, no filesystem watcher.
+
+**Where it lives:** `tckit/adapters/readers/xml_reader.py:_refresh_index_if_stale`.
+Per-`.plcproj` mtime tracking introduced under ADR-0005.
+
+**Open questions:**
+- Does mtime hold up if `remove_pou`/`rename_pou` or any future writer bypasses
+  the `.plcproj` rewrite? None do today.
+- Per-call `stat()` latency on Windows shares; not seen yet.
 
 ## Context
 

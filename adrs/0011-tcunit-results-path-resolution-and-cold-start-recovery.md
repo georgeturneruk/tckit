@@ -3,9 +3,35 @@ adr: 0011
 title: TcUnit results path resolution, run_tests inline failures, placeholder idempotency, save_plc_as_library cold-start retry
 status: Accepted
 created: 2026-05-17
+last_reviewed: 2026-05-18
 issue:
 pr:
+related: [0006, 0007, 0009, 0010]
 ---
+
+## Current state
+
+**Decision (live):** Six fixes on `feat/tcunit-self-validation`:
+(1) `Get-TcUnitDefaultXmlPath` fallback ladder (env override -> kernel -> UmRT
+glob with mtime tiebreak); (2) `run_tests` returns `summary` + `failures`
+inline via `wait_for_results=True` (passing tests omitted; full per-test list
+still on `get_test_results`); (3) `add_library_placeholder` probes
+`.plcproj` and skips COM `AddPlaceholder` when already present;
+(4) `save_plc_as_library` catches `PlaceholderReference/EffectiveResolution`
+and retries after `CheckAllObjects`; (5) `tckit doctor` TcUnit section via
+new `/tcunit-xml-resolve` route; (6) dedicated `set_placeholder_parameters`
+verb. Headless-mode cold-start retry is deferred (SyncLock wedge).
+
+**Where it lives:** Branch `feat/tcunit-self-validation`. Validated by
+`bench/findings/2026-05-17-adr-0011-impl-and-t1-rebench.md` and
+`bench/findings/2026-05-18-t1-friction-fixes-and-skill-nudges.md`.
+
+**Open questions:**
+- Promote to `Implemented` once the T1 re-bench cycle is fully closed (the
+  hand-off vs self-validate variance is characterised in the 2026-05-18
+  finding; an N=3 sweep would confirm).
+- Headless-mode cold-start: deferred pending a Visual Studio Appid Stub
+  SyncLock workaround.
 
 ## Context
 

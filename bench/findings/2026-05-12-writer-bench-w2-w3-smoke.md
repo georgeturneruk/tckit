@@ -1,3 +1,10 @@
+---
+date: 2026-05-12
+status: Superseded
+related_adrs: [0003]
+superseded_by: bench/findings/2026-05-12-writer-bench-wrap-up.md
+---
+
 # 2026-05-12 — Writer-bench W2 + W3 smoke
 
 Follow-up to the W1 smoke that landed alongside the writer-bench harness (#53). W2 adds a `VAR_INPUT` to `FB_TestSuite`; W3 adds a new method to the same FB. Same harness, same target, same model (Opus 4.7), N=1 per (task, config). The findings tested two specific predictions from the W1 doc and surfaced one structural finding about `add_variable`'s placement behaviour.

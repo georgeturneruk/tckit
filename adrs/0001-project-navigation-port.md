@@ -3,9 +3,29 @@ adr: 0001
 title: Project navigation port (ProjectSearcher)
 status: Exploring
 created: 2026-05-09
+last_reviewed: 2026-05-18
 issue:
 pr:
+related: [0002]
 ---
+
+## Current state
+
+**Decision (live):** Deferred. Stock `Grep` + `get_pou_item` covers most
+navigation cleanly; the residual gaps (XML-attribute noise, cross-instance
+disambiguation) are narrow. Reopen with a tight `find_callers(pou_name,
+item_name)` / `find_instantiations(fb_name)` surface when a real session
+repeatedly hits the gap; do not ship a general `search()` / `find_symbol()`
+without that pull.
+
+**Where it lives:** Not implemented. ADR-0007's bench task `02-find-callers`
+is parked at `bench/tasks/_parked/02-find-callers.md` until this lands.
+
+**Open questions:**
+- Will closed-loop bench rounds (B3-B5 bug-hunts that walk callgraphs)
+  produce the concrete pull this ADR is gated on?
+- If yes, blark + pytmc spike to confirm the parser composition before
+  committing to a build.
 
 ## Context
 
