@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 from typing import Any, Literal
 
-from tckit.ports.types import POUType, Result
+from tckit.ports.types import DUTKind, POUType, Result
 from tckit.ports.writer import ProjectWriter
 from tckit.utils.bridge_client import BridgeClient, BridgeError
 from tckit.utils.results import to_result
@@ -70,6 +70,26 @@ class AutomationWriter(ProjectWriter):
             "/gvl",
             self._with_project(
                 {"Name": name, "Code": code},
+                plc_name=plc_name,
+            ),
+        )
+
+    def add_dut(
+        self,
+        name: str,
+        code: str,
+        *,
+        dut_kind: DUTKind = DUTKind.STRUCT,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/dut",
+            self._with_project(
+                {
+                    "Name": name,
+                    "DutKind": dut_kind.value,
+                    "Code": code,
+                },
                 plc_name=plc_name,
             ),
         )

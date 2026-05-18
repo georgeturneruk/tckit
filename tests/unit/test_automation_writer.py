@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from tckit.adapters.writers.automation_writer import AutomationWriter
-from tckit.ports.types import POUType
+from tckit.ports.types import DUTKind, POUType
 from tckit.utils.bridge_client import BridgeUnavailableError
 
 
@@ -192,6 +192,75 @@ def test_add_property_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
         "Kp",
         "LREAL",
         getter_code="Kp := 0;",
+        plc_name="LibPlc",
+    )
+
+    _, payload = client.calls[0]
+    assert payload["PlcName"] == "LibPlc"
+
+
+def test_add_dut_defaults_to_struct(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_dut(
+        "ST_Config",
+        "TYPE ST_Config :\nSTRUCT\n    fKp : LREAL;\nEND_STRUCT\nEND_TYPE",
+    )
+
+    path, payload = client.calls[0]
+    assert path == "/dut"
+    assert payload == {
+        "ProjectPath": "C:/proj/foo.sln",
+        "Name": "ST_Config",
+        "DutKind": "struct",
+        "Code": "TYPE ST_Config :\nSTRUCT\n    fKp : LREAL;\nEND_STRUCT\nEND_TYPE",
+    }
+
+
+def test_add_dut_enum_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_dut(
+        "E_PidMode",
+        "TYPE E_PidMode : (\n    DIRECT,\n    REVERSE\n) END_TYPE",
+        dut_kind=DUTKind.ENUM,
+    )
+
+    _, payload = client.calls[0]
+    assert payload["DutKind"] == "enum"
+
+
+def test_add_dut_union_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_dut(
+        "U_FloatBytes",
+        "TYPE U_FloatBytes :\nUNION\n    fValue : LREAL;\n    aBytes : ARRAY[0..7] OF BYTE;\nEND_UNION\nEND_TYPE",
+        dut_kind=DUTKind.UNION,
+    )
+
+    _, payload = client.calls[0]
+    assert payload["DutKind"] == "union"
+
+
+def test_add_dut_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_dut(
+        "ST_Config",
+        "TYPE ST_Config : STRUCT END_STRUCT END_TYPE",
         plc_name="LibPlc",
     )
 

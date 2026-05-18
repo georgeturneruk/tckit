@@ -509,6 +509,51 @@ def add_method(
         return _err(str(exc))
 
 
+def add_dut(
+    name: str,
+    code: str,
+    dut_kind: str = "struct",
+    plc_name: str = "",
+) -> str:
+    """Add a new Data Unit Type (struct, enum, or union) to a PLC project.
+
+    DUTs live in their own tree folder under the PLC project, separate
+    from POUs and GVLs. The kind discriminator picks the TwinCAT item
+    type:
+
+      ``struct`` -> ``TYPE Foo : STRUCT ... END_STRUCT END_TYPE``
+      ``enum``   -> ``TYPE Foo : ( ... ) END_TYPE``
+      ``union``  -> ``TYPE Foo : UNION ... END_UNION END_TYPE``
+
+    The TwinCAT ALIAS type (``TYPE x : LREAL; END_TYPE``) is not yet
+    supported.
+
+    :param name: Name of the new DUT (e.g. ``ST_Config``, ``E_State``).
+    :param code: Full ST source text including the ``TYPE`` /
+        ``END_TYPE`` wrapper.
+    :param dut_kind: One of ``"struct"`` (default), ``"enum"``,
+        ``"union"``.
+    :param plc_name: PLC project to write to. Leave empty for
+        single-project solutions or to use the ``PLC_PROJECT_NAME`` env
+        default.
+    """
+    try:
+        from tckit.ports.types import DUTKind
+
+        try:
+            kind = DUTKind(dut_kind.lower())
+        except ValueError:
+            return _err(
+                f"dut_kind must be one of struct/enum/union, got {dut_kind!r}."
+            )
+        result = _cfg.writer().add_dut(
+            name, code, dut_kind=kind, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def add_property(
     pou_name: str,
     property_name: str,
@@ -1045,6 +1090,7 @@ _TOOLS = (
     set_placeholder_parameters,
     add_pou,
     add_gvl,
+    add_dut,
     add_method,
     add_property,
     update_pou_declaration,

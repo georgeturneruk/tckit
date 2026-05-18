@@ -161,3 +161,18 @@ add a `scripts/check-twincat-claude-sync.py` to CI.
   rather than VAR_OUTPUT (so callers read `myFB.Error`, with
   the property getter returning `_error`). Documented here as
   context; not part of the template or the skill.
+- 2026-05-18: Template finally shipped as real package data.
+  `tckit/templates/twincat-claude.md` now lives as a linker file
+  plus a `tckit/templates/twincat/` directory of topic files
+  (cyclic-in-method, polymorphism-arrays, tcunit-tests, naming,
+  comments, multi-plc-libraries). The skill remains intentionally
+  untouched: house-style rules belong in the user-editable
+  template, not in tckit-internal procedure. `tckit init
+  --with-claude-md` is the supported install path; `tckit doctor`
+  nudges when a `.sln` is found without a sibling `CLAUDE.md`.
+  Bench fixture authoring (`_common.scaffold_fixture`) now drops
+  the template into newly-authored fixtures as a final step;
+  existing fixtures keep their hand-written CLAUDE.md until next
+  re-author. The "cyclic logic in a method, not the FB body" and
+  "interfaces for FB collections" rules were added as new topic
+  files alongside the older naming/comments/multi-plc content.

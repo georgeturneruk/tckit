@@ -74,7 +74,7 @@ This is enforced by `scripts/check-adapter-isolation.py`, which runs in CI along
 | Port           | Key methods |
 |----------------|-------------|
 | ProjectReader  | `get_structure()`, `get_pou_interface()`, `get_pou_declaration()`, `get_pou_item()`, `get_gvl()`, `get_dut()` |
-| ProjectWriter  | `open_project()`, `create_project()`, `add_pou()`, `add_gvl()`, `add_method()`, `add_property()`, `update_pou_declaration()`, `update_pou_implementation()`, `update_method_body()` (+ `_patch` variants) |
+| ProjectWriter  | `open_project()`, `create_project()`, `add_pou()`, `add_gvl()`, `add_dut()`, `add_method()`, `add_property()`, `update_pou_declaration()`, `update_pou_implementation()`, `update_method_body()` (+ `_patch` variants) |
 | BuildRunner    | `build()`, `deploy()`, `start_runtime()`, `get_status()` |
 | TestRunner     | `run_tests()`, `wait_complete()`, `get_results()`, `get_status()` |
 | DocGenerator   | `generate()`, `get_status()` |

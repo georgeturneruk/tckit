@@ -56,7 +56,8 @@ function Get-TcKind {
         Map a logical type name to its CreateChild kind constant.
 
         Accepts: function_block, function, program, interface, method, action,
-        property, property_get, property_set, gvl, folder.
+        property, property_get, property_set, gvl, struct, enum, union,
+        folder.
     #>
     param([Parameter(Mandatory)][string]$Type)
     switch ($Type.ToLowerInvariant()) {
@@ -70,6 +71,9 @@ function Get-TcKind {
         'property_get'   { return $script:TcKind.PropertyGet }
         'property_set'   { return $script:TcKind.PropertySet }
         'gvl'            { return $script:TcKind.GVL }
+        'struct'         { return $script:TcKind.Struct }
+        'enum'           { return $script:TcKind.Enum }
+        'union'          { return $script:TcKind.Union }
         'folder'         { return $script:TcKind.Folder }
         default {
             throw "Unknown tree-item type: '$Type'."
@@ -714,6 +718,24 @@ function Get-TcPousFolder {
     Write-Output $node -NoEnumerate
 }
 
+function Get-TcDutsFolder {
+    <#
+    .SYNOPSIS
+        Return the DUTs folder under a PLC project.
+
+    .DESCRIPTION
+        Mirror of Get-TcPousFolder, but for the parallel DUTs folder.
+        Tree path is ``TIPC^<plc>^<plc> Project^DUTs``; see
+        scripts/SPIKE_NOTES.md section "Tree navigation into PLC source".
+    #>
+    param(
+        [Parameter(Mandatory)]$SysManager,
+        [Parameter(Mandatory)][string]$PlcName
+    )
+    $node = $SysManager.LookupTreeItem("TIPC^$PlcName^$PlcName Project^DUTs")
+    Write-Output $node -NoEnumerate
+}
+
 function Find-TcChild {
     <#
     .SYNOPSIS
@@ -932,6 +954,7 @@ function Read-TcBuildLog {
 Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
+    Get-TcDutsFolder, `
     Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `

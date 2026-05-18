@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Literal
 
-from tckit.ports.types import POUType, Result
+from tckit.ports.types import DUTKind, POUType, Result
 
 
 class ProjectWriter(ABC):
@@ -51,6 +51,36 @@ class ProjectWriter(ABC):
         :param name: Name of the new POU.
         :param pou_type: POUType enum value.
         :param code: Full ST source text including VAR blocks.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def add_dut(
+        self,
+        name: str,
+        code: str,
+        *,
+        dut_kind: DUTKind = DUTKind.STRUCT,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Add a new Data Unit Type (struct, enum, or union) to the project.
+
+        DUTs live in their own tree folder under the PLC project
+        (``TIPC^<plc>^<plc> Project^DUTs``), separate from POUs and GVLs.
+        The kind discriminator controls which TwinCAT item type is
+        created (``Struct``=606, ``Enum``=605, ``Union``=607). The
+        TwinCAT ALIAS type (``TYPE x : LREAL; END_TYPE``) is not yet
+        supported.
+
+        :param name: Name of the new DUT (e.g. ``ST_Config``,
+            ``E_State``).
+        :param code: Full ST source text. For a struct, the
+            ``TYPE x : STRUCT ... END_STRUCT END_TYPE`` block. For an
+            enum, the ``TYPE x : ( ... ) END_TYPE`` block. For a union,
+            the ``TYPE x : UNION ... END_UNION END_TYPE`` block.
+        :param dut_kind: Discriminator. Defaults to ``STRUCT``.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
         """

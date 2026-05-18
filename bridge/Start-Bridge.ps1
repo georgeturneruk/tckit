@@ -21,6 +21,7 @@
       POST /add-library-placeholder -> harness\Add-TcLibraryPlaceholder.ps1
       POST /pou                   -> harness\Add-TcPou.ps1
       POST /gvl                   -> harness\Add-TcGvl.ps1
+      POST /dut                   -> harness\Add-TcDut.ps1
       POST /method                -> harness\Add-TcMethod.ps1
       POST /property              -> harness\Add-TcProperty.ps1
       POST /pou-declaration       -> harness\Update-TcPouDeclaration.ps1
@@ -359,6 +360,11 @@ try {
                 'POST /gvl' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Add-TcGvl.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /dut' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcDut.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /symbols' {

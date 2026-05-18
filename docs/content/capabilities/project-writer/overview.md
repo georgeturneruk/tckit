@@ -13,6 +13,7 @@
 | `add_library_placeholder(consumer_plc_name, placeholder_name, default_library, *, version='*', distributor='', parameters=None)` | `Result` |
 | `add_pou(name, pou_type, code, *, plc_name=None)` | `Result` |
 | `add_gvl(name, code, *, plc_name=None)` | `Result` |
+| `add_dut(name, code, *, dut_kind=DUTKind.STRUCT, plc_name=None)` | `Result` |
 | `add_method(pou_name, method_name, code, *, plc_name=None)` | `Result` |
 | `add_property(pou_name, property_name, return_type, *, getter_code=None, setter_code=None, plc_name=None)` | `Result` |
 | `update_pou_declaration(pou_name, code, *, plc_name=None)` | `Result` |
