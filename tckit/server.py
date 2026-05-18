@@ -25,6 +25,24 @@ _cfg = load_config()
 # ---------------------------------------------------------------------------
 
 
+def _resolve_target_ams_id(arg: str) -> str:
+    """Return ``arg`` if set, else fall back to TARGET_AMS_ID config / env.
+
+    Empty string means unresolved — the caller should error out with the
+    "where to set it" hint rather than passing an empty target down to
+    the bridge (which would surface as an unhelpful COM error).
+    """
+    if arg:
+        return arg
+    return str(_cfg.get("TARGET_AMS_ID", "") or "")
+
+
+_TARGET_AMS_ID_REQUIRED_HINT = (
+    "target_ams_id is required. Pass it explicitly, set the TARGET_AMS_ID "
+    "env var, or add TARGET_AMS_ID = \"...\" to ~/.tckit/config.toml."
+)
+
+
 def _safety_check(action: str, target_ams_id: str, confirmed: bool) -> str | None:
     """Return an error/preview string if the action should not proceed, else None.
 
@@ -114,6 +132,11 @@ def get_structure(project_path: str, plc_name: str = "") -> str:
     Call once at the start of a session; do not refresh per turn.
     Returns names and metadata only, no code bodies; use
     get_pou_interface / get_pou_item for those.
+
+    The returned ``solution_path`` is the resolved absolute path to the
+    .sln; use it as ``project_path`` on the follow-up ``build()`` call.
+    If ``plcs`` has more than one entry, pass ``plc_name`` on that same
+    first ``build()`` call to skip the multi-PLC disambiguation step.
 
     :param project_path: Absolute path to the solution root.
     :param plc_name: Optional PLC project to restrict the walk to. Leave
@@ -711,7 +734,7 @@ def build(project_path: str, plc_name: str = "") -> str:
 
 
 def deploy(
-    target_ams_id: str,
+    target_ams_id: str = "",
     confirmed: bool = False,
     plc_name: str = "",
     boot_autostart: bool = True,
@@ -729,6 +752,8 @@ def deploy(
       - ``BLOCKED_NETIDS=<id>,...``    — these targets are permanently rejected
 
     :param target_ams_id: AMS Net ID of the target (e.g. 192.168.1.100.1.1).
+        If empty, falls back to the ``TARGET_AMS_ID`` env var or the
+        same field in ``~/.tckit/config.toml``.
     :param confirmed: Set to True after verifying the target is correct and not production.
     :param plc_name: PLC project to deploy. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
@@ -737,6 +762,9 @@ def deploy(
         runtime reaches Run mode. Set False if the consumer wants to control
         autostart explicitly (e.g. loaded-but-stopped for manual login).
     """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
     gate = _safety_check("deploy", target_ams_id, confirmed)
     if gate is not None:
         return gate
@@ -751,7 +779,7 @@ def deploy(
         return _err(str(exc))
 
 
-def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
+def start_runtime(target_ams_id: str = "", confirmed: bool = False) -> str:
     """Start or restart the TwinCAT runtime on a target.
 
     ⚠️  This operation restarts a live PLC runtime. By default it requires
@@ -762,9 +790,14 @@ def start_runtime(target_ams_id: str, confirmed: bool = False) -> str:
       - ``SAFETY_CONFIRMATIONS=false`` — no confirmation gate (trusted closed network)
       - ``BLOCKED_NETIDS=<id>,...``    — these targets are permanently rejected
 
-    :param target_ams_id: AMS Net ID of the target.
+    :param target_ams_id: AMS Net ID of the target. If empty, falls back to
+        the ``TARGET_AMS_ID`` env var or the same field in
+        ``~/.tckit/config.toml``.
     :param confirmed: Set to True after verifying the target is correct and not production.
     """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
     gate = _safety_check("start_runtime", target_ams_id, confirmed)
     if gate is not None:
         return gate
@@ -802,7 +835,7 @@ def read_symbols(target_ams_id: str, paths: list[str]) -> str:
 
 
 def run_tests(
-    target_ams_id: str,
+    target_ams_id: str = "",
     plc_name: str = "",
     wait_for_results: bool = True,
 ) -> str:
@@ -817,7 +850,9 @@ def run_tests(
     fetch the full per-test list including passes.
 
     :param target_ams_id: AMS Net ID of the target runtime (e.g.
-        ``192.168.1.100.1.1``).
+        ``192.168.1.100.1.1``). If empty, falls back to the
+        ``TARGET_AMS_ID`` env var or the same field in
+        ``~/.tckit/config.toml``.
     :param plc_name: PLC project hosting the TcUnit suites. Leave empty
         for single-project solutions or to use the ``PLC_PROJECT_NAME``
         env default.
@@ -826,6 +861,9 @@ def run_tests(
         you need to issue your own get_test_results call (e.g. an
         external orchestrator hand-rolling polling). See ADR-0011.
     """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
     try:
         result = _cfg.test_runner().run_tests(
             target_ams_id,

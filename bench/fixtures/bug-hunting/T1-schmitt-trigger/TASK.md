@@ -41,11 +41,6 @@ the test suite passes. The Schmitt-trigger behaviour is:
 
 - Do not change anything under `SchmittTriggerTests/`. Test files are
   read-only for grading.
-- After editing the library, the consumer build resolves against the
-  *installed* library, not the source — so the bench harness re-runs
-  `save_plc_as_library` on `T1SchmittTrigger_Plc` before each build.
-  You don't need to invoke it yourself; the harness handles it
-  between iterations of `run_tests`.
 
 ## Hint shape
 

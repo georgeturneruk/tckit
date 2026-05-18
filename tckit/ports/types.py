@@ -90,9 +90,15 @@ class ProjectStructure:
     Multi-project sln returns one entry per .plcproj; a single-project sln
     returns a one-entry dict. Iterate ``plcs.values()`` to walk every PLC
     project. See ADR-0005.
+
+    ``solution_path`` is the absolute path to the .sln file the reader
+    resolved during the walk — pass it as ``project_path`` on the follow-up
+    ``build()`` call. Empty when the project has no .sln (e.g. a bare
+    .tsproj layout).
     """
 
     project_path: str
+    solution_path: str = ""
     plcs: dict[str, PLCSection] = field(default_factory=dict)
     tasks: list[TaskInfo] = field(default_factory=list)
 

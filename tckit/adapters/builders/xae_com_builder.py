@@ -12,11 +12,14 @@ same auto-resolve / disambiguate policy on the Windows side.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from tckit.ports.builder import BuildRunner
 from tckit.ports.types import BuildError, BuildResult, BuildStatus, Result
 from tckit.utils.bridge_client import BridgeClient, BridgeError
+
+_VALID_PROJECT_SUFFIXES = (".sln", ".tsproj")
 
 
 class XaeComBuilder(BuildRunner):
@@ -33,6 +36,11 @@ class XaeComBuilder(BuildRunner):
     def build(
         self, project_path: str, *, plc_name: str | None = None
     ) -> BuildResult:
+        validation_error = _validate_project_path(project_path)
+        if validation_error is not None:
+            self._last_status = BuildStatus.ERROR
+            return BuildResult(success=False, errors=[validation_error])
+
         self._last_status = BuildStatus.BUILDING
         payload: dict[str, Any] = {"ProjectPath": project_path}
         _attach_plc(payload, plc_name)
@@ -116,6 +124,63 @@ def _attach_plc(payload: dict[str, Any], plc_name: str | None) -> None:
     resolved = plc_name or os.getenv("PLC_PROJECT_NAME")
     if resolved:
         payload["PlcName"] = resolved
+
+
+def _validate_project_path(project_path: str) -> BuildError | None:
+    """Pre-flight check that surfaces a clear error before the bridge round-trip.
+
+    Returns a BuildError if the path is obviously wrong, else None. Catches
+    the common failure mode where a directory or a bare project name is
+    passed instead of an absolute path to a .sln or .tsproj file. Without
+    this guard the bridge bubbles a raw COM ``STG_E_FILENOTFOUND`` with an
+    empty file field, which leaves the caller guessing.
+    """
+    if not project_path:
+        return BuildError(
+            file="",
+            line=0,
+            message=(
+                "project_path is required; pass an absolute path to a "
+                ".sln or .tsproj file."
+            ),
+            severity="error",
+        )
+    path = Path(project_path)
+    if not path.exists():
+        return BuildError(
+            file="",
+            line=0,
+            message=f"project_path '{project_path}' does not exist.",
+            severity="error",
+        )
+    if path.is_dir():
+        candidates = sorted(
+            p.name
+            for p in path.iterdir()
+            if p.is_file() and p.suffix.lower() in _VALID_PROJECT_SUFFIXES
+        )
+        found = ", ".join(candidates) if candidates else "(none)"
+        return BuildError(
+            file="",
+            line=0,
+            message=(
+                f"project_path must be a .sln or .tsproj file, got "
+                f"directory '{project_path}'. "
+                f"Found in this directory: {found}."
+            ),
+            severity="error",
+        )
+    if path.suffix.lower() not in _VALID_PROJECT_SUFFIXES:
+        return BuildError(
+            file="",
+            line=0,
+            message=(
+                f"project_path must end in .sln or .tsproj, got "
+                f"'{project_path}'."
+            ),
+            severity="error",
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------
