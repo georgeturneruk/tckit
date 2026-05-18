@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/content/assets/logo-full.svg" alt="TcKit" width="100">
+  <img src="https://raw.githubusercontent.com/georgeturneruk/tckit/main/docs/content/assets/logo-full.svg" alt="TcKit" width="100">
 </p>
 
 # TcKit
@@ -45,7 +45,7 @@ Head-to-head writer-task runs of TcKit-equipped Claude vs vanilla Claude:
 | Add a `VAR_INPUT` to an FB | **2.4× fewer** (1,653 → 691) | **1.27× faster** (27.5s → 21.7s) | 5 → 3 |
 | Add a method to an FB | **2.4× fewer** (1,236 → 508) | **1.69× faster** (26.2s → 15.5s) | 5 → 2 |
 
-N=1 per cell. See [`bench/findings/`](bench/findings/) for full methodology and a record of the harness gotchas behind the numbers.
+N=1 per cell. See [`bench/findings/`](https://github.com/georgeturneruk/tckit/tree/main/bench/findings) for full methodology and a record of the harness gotchas behind the numbers.
 
 ## See it in action
 
@@ -92,4 +92,4 @@ All six capabilities are implemented and shipping. See [releases](https://github
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licence.
+See [CONTRIBUTING.md](https://github.com/georgeturneruk/tckit/blob/main/CONTRIBUTING.md). MIT licence.
