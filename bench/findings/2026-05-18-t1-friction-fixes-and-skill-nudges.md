@@ -1,3 +1,9 @@
+---
+date: 2026-05-18
+status: Current
+related_adrs: [0011, 0007]
+---
+
 # 2026-05-18 — T1 friction fixes plus skill nudges (n=1 per shape)
 
 Followup to [2026-05-17](2026-05-17-adr-0011-impl-and-t1-rebench.md).

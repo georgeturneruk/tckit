@@ -3,9 +3,33 @@ adr: 0007
 title: Bug-hunting bench (closed-loop debugging against TcUnit)
 status: Proposed
 created: 2026-05-12
+last_reviewed: 2026-05-18
 issue:
 pr:
+related: [0005, 0006, 0008, 0009, 0010, 0011, 0012]
 ---
+
+## Current state
+
+**Decision (live):** One `.sln` per task under `bench/fixtures/bug-hunting/<id>-<slug>/`,
+each with a library + TcUnit-tests `.plcproj` split. Per-run authoring goes
+through the writer MCP tools (`save_plc_as_library` per ADR-0009; `add_property`
+/ `add_dut` per ADR-0012). Bench arms run with `--isolate-cwd` (vanilla and
+tckit) + `--inject-skills plugin/skills` (tckit only) so each arm sees only
+the surface a real plugin install ships. `--close-during-run` wraps `claude -p`
+so XAE's external-mod guard doesn't wedge on reset or raw XML edits.
+
+**Where it lives:** `bench/run.py`, `bench/fixtures/bug-hunting/`. B1
+(off-by-one) and T1 (Schmitt-trigger TDD) green end-to-end on N=1. T2-pid
+authored, awaiting bench run. B2-B5 fixture test-infra still to author.
+
+**Open questions:**
+- B2-B5 author scripts only seed the library FB + consumer; suite + tests +
+  MAIN need adding before bench rounds can run on them.
+- N=3 sweep on B1 + T1 + T2 once author scripts are regenerable from scratch.
+- Whether the `tc-build-test-loop` skill iterates too eagerly on tasks where
+  the spec is fully constraining (T1 lesson, partially addressed by ADR-0011
+  inline failures; revisit after the T1 re-bench round closes).
 
 ## Context
 

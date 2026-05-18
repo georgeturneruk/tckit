@@ -1,3 +1,9 @@
+---
+date: 2026-05-12
+status: Current
+related_adrs: [0003]
+---
+
 # 2026-05-12 — Writer-bench wrap-up (post-fix W2/W3 re-smoke)
 
 Wrap-up round to address the three actionable findings from the W2/W3 smoke earlier today:

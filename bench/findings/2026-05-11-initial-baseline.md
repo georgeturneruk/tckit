@@ -1,3 +1,10 @@
+---
+date: 2026-05-11
+status: Superseded
+related_adrs: [0001, 0002]
+superseded_by: bench/findings/2026-05-11-adr-0002-post-impl.md
+---
+
 # 2026-05-11 — Initial baseline: vanilla vs TcKit on read-only TcUnit tasks
 
 First run of the benchmark harness. Single run per cell, exploratory.

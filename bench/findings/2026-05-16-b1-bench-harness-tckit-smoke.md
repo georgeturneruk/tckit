@@ -1,3 +1,9 @@
+---
+date: 2026-05-16
+status: Current
+related_adrs: [0007, 0010, 0011]
+---
+
 # 2026-05-16 — B1 bench harness end-to-end + n=1 pair
 
 First closed-loop bench round on a bug-hunting fixture. The B1 off-by-one

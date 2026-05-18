@@ -1,3 +1,10 @@
+---
+date: 2026-05-16
+status: Superseded
+related_adrs: [0007, 0011]
+superseded_by: bench/findings/2026-05-18-t1-friction-fixes-and-skill-nudges.md
+---
+
 # 2026-05-16 — T1 Schmitt-trigger TDD pair (n=1, isolated)
 
 Second bug-hunting fixture benched. Same harness as the B1 round

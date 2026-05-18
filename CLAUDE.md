@@ -62,13 +62,16 @@ full procedure; this index just points to it.
 
 ## ADR session-start trigger
 
-If `adrs/` contains any ADR with `status: Exploring`, `status: Proposed`, or
-`status: Accepted` relevant to the user's request, read those before doing
-work and propose an orientation: which ADRs intersect, and a suggested
-sequence for this session. Verbal context only, not written to disk.
+Read [`adrs/README.md`](adrs/README.md) at the start of every session. It is
+a one-page index with status and a one-line summary per ADR. Then descend
+into the **Current state** block (top of the file) of any ADR whose summary
+intersects the task. Only read further into an ADR's body when you need
+rationale.
 
-The full ADR workflow (status lifecycle, when to write one, decisions-flow-back
-rule, source-of-truth split) lives in the [tc-adr skill](.claude/skills/tc-adr/SKILL.md).
+The full ADR workflow (layered reading order, status lifecycle, when to
+write one, Current state maintenance rule, trim-on-promotion rule,
+source-of-truth split, plus the parallel rules for `bench/findings/`)
+lives in the [tc-adr skill](.claude/skills/tc-adr/SKILL.md).
 
 ---
 

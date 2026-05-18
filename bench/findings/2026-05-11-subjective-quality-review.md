@@ -1,3 +1,9 @@
+---
+date: 2026-05-11
+status: Current
+related_adrs: [0002]
+---
+
 # 2026-05-11 — Subjective quality review of the post-#42 / post-#46 bench outputs
 
 Follow-up to `2026-05-11-post-issue-42.md`. That file scored efficiency (tool calls, tokens, wall). This one reads the *actual answers* Claude produced and asks: are TcKit and vanilla giving equivalent-quality output, or is one cutting corners?

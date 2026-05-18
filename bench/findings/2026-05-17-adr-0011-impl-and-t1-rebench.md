@@ -1,3 +1,10 @@
+---
+date: 2026-05-17
+status: Superseded
+related_adrs: [0011, 0007]
+superseded_by: bench/findings/2026-05-18-t1-friction-fixes-and-skill-nudges.md
+---
+
 # 2026-05-17 — ADR-0011 fixes landed, T1 re-benched (n=1)
 
 Implemented the six fixes from
