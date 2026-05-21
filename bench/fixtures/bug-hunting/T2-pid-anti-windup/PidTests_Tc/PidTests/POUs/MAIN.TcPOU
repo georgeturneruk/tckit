@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <POU Name="MAIN" Id="{20d0be1b-d6d7-409c-a784-a75ceb56053b}" SpecialFunc="None">
+  <POU Name="MAIN" Id="{72a389d0-e9a6-401b-a137-8089ca4cdeb1}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM MAIN
 VAR
     suite : FB_PidTests;

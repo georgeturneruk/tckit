@@ -14,9 +14,9 @@ Methods (must satisfy `I_Pid`):
 ```
 METHOD Update : LREAL
 VAR_INPUT
-    fSetpoint    : LREAL;
-    fMeasurement : LREAL;
-    fDeltaT      : LREAL;
+    setpoint    : LREAL;
+    measurement : LREAL;
+    deltaT      : LREAL;
 END_VAR
 
 METHOD Reset

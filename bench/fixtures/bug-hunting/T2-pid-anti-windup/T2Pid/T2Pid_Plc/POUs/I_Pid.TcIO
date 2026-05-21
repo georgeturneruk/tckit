@@ -1,16 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1">
-  <Itf Name="I_Pid" Id="{b5e48d33-99a7-455a-9a71-25c357c0c781}">
+  <Itf Name="I_Pid" Id="{2f38d1f4-d551-4a0e-a6e2-ff3e85503e4a}">
     <Declaration><![CDATA[INTERFACE I_Pid]]></Declaration>
-    <Method Name="Reset" Id="{3a74c138-43f7-4dde-9295-168397c146fe}">
+    <Method Name="Reset" Id="{de031637-a4c9-44f9-9687-a745f17da1b9}">
       <Declaration><![CDATA[METHOD Reset]]></Declaration>
     </Method>
-    <Method Name="Update" Id="{12494460-92f3-43f3-b78c-78528912bf97}">
+    <Method Name="Update" Id="{5626bdb9-42c6-4b69-b52f-e79c9b2020cf}">
       <Declaration><![CDATA[METHOD Update : LREAL
 VAR_INPUT
-    fSetpoint    : LREAL;
-    fMeasurement : LREAL;
-    fDeltaT      : LREAL;
+    setpoint    : LREAL;
+    measurement : LREAL;
+    deltaT      : LREAL;
 END_VAR]]></Declaration>
     </Method>
   </Itf>

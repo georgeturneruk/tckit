@@ -3,19 +3,19 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{fc42fa9c-5c32-40bc-b62d-270aa0275174}</ProjectGuid>
+    <ProjectGuid>{8baa6805-f2aa-4f70-953a-ae1b3bcbade1}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>T2Pid_Plc</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{176fd97e-6f92-4818-b794-13b735046708}</Application>
-    <TypeSystem>{0958e031-1933-4b0a-8390-acfaca9462d5}</TypeSystem>
-    <Implicit_Task_Info>{540a2f0b-7929-424f-9a55-4d9e61fd629f}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{f5f4909c-47d5-4722-8c01-9735a7372bab}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{ea9842f7-a044-46b6-b2f5-77c1d4e249f6}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{7a8b6290-0ad7-4528-8ccf-ef9ae6720caa}</LibraryReferences>
+    <Application>{faa617b6-3bd9-4068-a943-1e56620e1c54}</Application>
+    <TypeSystem>{4dbb4892-87b9-4cc9-b277-831c28555528}</TypeSystem>
+    <Implicit_Task_Info>{19deb158-5b77-4936-8fdc-08ba457a81c7}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{393698f5-916a-494d-b947-3f8c4919f48a}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{e31da076-5c95-426a-bf4a-8863feccbfa8}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{35cc1547-ccd0-4cd2-aacb-26a8d24bed27}</LibraryReferences>
     <Company>Tc3 Project</Company>
     <Title>T2Pid_Plc</Title>
     <ProjectVersion>1.0.0.0</ProjectVersion>

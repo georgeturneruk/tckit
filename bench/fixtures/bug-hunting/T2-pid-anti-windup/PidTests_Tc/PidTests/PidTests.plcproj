@@ -3,19 +3,19 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{f10b982e-1a36-4b21-bc69-6c1643287995}</ProjectGuid>
+    <ProjectGuid>{d6a2bdf5-5dac-4a20-a81e-aabda995368d}</ProjectGuid>
     <SubObjectsSortedByName>true</SubObjectsSortedByName>
     <DownloadApplicationInfo>true</DownloadApplicationInfo>
     <WriteProductVersion>false</WriteProductVersion>
     <GenerateTpy>false</GenerateTpy>
     <Name>PidTests</Name>
     <ProgramVersion>3.1.4026.22</ProgramVersion>
-    <Application>{ac75b733-1e58-405a-9c1a-8b767c86b926}</Application>
-    <TypeSystem>{bbdc947d-1d63-4ebc-aaa2-07a38bbb2189}</TypeSystem>
-    <Implicit_Task_Info>{2824e9a6-4973-4163-bb79-111edb1aa056}</Implicit_Task_Info>
-    <Implicit_KindOfTask>{ce944225-c851-4a4a-824d-ab897c341c90}</Implicit_KindOfTask>
-    <Implicit_Jitter_Distribution>{753a8de8-db98-44c2-9a06-202e7933128e}</Implicit_Jitter_Distribution>
-    <LibraryReferences>{edf9e001-09e6-46d6-9ede-b609ed981290}</LibraryReferences>
+    <Application>{45326966-217c-4459-84a9-a83cc06b31f3}</Application>
+    <TypeSystem>{6bca468b-3914-4390-a78a-d8176f54cd6b}</TypeSystem>
+    <Implicit_Task_Info>{69197a14-fb29-45db-959b-bc10fa0070b4}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{704646f3-3100-4a4c-9092-a16ab95edcb4}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{2d1e4a44-eda6-426b-8931-eec2d38d991b}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{7b88ba8f-a804-467e-a1be-c647b54ea44b}</LibraryReferences>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="PlcTask.TcTTO">

@@ -66,9 +66,9 @@ INTERFACE {INTERFACE}
 INTERFACE_UPDATE = """\
 METHOD Update : LREAL
 VAR_INPUT
-    fSetpoint    : LREAL;
-    fMeasurement : LREAL;
-    fDeltaT      : LREAL;
+    setpoint    : LREAL;
+    measurement : LREAL;
+    deltaT      : LREAL;
 END_VAR
 """
 
@@ -85,10 +85,10 @@ FUNCTION_BLOCK {TESTS_FB} EXTENDS TcUnit.FB_TestSuite
 VAR
     pid       : {SLN_NAME}_Plc.{LIBRARY_FB};
     iPid      : {SLN_NAME}_Plc.{INTERFACE};
-    fOutput   : LREAL;
-    fOutput2  : LREAL;
-    fIntegral : LREAL;
-    bSat      : BOOL;
+    output    : LREAL;
+    output2   : LREAL;
+    integral  : LREAL;
+    saturated : BOOL;
     i         : DINT;
 END_VAR
 """
@@ -114,7 +114,7 @@ CyclicReachableThroughInterface();
 TEST_P_ONLY = """\
 METHOD PProportionalOnly : BOOL
 VAR
-    fOutput : LREAL;
+    output : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -124,8 +124,8 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.Mode := 0;
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
-    fOutput := pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    AssertEquals_LREAL(Expected := 2.0, Actual := fOutput, Delta := 1E-6,
+    output := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := 2.0, Actual := output, Delta := 1E-6,
         Message := 'P-only Kp=2 error=1 should yield output=2');
     TEST_FINISHED();
 END_IF
@@ -134,7 +134,7 @@ END_IF
 TEST_CLAMP_MAX = """\
 METHOD OutputClampsToMax : BOOL
 VAR
-    fOutput : LREAL;
+    output : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -144,8 +144,8 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.Mode := 0;
     pid.OutputMin := -5.0;
     pid.OutputMax := 5.0;
-    fOutput := pid.Update(fSetpoint := 100.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    AssertEquals_LREAL(Expected := 5.0, Actual := fOutput, Delta := 1E-6,
+    output := pid.Update(setpoint := 100.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := 5.0, Actual := output, Delta := 1E-6,
         Message := 'Output should clamp to OutputMax on large positive error');
     TEST_FINISHED();
 END_IF
@@ -154,7 +154,7 @@ END_IF
 TEST_CLAMP_MIN = """\
 METHOD OutputClampsToMin : BOOL
 VAR
-    fOutput : LREAL;
+    output : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -164,8 +164,8 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.Mode := 0;
     pid.OutputMin := -5.0;
     pid.OutputMax := 5.0;
-    fOutput := pid.Update(fSetpoint := -100.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    AssertEquals_LREAL(Expected := -5.0, Actual := fOutput, Delta := 1E-6,
+    output := pid.Update(setpoint := -100.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := -5.0, Actual := output, Delta := 1E-6,
         Message := 'Output should clamp to OutputMin on large negative error');
     TEST_FINISHED();
 END_IF
@@ -174,7 +174,7 @@ END_IF
 TEST_INTEGRAL_ACCUM = """\
 METHOD IntegralAccumulates : BOOL
 VAR
-    fIntegral : LREAL;
+    integral : LREAL;
     i : DINT;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
@@ -186,10 +186,10 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
     FOR i := 1 TO 10 DO
-        pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
     END_FOR
-    fIntegral := pid.IntegralTerm;
-    AssertEquals_LREAL(Expected := 1.0, Actual := fIntegral, Delta := 0.05,
+    integral := pid.IntegralTerm;
+    AssertEquals_LREAL(Expected := 1.0, Actual := integral, Delta := 0.05,
         Message := 'I-only Ki=1 error=1 for 10x0.1s should integrate to ~1.0');
     TEST_FINISHED();
 END_IF
@@ -198,7 +198,7 @@ END_IF
 TEST_ANTIWINDUP = """\
 METHOD AntiWindupHoldsIntegral : BOOL
 VAR
-    fIntegral : LREAL;
+    integral : LREAL;
     i : DINT;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
@@ -213,10 +213,10 @@ IF TEST_ORDERED(__POUNAME()) THEN
     // would produce output 1.0 (at clamp). Twenty more ticks should
     // not grow the integral once saturated.
     FOR i := 1 TO 20 DO
-        pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
     END_FOR
-    fIntegral := pid.IntegralTerm;
-    AssertTrue(Condition := fIntegral <= 0.2,
+    integral := pid.IntegralTerm;
+    AssertTrue(Condition := integral <= 0.2,
         Message := 'Anti-windup should hold integral at/near saturation point, not let it grow');
     TEST_FINISHED();
 END_IF
@@ -225,8 +225,8 @@ END_IF
 TEST_D_ON_MEASUREMENT = """\
 METHOD DerivativeOnMeasurementNoSetpointSpike : BOOL
 VAR
-    fOutput : LREAL;
-    fOutput2 : LREAL;
+    output : LREAL;
+    output2 : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -237,12 +237,12 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
     // Steady state: setpoint=0, measurement=0.
-    pid.Update(fSetpoint := 0.0, fMeasurement := 0.0, fDeltaT := 0.1);
+    pid.Update(setpoint := 0.0, measurement := 0.0, deltaT := 0.1);
     // Step the SETPOINT. With derivative-on-error this would produce
     // a large spike (d_error/dt ~ 100). With derivative-on-measurement
     // the derivative is computed from -dMeasurement/dt, which is 0.
-    fOutput := pid.Update(fSetpoint := 10.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    AssertTrue(Condition := ABS(fOutput) < 1.0,
+    output := pid.Update(setpoint := 10.0, measurement := 0.0, deltaT := 0.1);
+    AssertTrue(Condition := ABS(output) < 1.0,
         Message := 'Derivative-on-measurement: setpoint step must NOT cause D-kick');
     TEST_FINISHED();
 END_IF
@@ -251,7 +251,7 @@ END_IF
 TEST_REVERSE_MODE = """\
 METHOD ReverseModeFlipsSign : BOOL
 VAR
-    fOutput : LREAL;
+    output : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -261,8 +261,8 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.Mode := 1;  // reverse
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
-    fOutput := pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    AssertEquals_LREAL(Expected := -2.0, Actual := fOutput, Delta := 1E-6,
+    output := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := -2.0, Actual := output, Delta := 1E-6,
         Message := 'Reverse mode should flip the sign of the controller output');
     TEST_FINISHED();
 END_IF
@@ -271,7 +271,7 @@ END_IF
 TEST_RESET_CLEARS_INTEGRAL = """\
 METHOD ResetClearsIntegral : BOOL
 VAR
-    fIntegral : LREAL;
+    integral : LREAL;
     i : DINT;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
@@ -282,13 +282,13 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
     FOR i := 1 TO 5 DO
-        pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
     END_FOR
     AssertTrue(Condition := pid.IntegralTerm > 0.0,
         Message := 'Integral must be non-zero before Reset for this test to be meaningful');
     pid.Reset();
-    fIntegral := pid.IntegralTerm;
-    AssertEquals_LREAL(Expected := 0.0, Actual := fIntegral, Delta := 1E-9,
+    integral := pid.IntegralTerm;
+    AssertEquals_LREAL(Expected := 0.0, Actual := integral, Delta := 1E-9,
         Message := 'Reset must zero the integral term');
     TEST_FINISHED();
 END_IF
@@ -308,7 +308,7 @@ END_IF
 TEST_IS_SATURATED = """\
 METHOD IsSaturatedReflectsClampState : BOOL
 VAR
-    bSat : BOOL;
+    saturated : BOOL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -319,14 +319,14 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.OutputMin := -10.0;
     pid.OutputMax := 10.0;
     // Small error, output well within limits.
-    pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    bSat := pid.IsSaturated;
-    AssertFalse(Condition := bSat,
+    pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    saturated := pid.IsSaturated;
+    AssertFalse(Condition := saturated,
         Message := 'IsSaturated should be FALSE when output is within OutputMin..OutputMax');
     // Now saturate the output.
-    pid.Update(fSetpoint := 100.0, fMeasurement := 0.0, fDeltaT := 0.1);
-    bSat := pid.IsSaturated;
-    AssertTrue(Condition := bSat,
+    pid.Update(setpoint := 100.0, measurement := 0.0, deltaT := 0.1);
+    saturated := pid.IsSaturated;
+    AssertTrue(Condition := saturated,
         Message := 'IsSaturated should be TRUE once the output is clamped to OutputMax');
     TEST_FINISHED();
 END_IF
@@ -340,8 +340,8 @@ END_IF
 TEST_CYCLIC_THROUGH_INTERFACE = """\
 METHOD CyclicReachableThroughInterface : BOOL
 VAR
-    fDirect    : LREAL;
-    fViaIface  : LREAL;
+    direct    : LREAL;
+    viaIface  : LREAL;
 END_VAR
 IF TEST_ORDERED(__POUNAME()) THEN
     pid.Reset();
@@ -351,13 +351,13 @@ IF TEST_ORDERED(__POUNAME()) THEN
     pid.Mode := 0;
     pid.OutputMin := -100.0;
     pid.OutputMax := 100.0;
-    fDirect := pid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
+    direct := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
 
     pid.Reset();
     iPid := pid;  // FB_Pid IMPLEMENTS I_Pid required
-    fViaIface := iPid.Update(fSetpoint := 1.0, fMeasurement := 0.0, fDeltaT := 0.1);
+    viaIface := iPid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
 
-    AssertEquals_LREAL(Expected := fDirect, Actual := fViaIface, Delta := 1E-9,
+    AssertEquals_LREAL(Expected := direct, Actual := viaIface, Delta := 1E-9,
         Message := 'Same Update inputs through pid and iPid must give the same output');
     TEST_FINISHED();
 END_IF
