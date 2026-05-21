@@ -1,0 +1,14 @@
+{
+  "sln": "T1SchmittTrigger.sln",
+  "libraryPlc": "T1SchmittTrigger_Plc",
+  "testsPlc": "SchmittTriggerTests",
+  "testsPouPath": "SchmittTriggerTests_Tc/SchmittTriggerTests/POUs/",
+  "probes": [
+    "MAIN.suite.Tests[1].TestIsFailed",
+    "MAIN.suite.Tests[2].TestIsFailed",
+    "MAIN.suite.Tests[3].TestIsFailed",
+    "MAIN.suite.Tests[4].TestIsFailed",
+    "MAIN.suite.Tests[5].TestIsFailed",
+    "MAIN.suite.NumberOfTests"
+  ]
+}
