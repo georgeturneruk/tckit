@@ -40,14 +40,16 @@ $script:TcKind = @{
     Action            = 608
     Method            = 609
     InterfaceMethod   = 610
-    Property          = 611
-    InterfaceProperty = 612
-    PropertyGet       = 613
-    PropertySet       = 614
-    GVL               = 615
-    Transition        = 616
-    Interface         = 618
-    PlcProject        = 0  # special: passed with template name in 4th arg
+    Property             = 611
+    InterfaceProperty    = 612
+    PropertyGet          = 613
+    PropertySet          = 614
+    GVL                  = 615
+    Transition           = 616
+    Interface            = 618
+    InterfacePropertyGet = 654
+    InterfacePropertySet = 655
+    PlcProject           = 0  # special: passed with template name in 4th arg
 }
 
 function Get-TcKind {
@@ -56,8 +58,9 @@ function Get-TcKind {
         Map a logical type name to its CreateChild kind constant.
 
         Accepts: function_block, function, program, interface, method, action,
-        property, property_get, property_set, gvl, struct, enum, union,
-        folder.
+        interface_method, property, interface_property, property_get,
+        property_set, interface_property_get, interface_property_set, gvl,
+        struct, enum, union, folder.
     #>
     param([Parameter(Mandatory)][string]$Type)
     switch ($Type.ToLowerInvariant()) {
@@ -70,8 +73,10 @@ function Get-TcKind {
         'action'             { return $script:TcKind.Action }
         'property'           { return $script:TcKind.Property }
         'interface_property' { return $script:TcKind.InterfaceProperty }
-        'property_get'       { return $script:TcKind.PropertyGet }
-        'property_set'       { return $script:TcKind.PropertySet }
+        'property_get'           { return $script:TcKind.PropertyGet }
+        'property_set'           { return $script:TcKind.PropertySet }
+        'interface_property_get' { return $script:TcKind.InterfacePropertyGet }
+        'interface_property_set' { return $script:TcKind.InterfacePropertySet }
         'gvl'            { return $script:TcKind.GVL }
         'struct'         { return $script:TcKind.Struct }
         'enum'           { return $script:TcKind.Enum }

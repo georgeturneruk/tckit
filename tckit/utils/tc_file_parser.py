@@ -91,23 +91,40 @@ def detect_pou_type(declaration: str, element_tag: str = "POU") -> str:
     return "function_block"
 
 
+# Access modifiers (TwinCAT IEC 61131-3 ext): may appear between the
+# METHOD / PROPERTY keyword and the name. XAE writes them when the
+# accessor is created via the automation interface (CreateChild vInfo
+# carries the access string), so a declaration produced by add_property
+# / add_method looks like ``PROPERTY PUBLIC Foo : LREAL`` rather than
+# ``PROPERTY Foo : LREAL``. Both spellings must round-trip cleanly.
+_ACCESS_MOD = r"(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL|FINAL|ABSTRACT)\s+)*"
+
+
 def extract_method_return_type(declaration: str) -> str:
     """Extract return type from a METHOD declaration using regex.
 
-    Matches:  METHOD MethodName : ReturnType
+    Matches:  METHOD [<access>...] MethodName : ReturnType
     Returns empty string if not found.
     """
-    match = re.search(r"METHOD\s+\w+\s*:\s*(\w+)", declaration, re.IGNORECASE)
+    match = re.search(
+        rf"METHOD\s+{_ACCESS_MOD}\w+\s*:\s*(\w+)",
+        declaration,
+        re.IGNORECASE,
+    )
     return match.group(1) if match else ""
 
 
 def extract_property_return_type(declaration: str) -> str:
     """Extract return type from a PROPERTY declaration using regex.
 
-    Matches:  PROPERTY PropertyName : ReturnType
+    Matches:  PROPERTY [<access>...] PropertyName : ReturnType
     Returns empty string if not found.
     """
-    match = re.search(r"PROPERTY\s+\w+\s*:\s*(\w+)", declaration, re.IGNORECASE)
+    match = re.search(
+        rf"PROPERTY\s+{_ACCESS_MOD}\w+\s*:\s*(\w+)",
+        declaration,
+        re.IGNORECASE,
+    )
     return match.group(1) if match else ""
 
 

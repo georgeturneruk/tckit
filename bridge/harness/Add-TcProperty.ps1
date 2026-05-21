@@ -69,23 +69,71 @@ try {
     $pou = Find-TcChild -Root $plcProj -Name $PouName
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
-    $kindProperty = Get-TcKind -Type 'property'
-    $kindGet      = Get-TcKind -Type 'property_get'
-    $kindSet      = Get-TcKind -Type 'property_set'
-
-    $newProperty = $pou.CreateChild($PropertyName, $kindProperty, $null, $null)
-    Set-TcItemSource -Item $newProperty -Declaration "PROPERTY $PropertyName : $ReturnType"
-
-    $accessors = @()
-
-    if ($GetterCode) {
-        $getItem = $newProperty.CreateChild('Get', $kindGet, $null, $null)
-        Set-TcItemSource -Item $getItem -Code $GetterCode
-        $accessors += 'Get'
+    # Properties under an INTERFACE need different CreateChild kinds (612 /
+    # 654 / 655) and a different vInfo shape than properties under an FB.
+    # Mirrors the InterfaceMethod branch in Add-TcMethod.ps1.
+    #
+    # vInfo shape (see Beckhoff samples, TC_AI_DOTNET_Samples
+    # GeneratePlcProject.cs:1106-1119 for FB, :213-216 for interface):
+    #
+    #   FB property parent:   [language, return_type, access_modifier]
+    #   FB property Get/Set:  [language, access_modifier, body_xml_seed]
+    #   ITF property parent:  return_type as a single string
+    #   ITF property Get/Set: $null
+    #
+    # Set-TcItemSource overwrites the seed body straight after, so the body
+    # XML in vInfo[2] is only the initial placeholder XAE generates while
+    # the tree item is being constructed.
+    $isInterface = Test-TcInterfacePou -Item $pou
+    if ($isInterface) {
+        $kindProperty = Get-TcKind -Type 'interface_property'
+        $kindGet      = Get-TcKind -Type 'interface_property_get'
+        $kindSet      = Get-TcKind -Type 'interface_property_set'
+        $propertyVInfo = [object]$ReturnType
+        $getVInfo      = $null
+        $setVInfo      = $null
+    } else {
+        $kindProperty = Get-TcKind -Type 'property'
+        $kindGet      = Get-TcKind -Type 'property_get'
+        $kindSet      = Get-TcKind -Type 'property_set'
+        $propertyVInfo = [string[]]@('ST', $ReturnType, 'PUBLIC')
+        $getVInfo      = [string[]]@('ST', 'PUBLIC', '<ST><![CDATA[(* ST PropGet *)]]></ST>')
+        $setVInfo      = [string[]]@('ST', 'PUBLIC', '<ST><![CDATA[(* ST PropSet *)]]></ST>')
     }
 
+    # 3rd arg (bstrBefore) is $null — insert at end. 4th arg (vInfo) shape
+    # is the load-bearing thing: passing $null or a scalar string here is
+    # what previously caused the 'Object reference not set' / 'Requested
+    # value LREAL was not found' errors.
+    $null = $pou.CreateChild($PropertyName, $kindProperty, $null, $propertyVInfo)
+
+    # Build the LookupTreeItem path for the new property so we can fetch a
+    # fresh reference for each subsequent CreateChild. PowerShell's
+    # apartment-threaded COM marshalling does not preserve tree-item refs
+    # across mutating calls reliably — re-using the parent ref between the
+    # Get and Set CreateChild calls surfaces "Item 'Get' is deleted or
+    # invalidated by an earlier operation!" on XAE versions that revalidate
+    # siblings during accessor creation. LookupTreeItem on the full path
+    # gives us a stable single-call reference.
+    $propPath = "TIPC^$plcName^$plcName Project^POUs^$PouName^$PropertyName"
+
+    $accessors = @()
+    $getItem = $null
+    $setItem = $null
+
+    # Accessor name is intentionally empty: the kind constant (613/614/654/655)
+    # already identifies which accessor this is, and XAE names the child item
+    # itself.
+    if ($GetterCode) {
+        $propParent = $sm.LookupTreeItem($propPath)
+        $getItem = $propParent.CreateChild('', $kindGet, $null, $getVInfo)
+        Set-TcItemSource -Item $getItem -Code $GetterCode
+        Save-TcSolution -Dte $dte  # flush tree mutations before adding sibling
+        $accessors += 'Get'
+    }
     if ($SetterCode) {
-        $setItem = $newProperty.CreateChild('Set', $kindSet, $null, $null)
+        $propParent = $sm.LookupTreeItem($propPath)
+        $setItem = $propParent.CreateChild('', $kindSet, $null, $setVInfo)
         Set-TcItemSource -Item $setItem -Code $SetterCode
         $accessors += 'Set'
     }

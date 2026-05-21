@@ -69,6 +69,11 @@ bench/results/
 bench/fixtures/bug-hunting/TwinCAT Project*/
 bench/fixtures/bug-hunting/Untitled*/
 
+# Throwaway smoke fixtures (created on demand by smoke_*.py runners,
+# never source-controlled; the scripts under bench/fixtures/bug-hunting/_author/
+# regenerate them from scratch).
+bench/fixtures/_smoke-*/
+
 # Local server logs from bench setup
 bridge.log
 bridge.err.log
