@@ -13,6 +13,7 @@ or contradicted.
 
 | Date       | Title                                                                 | Status     | Related ADRs |
 |------------|-----------------------------------------------------------------------|------------|--------------|
+| [2026-05-21](2026-05-21-t2-attempt-add-property-fix-and-popup-detection.md) | T2-pid bench attempt: `add_property` end-to-end fix and XAE popup detection | Current | 0007, 0012 |
 | [2026-05-18](2026-05-18-t2-pid-anti-windup-seed.md)                | T2 PID anti-windup TDD pair (seed)                                    | Current    | 0007, 0008, 0012 |
 | [2026-05-18](2026-05-18-t1-friction-fixes-and-skill-nudges.md)     | T1 friction fixes plus skill nudges                                   | Current    | 0011, 0007       |
 | [2026-05-17](2026-05-17-adr-0011-impl-and-t1-rebench.md)           | ADR-0011 fixes landed, T1 re-benched (n=1)                            | Superseded | 0011, 0007       |

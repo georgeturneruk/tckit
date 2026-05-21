@@ -109,9 +109,11 @@ Recursively scans `project_path` for `*.TcPOU`, `*.TcGVL`, and `*.TcDUT` files. 
 
 ```python
 structure = reader.get_structure("/projects/MyPLC")
-# structure.pous → [POURef(name="FB_Motor", pou_type=FUNCTION_BLOCK, ...), ...]
-# structure.gvls → ["GVL_Params", ...]
-# structure.duts → ["ST_MotorConfig", "E_State", ...]
+section = structure.plcs["MyPLC"]
+# section.pous → [POURef(name="FB_Motor", pou_type=FUNCTION_BLOCK, folder="Drives", ...), ...]
+# section.gvls → [GVLRef(name="GVL_Params", folder="", ...), ...]
+# section.duts → [DUTRef(name="ST_MotorConfig", dut_kind="struct", folder="", ...),
+#                 DUTRef(name="Counter", dut_kind="alias", ...), ...]
 ```
 
 ### `get_pou_interface(pou_name)`

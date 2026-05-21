@@ -113,9 +113,10 @@ self-validation cost.
 The fix is in `bench/run.py`: the bench now manages the MCP server
 lifecycle per run, spawning a fresh `python -m tckit.server` with
 `PLC_PROJECT_PATH` pointing at the temp fixture during the model
-session, then killing it before sync-back. `run-pair.ps1`
-drops `-StartMcp` (the bench owns lifecycle now) and refuses if
-port 8000 is occupied. The bench also extended its sync-back
+session, then killing it before sync-back. `run-bench.ps1`
+(then named `run-pair.ps1`) drops `-StartMcp` (the bench owns
+lifecycle now) and refuses if port 8000 is occupied. The bench
+also extended its sync-back
 exclude list to cover `.vs/`, `*.suo`, `_Boot/` etc, which now
 appear inside the temp fixture because the bench's own DTE attach
 creates them there.

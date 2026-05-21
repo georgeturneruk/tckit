@@ -449,7 +449,13 @@ def set_placeholder_parameters(
         return _err(str(exc))
 
 
-def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
+def add_pou(
+    name: str,
+    pou_type: str,
+    code: str,
+    parent_folder: str = "",
+    plc_name: str = "",
+) -> str:
     """Add a new POU (function block, program, function, or interface) to the project.
 
     :param name: Name of the new POU (follow naming conventions: FB_, PRG_, etc.).
@@ -457,6 +463,10 @@ def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
         For GVLs use ``add_gvl`` instead — the bridge no longer accepts
         ``"gvl"`` as a POU type.
     :param code: Full ST source text including VAR blocks.
+    :param parent_folder: Optional path under POUs, slash-separated
+        (e.g. ``"Drives/Motors"``), placing the POU in that folder.
+        Intermediate folders must already exist; create them with
+        ``add_folder``. Empty (default) puts the POU at the POUs root.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
@@ -464,13 +474,43 @@ def add_pou(name: str, pou_type: str, code: str, plc_name: str = "") -> str:
 
     try:
         pt = POUType(pou_type)
-        result = _cfg.writer().add_pou(name, pt, code, plc_name=_plc(plc_name))
+        result = _cfg.writer().add_pou(
+            name, pt, code, parent_folder=parent_folder, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
-def add_gvl(name: str, code: str, plc_name: str = "") -> str:
+def add_folder(name: str, parent_path: str = "POUs", plc_name: str = "") -> str:
+    """Add a folder to a PLC project's source tree.
+
+    Folders organise POUs, GVLs, and DUTs in XAE without affecting the
+    build output. Intermediate folders in ``parent_path`` must already
+    exist; create deeper layouts bottom-up with repeated calls.
+
+    :param name: Name of the new folder.
+    :param parent_path: Path under the PLC project's IDE-level node,
+        slash-separated. Examples: ``"POUs"``, ``"POUs/Drives"``,
+        ``"DUTs"``, ``"DUTs/Motors"``. Defaults to ``"POUs"``.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().add_folder(
+            name, parent_path=parent_path, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def add_gvl(
+    name: str,
+    code: str,
+    parent_folder: str = "",
+    plc_name: str = "",
+) -> str:
     """Add a new Global Variable List (GVL) to the project.
 
     GVLs aren't POUs in the TwinCAT tree; this is the dedicated path for
@@ -479,30 +519,46 @@ def add_gvl(name: str, code: str, plc_name: str = "") -> str:
 
     :param name: Name of the new GVL (e.g. ``GVL_Settings``).
     :param code: Full ST source text including ``VAR_GLOBAL`` / ``END_VAR``.
+    :param parent_folder: Optional path under POUs, slash-separated
+        (e.g. ``"Settings"``), placing the GVL in that folder. Empty
+        (default) puts the GVL at the POUs root.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
-        result = _cfg.writer().add_gvl(name, code, plc_name=_plc(plc_name))
+        result = _cfg.writer().add_gvl(
+            name, code, parent_folder=parent_folder, plc_name=_plc(plc_name)
+        )
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
 
 def add_method(
-    pou_name: str, method_name: str, code: str, plc_name: str = ""
+    pou_name: str,
+    method_name: str,
+    code: str,
+    parent_folder: str = "",
+    plc_name: str = "",
 ) -> str:
     """Add a new method to an existing POU.
 
     :param pou_name: Name of the containing POU.
     :param method_name: Name of the new method (PascalCase, no prefix).
     :param code: Full ST source text including declaration block.
+    :param parent_folder: Optional path under POUs identifying the
+        folder the parent POU lives in (e.g. ``"Drives"``). Empty
+        (default) searches the POU subtree recursively.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
     try:
         result = _cfg.writer().add_method(
-            pou_name, method_name, code, plc_name=_plc(plc_name)
+            pou_name,
+            method_name,
+            code,
+            parent_folder=parent_folder,
+            plc_name=_plc(plc_name),
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -513,6 +569,7 @@ def add_dut(
     name: str,
     code: str,
     dut_kind: str = "struct",
+    parent_folder: str = "",
     plc_name: str = "",
 ) -> str:
     """Add a new Data Unit Type (struct, enum, or union) to a PLC project.
@@ -533,6 +590,9 @@ def add_dut(
         ``END_TYPE`` wrapper.
     :param dut_kind: One of ``"struct"`` (default), ``"enum"``,
         ``"union"``.
+    :param parent_folder: Optional path under DUTs, slash-separated
+        (e.g. ``"Drives"``), placing the DUT in that folder. Empty
+        (default) puts the DUT at the DUTs root.
     :param plc_name: PLC project to write to. Leave empty for
         single-project solutions or to use the ``PLC_PROJECT_NAME`` env
         default.
@@ -547,7 +607,11 @@ def add_dut(
                 f"dut_kind must be one of struct/enum/union, got {dut_kind!r}."
             )
         result = _cfg.writer().add_dut(
-            name, code, dut_kind=kind, plc_name=_plc(plc_name)
+            name,
+            code,
+            dut_kind=kind,
+            parent_folder=parent_folder,
+            plc_name=_plc(plc_name),
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -560,6 +624,7 @@ def add_property(
     return_type: str,
     getter_code: str = "",
     setter_code: str = "",
+    parent_folder: str = "",
     plc_name: str = "",
 ) -> str:
     """Add a new property to an existing POU.
@@ -579,6 +644,9 @@ def add_property(
     :param return_type: TwinCAT type the property exposes (e.g. ``LREAL``).
     :param getter_code: Body of the Get accessor. Empty string skips it.
     :param setter_code: Body of the Set accessor. Empty string skips it.
+    :param parent_folder: Optional path under POUs identifying the
+        folder the parent POU lives in. Empty (default) searches the
+        POU subtree recursively.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
@@ -589,6 +657,7 @@ def add_property(
             return_type,
             getter_code=getter_code or None,
             setter_code=setter_code or None,
+            parent_folder=parent_folder,
             plc_name=_plc(plc_name),
         )
         return _ok(asdict(result))
@@ -778,6 +847,207 @@ def add_variable(
         target = item_name if item_name else None
         result = _cfg.writer().add_variable(
             pou_name, scope, declaration, target, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_pou(name: str, plc_name: str = "") -> str:
+    """Delete a POU (function block, function, program, or interface).
+
+    Searches the POUs subtree by name, so POUs nested in folders are
+    handled. Refuses to delete a ``PROGRAM`` that is still referenced
+    by a ``<PouCall>`` in any task (``.TcTTO``); detach the task first.
+    Other POU kinds skip the task-reference scan because they cannot be
+    task-bound; orphan-instance risk surfaces at build time.
+
+    :param name: Name of the POU to delete.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_pou(name, plc_name=_plc(plc_name))
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_method(pou_name: str, method_name: str, plc_name: str = "") -> str:
+    """Delete a method (or action) from a POU.
+
+    :param pou_name: Name of the containing POU.
+    :param method_name: Name of the method or action to delete.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_method(
+            pou_name, method_name, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_property(pou_name: str, property_name: str, plc_name: str = "") -> str:
+    """Delete a property from a POU, including its Get/Set accessors.
+
+    :param pou_name: Name of the containing POU.
+    :param property_name: Name of the property to delete.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_property(
+            pou_name, property_name, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_gvl(name: str, plc_name: str = "") -> str:
+    """Delete a Global Variable List from a PLC project.
+
+    Refuses if the named item is not a GVL (so a same-named POU or folder
+    isn't deleted by mistake).
+
+    :param name: Name of the GVL to delete.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_gvl(name, plc_name=_plc(plc_name))
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_dut(name: str, plc_name: str = "") -> str:
+    """Delete a DUT (struct, enum, union, alias) from a PLC project.
+
+    Refuses if the named item is not a DUT.
+
+    :param name: Name of the DUT to delete.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_dut(name, plc_name=_plc(plc_name))
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_variable(
+    pou_name: str,
+    variable_name: str,
+    item_name: str = "",
+    plc_name: str = "",
+) -> str:
+    """Remove a single variable declaration from a POU or method.
+
+    Refuses multi-name declarations (``bA, bB : BOOL;``) and variable
+    lines that don't terminate with ``;`` on the same line. For those
+    cases, use ``update_pou_declaration_patch``.
+
+    :param pou_name: Name of the containing POU.
+    :param variable_name: Name of the variable to remove.
+    :param item_name: Method name to target. Empty string (default)
+        targets the FB-level declaration.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        target = item_name if item_name else None
+        result = _cfg.writer().delete_variable(
+            pou_name, variable_name, target, plc_name=_plc(plc_name)
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_folder(
+    name: str,
+    parent_path: str = "",
+    recursive: bool = False,
+    plc_name: str = "",
+) -> str:
+    """Delete a folder from a PLC project's source tree.
+
+    Refuses to delete a non-empty folder unless ``recursive=True``.
+
+    :param name: Name of the folder to delete.
+    :param parent_path: Optional explicit parent path under the PLC
+        project's IDE-level node, slash-separated (e.g.
+        ``"POUs/Drives"``). Use this when a folder name exists in more
+        than one subtree.
+    :param recursive: When ``True``, allow deletion of a folder that
+        still contains children.
+    :param plc_name: PLC project to write to. Leave empty for single-project
+        solutions or to use the ``PLC_PROJECT_NAME`` env default.
+    """
+    try:
+        result = _cfg.writer().delete_folder(
+            name,
+            parent_path=parent_path,
+            recursive=recursive,
+            plc_name=_plc(plc_name),
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_library_reference(
+    consumer_plc_name: str,
+    library_name: str,
+    version: str = "*",
+    distributor: str = "Tc3 Project",
+) -> str:
+    """Remove a library reference from a consumer PLC project.
+
+    Symmetric counterpart to ``add_library_reference``. For placeholder
+    references use ``delete_placeholder`` instead.
+
+    :param consumer_plc_name: PLC project carrying the reference.
+    :param library_name: Library name as referenced.
+    :param version: Library version as referenced. ``"*"`` (default)
+        targets the latest / wildcard reference.
+    :param distributor: Library distributor / company string. Defaults
+        to ``"Tc3 Project"`` matching ``add_library_reference``.
+    """
+    try:
+        result = _cfg.writer().delete_library_reference(
+            consumer_plc_name,
+            library_name,
+            version=version,
+            distributor=distributor,
+        )
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def delete_placeholder(
+    consumer_plc_name: str,
+    placeholder_name: str,
+) -> str:
+    """Remove a placeholder reference from a consumer PLC project.
+
+    Symmetric counterpart to ``add_library_placeholder``. Whether the
+    underlying ``RemoveReference`` call also strips an orphan
+    ``<Parameters>`` block from ``.plcproj`` is bench-confirmed per
+    project.
+
+    :param consumer_plc_name: PLC project carrying the placeholder.
+    :param placeholder_name: Placeholder name to remove.
+    """
+    try:
+        result = _cfg.writer().delete_placeholder(
+            consumer_plc_name, placeholder_name
         )
         return _ok(asdict(result))
     except Exception as exc:
@@ -1093,6 +1363,7 @@ _TOOLS = (
     add_dut,
     add_method,
     add_property,
+    add_folder,
     update_pou_declaration,
     update_pou_implementation,
     update_method_body,
@@ -1100,6 +1371,15 @@ _TOOLS = (
     update_pou_implementation_patch,
     update_method_body_patch,
     add_variable,
+    delete_pou,
+    delete_method,
+    delete_property,
+    delete_gvl,
+    delete_dut,
+    delete_variable,
+    delete_folder,
+    delete_library_reference,
+    delete_placeholder,
     build,
     deploy,
     start_runtime,

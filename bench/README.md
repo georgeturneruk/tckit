@@ -197,18 +197,27 @@ start_runtime → run_tests post-session, and tamper-guards the tests POUs.
 - Reset is path-scoped to the fixture directory, not the whole repo,
   because the fixture lives inside the TcKit working tree.
 
-### Quick path: `run-pair.ps1`
+### Quick path: `run-bench.ps1`
 
-`bench/run-pair.ps1` wraps `run.py` with the per-task flags so an
-operator doesn't have to remember which probes go with which fixture:
+`bench/run-bench.ps1` wraps `run.py` with the per-task flags so an
+operator doesn't have to remember which probes go with which fixture.
+Per-task config is data-driven: each fixture provides a
+`bench-config.json` next to its `TASK.md` declaring the sln, library /
+tests PLC names, tests POU path (for the tamper guard), and probes.
+Adding a new fixture is "drop in a directory with a TASK.md +
+bench-config.json"; no script edit needed.
 
 ```powershell
 # Both arms of T1, self-validating (model can deploy, dev machine only).
-.\bench\run-pair.ps1 -Task T1 -SelfValidate
+.\bench\run-bench.ps1 -Task T1-schmitt-trigger -SelfValidate
 
-# Just the tckit arm of B1 with the deploy safety gate engaged.
-.\bench\run-pair.ps1 -Task B1 -Arm tckit
+# Just the tckit arm of T2 with the deploy safety gate engaged.
+.\bench\run-bench.ps1 -Task T2-pid-anti-windup -Arm tckit
 ```
+
+The `-Task` parameter takes the fixture directory name; tab
+completion enumerates every directory under
+`bench/fixtures/bug-hunting/` that has a `bench-config.json`.
 
 The bench owns the MCP server lifecycle per run with `PLC_PROJECT_PATH`
 pointing at the temp fixture path when `--isolate-cwd` is on. Without
@@ -217,14 +226,14 @@ long-lived MCP env path while Read sees the temp copy — the model
 cannot observe its own writes (see the 2026-05-17 finding). Port 8000
 must be free; the script aborts if anything is listening there.
 
-`Get-Help .\bench\run-pair.ps1 -Detailed` for the full parameter list
+`Get-Help .\bench\run-bench.ps1 -Detailed` for the full parameter list
 and the self-validate trade-off.
 
 ### Direct invocation
 
 For new fixtures or one-off tweaks, `run.py` takes the flags directly.
-The shape (B1's tckit arm; see `run-pair.ps1` for the full per-fixture
-flag set including `--test-probe` lists):
+The shape (B1's tckit arm; see each fixture's `bench-config.json` for
+the per-fixture probe list and PLC names):
 
 ```powershell
 python bench/run.py `

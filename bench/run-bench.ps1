@@ -1,26 +1,34 @@
 <#
 .SYNOPSIS
-    Run a closed-loop bench task (T1 or B1) against tckit, vanilla, or both.
+    Run a closed-loop bench task against tckit, vanilla, or both arms.
 
 .DESCRIPTION
-    Wraps bench/run.py with the right per-task flags so an operator does
-    not have to copy-paste eight arguments and remember which probes go
-    with which fixture. Mirrors the invocation shape documented in
-    bench/README.md plus the per-task tweaks from the 2026-05-16 T1 and
-    B1 finding files.
+    Wraps bench/run.py with the per-task flags so an operator does
+    not have to copy-paste eight arguments and remember which probes
+    go with which fixture. Mirrors the invocation shape documented
+    in bench/README.md plus the per-task tweaks captured in the
+    individual finding files.
+
+    Per-task config is data-driven: each fixture provides its own
+    `bench-config.json` next to TASK.md describing the sln, the
+    library / tests PLC names, the tests POU path (for the tamper
+    guard), and the test probes to read after each run. Adding a
+    new fixture only requires dropping in a new fixture directory
+    with a TASK.md + bench-config.json; no script edit needed.
 
     Preconditions:
-      - PowerShell working directory is the tckit repo root (the script
-        will refuse to run from elsewhere).
+      - PowerShell working directory is the tckit repo root (the
+        script will refuse to run from elsewhere).
       - The bridge is reachable at -BridgeUrl. Start it with
         .\bridge\Start-Bridge.ps1 if it is not.
       - TcXaeShell is running (attach mode) with no solution loaded.
         The script will open and close the bench sln via the bridge.
-      - The MCP port (-McpUrl, default 8000) is FREE. The bench spawns
-        its own MCP server per run with PLC_PROJECT_PATH set to the
-        active fixture path (temp under --isolate-cwd, else the real
-        sln). If you have an interactive MCP server running on 8000,
-        stop it first or pass -McpUrl pointing at a free port.
+      - The MCP port (-McpUrl, default 8000) is FREE. The bench
+        spawns its own MCP server per run with PLC_PROJECT_PATH set
+        to the active fixture path (temp under --isolate-cwd, else
+        the real sln). If you have an interactive MCP server
+        running on 8000, stop it first or pass -McpUrl pointing at
+        a free port.
 
     Self-validation: the model session normally hits the safety-gate
     handshake on deploy / start_runtime and waits for human approval.
@@ -32,16 +40,19 @@
     the bench to talk freely to -TargetAmsId.
 
 .PARAMETER Task
-    T1 (Schmitt-trigger TDD pair) or B1 (rolling-average off-by-one).
+    Fixture directory name under bench/fixtures/bug-hunting/. Any
+    fixture with a bench-config.json next to its TASK.md is valid
+    (e.g. 'T1-schmitt-trigger', 'B1-off-by-one', 'T2-pid-anti-windup').
 
 .PARAMETER Arm
     Which arm to run: tckit, vanilla, or both. Default both.
 
 .PARAMETER SelfValidate
-    If set, MCP server starts with SAFETY_CONFIRMATIONS=false so the
-    model can call deploy / start_runtime without the approval
-    handshake. Otherwise sets ALLOWED_NETIDS=<TargetAmsId> as a
-    narrower allow-list. Dev-machine only.
+    If set, the per-run MCP server starts with
+    SAFETY_CONFIRMATIONS=false so the model can call deploy /
+    start_runtime without the approval handshake. Otherwise sets
+    ALLOWED_NETIDS=<TargetAmsId> as a narrower allow-list.
+    Dev-machine only.
 
 .PARAMETER TargetAmsId
     AMS Net ID the model targets. Default 127.0.0.1.1.1 (local UmRT).
@@ -56,16 +67,26 @@
     Passed through to --runs. Default 1.
 
 .EXAMPLE
-    # Most common: both arms of T1, self-validating (model can deploy).
-    .\bench\run-pair.ps1 -Task T1 -SelfValidate
+    # Both arms of T1, self-validating (model can deploy).
+    .\bench\run-bench.ps1 -Task T1-schmitt-trigger -SelfValidate
 
 .EXAMPLE
-    # Just the tckit arm of B1.
-    .\bench\run-pair.ps1 -Task B1 -Arm tckit
+    # Just the tckit arm of T2 with the deploy safety gate engaged.
+    .\bench\run-bench.ps1 -Task T2-pid-anti-windup -Arm tckit
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('T1','B1')][string]$Task,
+    [Parameter(Mandatory)]
+    [ArgumentCompleter({
+        param($cmd, $param, $word)
+        $root = Join-Path (Get-Location) 'bench/fixtures/bug-hunting'
+        if (-not (Test-Path $root)) { return }
+        Get-ChildItem -Path $root -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'bench-config.json') } |
+            Where-Object { $_.Name -like "$word*" } |
+            ForEach-Object { $_.Name }
+    })]
+    [string]$Task,
     [ValidateSet('tckit','vanilla','both')][string]$Arm = 'both',
     [switch]$SelfValidate,
     [string]$TargetAmsId = '127.0.0.1.1.1',
@@ -78,40 +99,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ---------------------------------------------------------------------------
-# Per-task config table
-# ---------------------------------------------------------------------------
-$tasks = @{
-    'T1' = @{
-        Dir          = 'bench/fixtures/bug-hunting/T1-schmitt-trigger'
-        Sln          = 'bench/fixtures/bug-hunting/T1-schmitt-trigger/T1SchmittTrigger.sln'
-        LibraryPlc   = 'T1SchmittTrigger_Plc'
-        TestsPlc     = 'SchmittTriggerTests'
-        TestsPouPath = 'bench/fixtures/bug-hunting/T1-schmitt-trigger/SchmittTriggerTests_Tc/SchmittTriggerTests/POUs/'
-        Probes       = @(
-            'MAIN.suite.Tests[1].TestIsFailed',
-            'MAIN.suite.Tests[2].TestIsFailed',
-            'MAIN.suite.Tests[3].TestIsFailed',
-            'MAIN.suite.Tests[4].TestIsFailed',
-            'MAIN.suite.Tests[5].TestIsFailed',
-            'MAIN.suite.NumberOfTests'
-        )
-    }
-    'B1' = @{
-        Dir          = 'bench/fixtures/bug-hunting/B1-off-by-one'
-        Sln          = 'bench/fixtures/bug-hunting/B1-off-by-one/B1RollingAverage.sln'
-        LibraryPlc   = 'B1RollingAverage_Plc'
-        TestsPlc     = 'RollingAverageTests'
-        TestsPouPath = 'bench/fixtures/bug-hunting/B1-off-by-one/RollingAverageTests_Tc/RollingAverageTests/POUs/'
-        Probes       = @(
-            'MAIN.suite.Tests[1].TestIsFailed',
-            'MAIN.suite.NumberOfTests'
-        )
-    }
-}
-$cfg = $tasks[$Task]
-
-# ---------------------------------------------------------------------------
-# Pre-flight
+# Pre-flight: repo root + bridge reachability
 # ---------------------------------------------------------------------------
 if (-not (Test-Path 'bench/run.py')) {
     throw "Run from tckit repo root (cwd: $((Get-Location).Path))."
@@ -124,6 +112,31 @@ try {
 } catch {
     throw "Bridge not reachable at $BridgeUrl. Start with .\bridge\Start-Bridge.ps1"
 }
+
+# ---------------------------------------------------------------------------
+# Resolve per-task config from bench-config.json
+# ---------------------------------------------------------------------------
+$taskDir = "bench/fixtures/bug-hunting/$Task"
+if (-not (Test-Path $taskDir)) {
+    throw "Fixture directory not found: $taskDir. Available: $(Get-ChildItem 'bench/fixtures/bug-hunting' -Directory | ForEach-Object Name | Sort-Object | Join-String -Separator ', ')"
+}
+$manifestPath = Join-Path $taskDir 'bench-config.json'
+if (-not (Test-Path $manifestPath)) {
+    throw "No bench-config.json at $manifestPath. Create one with sln/libraryPlc/testsPlc/testsPouPath/probes fields (see T1-schmitt-trigger for the shape)."
+}
+$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+
+foreach ($field in @('sln','libraryPlc','testsPlc','testsPouPath','probes')) {
+    if (-not (Get-Member -InputObject $manifest -Name $field -MemberType NoteProperty)) {
+        throw "bench-config.json at $manifestPath is missing required field '$field'."
+    }
+}
+
+$slnPath      = "$taskDir/$($manifest.sln)"
+$testsPouPath = "$taskDir/$($manifest.testsPouPath)"
+$probes       = @($manifest.probes)
+
+Write-Host "[OK] task $Task -> sln=$slnPath, libraryPlc=$($manifest.libraryPlc), testsPlc=$($manifest.testsPlc), $($probes.Count) probes"
 
 # ---------------------------------------------------------------------------
 # MCP port pre-check (bench owns MCP lifecycle per run; refuse on collision)
@@ -145,7 +158,7 @@ if ($needsMcp) {
 # claude -p non-interactive session.
 # ---------------------------------------------------------------------------
 $env:TARGET_AMS_ID    = $TargetAmsId
-$env:PLC_PROJECT_PATH = "$repoRoot/$($cfg.Sln)" -replace '\\','/'
+$env:PLC_PROJECT_PATH = "$repoRoot/$slnPath" -replace '\\','/'
 if ($SelfValidate) {
     $env:SAFETY_CONFIRMATIONS = 'false'
     Remove-Item Env:ALLOWED_NETIDS -ErrorAction SilentlyContinue
@@ -159,21 +172,21 @@ if ($SelfValidate) {
 # ---------------------------------------------------------------------------
 # Build the shared bench/run.py argument list
 # ---------------------------------------------------------------------------
-$resetCmd = "git -C $repoRoot checkout HEAD -- $($cfg.Dir)"
+$resetCmd = "git -C $repoRoot checkout HEAD -- $taskDir"
 
 $commonArgs = @(
-    '--task',                "$($cfg.Dir)/TASK.md",
+    '--task',                "$taskDir/TASK.md",
     '--runs',                $Runs.ToString(),
-    '--tcunit-path',         $cfg.Dir,
-    '--sln-path',            $cfg.Sln,
+    '--tcunit-path',         $taskDir,
+    '--sln-path',            $slnPath,
     '--reset-cmd',           $resetCmd,
-    '--pre-save-as-library', $cfg.LibraryPlc,
-    '--post-run-tests',      $cfg.TestsPlc,
-    '--tests-guard-path',    $cfg.TestsPouPath,
+    '--pre-save-as-library', $manifest.libraryPlc,
+    '--post-run-tests',      $manifest.testsPlc,
+    '--tests-guard-path',    $testsPouPath,
     '--close-during-run',
     '--isolate-cwd'
 )
-foreach ($probe in $cfg.Probes) { $commonArgs += @('--test-probe', $probe) }
+foreach ($probe in $probes) { $commonArgs += @('--test-probe', $probe) }
 
 # ---------------------------------------------------------------------------
 # Run the arms
@@ -219,4 +232,4 @@ finally {
 }
 
 Write-Host ''
-Write-Host "Done. Results: bench/results/TASK__*__$($Task)*.json (and .md / .diff / .test-result.json siblings)."
+Write-Host "Done. Results: bench/results/TASK__*__$Task*.json (and .md / .diff / .test-result.json siblings)."

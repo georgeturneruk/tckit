@@ -417,6 +417,56 @@ try {
                     $result = Invoke-Harness -Script 'Add-TcVariable.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
+                'POST /delete-pou' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcPou.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-method' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcMethod.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-property' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcProperty.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-gvl' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcGvl.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-dut' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcDut.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-variable' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcVariable.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-folder' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcFolder.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-library-reference' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcLibraryReference.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /delete-placeholder' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Delete-TcPlaceholder.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /add-folder' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Add-TcFolder.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
                 'POST /results' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Get-TcUnitResults.ps1' -Params $body

@@ -29,11 +29,11 @@ def _pous(structure, plc: str = PLC):
 
 
 def _gvls(structure, plc: str = PLC):
-    return structure.plcs[plc].gvls
+    return [g.name for g in structure.plcs[plc].gvls]
 
 
 def _duts(structure, plc: str = PLC):
-    return structure.plcs[plc].duts
+    return [d.name for d in structure.plcs[plc].duts]
 
 
 def _libs(structure, plc: str = PLC):

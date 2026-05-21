@@ -1,0 +1,298 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PidTests" Id="{8d94295f-4fc4-4387-9eca-d4d8e9e799bb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PidTests EXTENDS TcUnit.FB_TestSuite
+VAR
+    pid       : T2Pid_Plc.FB_Pid;
+    iPid      : T2Pid_Plc.I_Pid;
+    output    : LREAL;
+    output2   : LREAL;
+    integral  : LREAL;
+    saturated : BOOL;
+    i         : DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[PProportionalOnly();
+OutputClampsToMax();
+OutputClampsToMin();
+IntegralAccumulates();
+AntiWindupHoldsIntegral();
+DerivativeOnMeasurementNoSetpointSpike();
+ReverseModeFlipsSign();
+ResetClearsIntegral();
+SetterRejectsNegativeKp();
+IsSaturatedReflectsClampState();
+CyclicReachableThroughInterface();
+]]></ST>
+    </Implementation>
+    <Method Name="AntiWindupHoldsIntegral" Id="{3103af1e-5d77-46d6-94e8-435881a396fa}">
+      <Declaration><![CDATA[METHOD AntiWindupHoldsIntegral : BOOL
+VAR
+    integral : LREAL;
+    i : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 0.0;
+    pid.Ki := 10.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -1.0;
+    pid.OutputMax := 1.0;
+    // Drive into saturation: with Ki=10 and error=1, a single 0.1s tick
+    // would produce output 1.0 (at clamp). Twenty more ticks should
+    // not grow the integral once saturated.
+    FOR i := 1 TO 20 DO
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    END_FOR
+    integral := pid.IntegralTerm;
+    AssertTrue(Condition := integral <= 0.2,
+        Message := 'Anti-windup should hold integral at/near saturation point, not let it grow');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="CyclicReachableThroughInterface" Id="{886ae712-b289-4e98-89d9-4b395d172694}">
+      <Declaration><![CDATA[METHOD CyclicReachableThroughInterface : BOOL
+VAR
+    direct    : LREAL;
+    viaIface  : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 3.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    direct := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+
+    pid.Reset();
+    iPid := pid;  // FB_Pid IMPLEMENTS I_Pid required
+    viaIface := iPid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+
+    AssertEquals_LREAL(Expected := direct, Actual := viaIface, Delta := 1E-9,
+        Message := 'Same Update inputs through pid and iPid must give the same output');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="DerivativeOnMeasurementNoSetpointSpike" Id="{67c9dfe9-58c6-4972-8b50-62e5fce63e3e}">
+      <Declaration><![CDATA[METHOD DerivativeOnMeasurementNoSetpointSpike : BOOL
+VAR
+    output : LREAL;
+    output2 : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 0.0;
+    pid.Ki := 0.0;
+    pid.Kd := 1.0;
+    pid.Mode := 0;
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    // Steady state: setpoint=0, measurement=0.
+    pid.Update(setpoint := 0.0, measurement := 0.0, deltaT := 0.1);
+    // Step the SETPOINT. With derivative-on-error this would produce
+    // a large spike (d_error/dt ~ 100). With derivative-on-measurement
+    // the derivative is computed from -dMeasurement/dt, which is 0.
+    output := pid.Update(setpoint := 10.0, measurement := 0.0, deltaT := 0.1);
+    AssertTrue(Condition := ABS(output) < 1.0,
+        Message := 'Derivative-on-measurement: setpoint step must NOT cause D-kick');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IntegralAccumulates" Id="{ae354523-16ac-4708-82d5-21940e8903bf}">
+      <Declaration><![CDATA[METHOD IntegralAccumulates : BOOL
+VAR
+    integral : LREAL;
+    i : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 0.0;
+    pid.Ki := 1.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    FOR i := 1 TO 10 DO
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    END_FOR
+    integral := pid.IntegralTerm;
+    AssertEquals_LREAL(Expected := 1.0, Actual := integral, Delta := 0.05,
+        Message := 'I-only Ki=1 error=1 for 10x0.1s should integrate to ~1.0');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="IsSaturatedReflectsClampState" Id="{dabd8fff-bb29-4c9d-989c-94095e93dbd8}">
+      <Declaration><![CDATA[METHOD IsSaturatedReflectsClampState : BOOL
+VAR
+    saturated : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 1.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -10.0;
+    pid.OutputMax := 10.0;
+    // Small error, output well within limits.
+    pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    saturated := pid.IsSaturated;
+    AssertFalse(Condition := saturated,
+        Message := 'IsSaturated should be FALSE when output is within OutputMin..OutputMax');
+    // Now saturate the output.
+    pid.Update(setpoint := 100.0, measurement := 0.0, deltaT := 0.1);
+    saturated := pid.IsSaturated;
+    AssertTrue(Condition := saturated,
+        Message := 'IsSaturated should be TRUE once the output is clamped to OutputMax');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OutputClampsToMax" Id="{8294cd19-e6ba-4e4a-9a77-025dbb4e54b3}">
+      <Declaration><![CDATA[METHOD OutputClampsToMax : BOOL
+VAR
+    output : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 2.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -5.0;
+    pid.OutputMax := 5.0;
+    output := pid.Update(setpoint := 100.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := 5.0, Actual := output, Delta := 1E-6,
+        Message := 'Output should clamp to OutputMax on large positive error');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="OutputClampsToMin" Id="{de90ce70-26d2-4f09-92b0-cdea16386127}">
+      <Declaration><![CDATA[METHOD OutputClampsToMin : BOOL
+VAR
+    output : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 2.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -5.0;
+    pid.OutputMax := 5.0;
+    output := pid.Update(setpoint := -100.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := -5.0, Actual := output, Delta := 1E-6,
+        Message := 'Output should clamp to OutputMin on large negative error');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="PProportionalOnly" Id="{2bb7a6c1-cef5-48e3-a5cf-36e101f43ed2}">
+      <Declaration><![CDATA[METHOD PProportionalOnly : BOOL
+VAR
+    output : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 2.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    output := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := 2.0, Actual := output, Delta := 1E-6,
+        Message := 'P-only Kp=2 error=1 should yield output=2');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetClearsIntegral" Id="{02fc84f3-99ed-492b-8cab-69380e370633}">
+      <Declaration><![CDATA[METHOD ResetClearsIntegral : BOOL
+VAR
+    integral : LREAL;
+    i : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Kp := 0.0;
+    pid.Ki := 1.0;
+    pid.Kd := 0.0;
+    pid.Mode := 0;
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    FOR i := 1 TO 5 DO
+        pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    END_FOR
+    AssertTrue(Condition := pid.IntegralTerm > 0.0,
+        Message := 'Integral must be non-zero before Reset for this test to be meaningful');
+    pid.Reset();
+    integral := pid.IntegralTerm;
+    AssertEquals_LREAL(Expected := 0.0, Actual := integral, Delta := 1E-9,
+        Message := 'Reset must zero the integral term');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ReverseModeFlipsSign" Id="{7d38b6d7-2e24-425f-bfc7-76897d563c6f}">
+      <Declaration><![CDATA[METHOD ReverseModeFlipsSign : BOOL
+VAR
+    output : LREAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Reset();
+    pid.Kp := 2.0;
+    pid.Ki := 0.0;
+    pid.Kd := 0.0;
+    pid.Mode := 1;  // reverse
+    pid.OutputMin := -100.0;
+    pid.OutputMax := 100.0;
+    output := pid.Update(setpoint := 1.0, measurement := 0.0, deltaT := 0.1);
+    AssertEquals_LREAL(Expected := -2.0, Actual := output, Delta := 1E-6,
+        Message := 'Reverse mode should flip the sign of the controller output');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="SetterRejectsNegativeKp" Id="{1f94cacd-f5ad-4939-b179-ae3a13f117a1}">
+      <Declaration><![CDATA[METHOD SetterRejectsNegativeKp : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    pid.Kp := 0.5;
+    pid.Kp := -1.0;  // setter must reject this
+    AssertEquals_LREAL(Expected := 0.5, Actual := pid.Kp, Delta := 1E-9,
+        Message := 'Setter must reject negative Kp; existing value preserved');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

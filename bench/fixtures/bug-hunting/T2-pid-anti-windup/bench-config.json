@@ -1,0 +1,20 @@
+{
+  "sln": "T2Pid.sln",
+  "libraryPlc": "T2Pid_Plc",
+  "testsPlc": "PidTests",
+  "testsPouPath": "PidTests_Tc/PidTests/POUs/",
+  "probes": [
+    "MAIN.suite.Tests[1].TestIsFailed",
+    "MAIN.suite.Tests[2].TestIsFailed",
+    "MAIN.suite.Tests[3].TestIsFailed",
+    "MAIN.suite.Tests[4].TestIsFailed",
+    "MAIN.suite.Tests[5].TestIsFailed",
+    "MAIN.suite.Tests[6].TestIsFailed",
+    "MAIN.suite.Tests[7].TestIsFailed",
+    "MAIN.suite.Tests[8].TestIsFailed",
+    "MAIN.suite.Tests[9].TestIsFailed",
+    "MAIN.suite.Tests[10].TestIsFailed",
+    "MAIN.suite.Tests[11].TestIsFailed",
+    "MAIN.suite.NumberOfTests"
+  ]
+}

@@ -27,14 +27,25 @@ def main() -> None:
 
     print(f"=== get_structure({project_path!r}) ===")
     structure = reader.get_structure(project_path)
-    print(f"  POUs ({len(structure.pous)}):")
-    for pou in structure.pous:
-        print(f"    {pou.pou_type:20s}  {pou.name}")
-    print(f"  GVLs ({len(structure.gvls)}): {structure.gvls}")
+    for plc_name, section in structure.plcs.items():
+        print(f"  PLC {plc_name}")
+        print(f"    POUs ({len(section.pous)}):")
+        for pou in section.pous:
+            folder = f"  [{pou.folder}]" if pou.folder else ""
+            print(f"      {pou.pou_type:20s}  {pou.name}{folder}")
+        print(f"    GVLs ({len(section.gvls)}):")
+        for gvl in section.gvls:
+            folder = f"  [{gvl.folder}]" if gvl.folder else ""
+            print(f"      {gvl.name}{folder}")
+        print(f"    DUTs ({len(section.duts)}):")
+        for dut in section.duts:
+            folder = f"  [{dut.folder}]" if dut.folder else ""
+            print(f"      {dut.dut_kind:6s} {dut.name}{folder}")
     print()
 
-    if structure.pous:
-        first_pou = structure.pous[0].name
+    first_section = next(iter(structure.plcs.values()), None)
+    if first_section and first_section.pous:
+        first_pou = first_section.pous[0].name
         print(f"=== get_pou_interface({first_pou!r}) ===")
         interface = reader.get_pou_interface(first_pou)
         print(f"  pou_type:    {interface.pou_type}")
@@ -54,8 +65,8 @@ def main() -> None:
             print(f"  body:        {item.body[:120]!r}...")
             print()
 
-    if structure.gvls:
-        first_gvl = structure.gvls[0]
+    if first_section and first_section.gvls:
+        first_gvl = first_section.gvls[0].name
         print(f"=== get_gvl({first_gvl!r}) ===")
         gvl = reader.get_gvl(first_gvl)
         print(f"  declaration: {gvl.declaration[:200]!r}...")

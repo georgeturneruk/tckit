@@ -40,14 +40,16 @@ $script:TcKind = @{
     Action            = 608
     Method            = 609
     InterfaceMethod   = 610
-    Property          = 611
-    InterfaceProperty = 612
-    PropertyGet       = 613
-    PropertySet       = 614
-    GVL               = 615
-    Transition        = 616
-    Interface         = 618
-    PlcProject        = 0  # special: passed with template name in 4th arg
+    Property             = 611
+    InterfaceProperty    = 612
+    PropertyGet          = 613
+    PropertySet          = 614
+    GVL                  = 615
+    Transition           = 616
+    Interface            = 618
+    InterfacePropertyGet = 654
+    InterfacePropertySet = 655
+    PlcProject           = 0  # special: passed with template name in 4th arg
 }
 
 function Get-TcKind {
@@ -56,8 +58,9 @@ function Get-TcKind {
         Map a logical type name to its CreateChild kind constant.
 
         Accepts: function_block, function, program, interface, method, action,
-        property, property_get, property_set, gvl, struct, enum, union,
-        folder.
+        interface_method, property, interface_property, property_get,
+        property_set, interface_property_get, interface_property_set, gvl,
+        struct, enum, union, folder.
     #>
     param([Parameter(Mandatory)][string]$Type)
     switch ($Type.ToLowerInvariant()) {
@@ -65,11 +68,15 @@ function Get-TcKind {
         'function'       { return $script:TcKind.Function }
         'program'        { return $script:TcKind.Program }
         'interface'      { return $script:TcKind.Interface }
-        'method'         { return $script:TcKind.Method }
-        'action'         { return $script:TcKind.Action }
-        'property'       { return $script:TcKind.Property }
-        'property_get'   { return $script:TcKind.PropertyGet }
-        'property_set'   { return $script:TcKind.PropertySet }
+        'method'             { return $script:TcKind.Method }
+        'interface_method'   { return $script:TcKind.InterfaceMethod }
+        'action'             { return $script:TcKind.Action }
+        'property'           { return $script:TcKind.Property }
+        'interface_property' { return $script:TcKind.InterfaceProperty }
+        'property_get'           { return $script:TcKind.PropertyGet }
+        'property_set'           { return $script:TcKind.PropertySet }
+        'interface_property_get' { return $script:TcKind.InterfacePropertyGet }
+        'interface_property_set' { return $script:TcKind.InterfacePropertySet }
         'gvl'            { return $script:TcKind.GVL }
         'struct'         { return $script:TcKind.Struct }
         'enum'           { return $script:TcKind.Enum }
@@ -754,6 +761,84 @@ function Find-TcChild {
     return $null
 }
 
+function Resolve-TcFolderPath {
+    <#
+    .SYNOPSIS
+        Walk a slash-separated tree path under a root, returning the leaf
+        tree item.
+
+    .DESCRIPTION
+        Splits $Path on '/' or '\' and performs direct-child lookups
+        under $Root segment by segment. Throws with a precise error if
+        any segment is missing. An empty $Path returns $Root unchanged
+        so callers can pass it through.
+
+        Kind is intentionally not validated during traversal: the
+        well-known top-level subtrees (POUs, DUTs, References) don't
+        all carry ItemType=601, but they're the natural starting
+        point for "POUs/Drives/Motors"-style paths. The downstream
+        CreateChild call will fail loud if the resolved parent doesn't
+        accept the requested child kind. (XAE carries the kind on
+        ItemType; ItemSubType is reserved for I/O sub-discrimination
+        and is 0 on PLC source items.)
+
+        Tree path conventions are documented at
+        https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html;
+        Beckhoff's CreatePlcFolder helper in TC_AI_DOTNET_Samples
+        GeneratePlcProject.cs is the canonical creation pattern.
+    #>
+    param(
+        [Parameter(Mandatory)]$Root,
+        [string]$Path = ''
+    )
+    if (-not $Path) { Write-Output $Root -NoEnumerate; return }
+    $cursor = $Root
+    foreach ($seg in ($Path -split '[/\\]')) {
+        if (-not $seg) { continue }
+        $next = $null
+        for ($i = 1; $i -le $cursor.ChildCount; $i++) {
+            $child = $cursor.Child($i)
+            if ($child.Name -eq $seg) { $next = $child; break }
+        }
+        if ($null -eq $next) {
+            throw "Path segment '$seg' not found under '$($cursor.PathName)'."
+        }
+        $cursor = $next
+    }
+    Write-Output $cursor -NoEnumerate
+}
+
+function Remove-TcTreeItem {
+    <#
+    .SYNOPSIS
+        Delete a tree item by resolving its parent via PathName and calling
+        ITcSmTreeItem::DeleteChild on the parent.
+
+    .DESCRIPTION
+        The Automation Interface deletion primitive is
+        DeleteChild(BSTR bstrName) on the parent item (single arg, by
+        display name; see https://infosys.beckhoff.com/content/1033/
+        tc3_automationinterface/242837387.html). Items returned by
+        recursive name lookups don't carry a Parent property, so we
+        derive the parent path by stripping the last segment of the
+        item's PathName and re-resolving via LookupTreeItem. This works
+        uniformly for POUs (in folders or at root), GVLs, DUTs, methods/
+        properties (whose parent is the POU), and folders.
+    #>
+    param(
+        [Parameter(Mandatory)]$SysManager,
+        [Parameter(Mandatory)]$Item
+    )
+    $pathSegments = $Item.PathName -split '\^'
+    if ($pathSegments.Count -lt 2) {
+        throw "Cannot resolve parent of '$($Item.Name)' (PathName=$($Item.PathName))."
+    }
+    $parentPath = ($pathSegments[0..($pathSegments.Count - 2)]) -join '^'
+    $parent = $SysManager.LookupTreeItem($parentPath)
+    $parent.DeleteChild($Item.Name)
+    return $parentPath
+}
+
 # ------------------------------------------------------------------
 # Source code write
 # ------------------------------------------------------------------
@@ -864,6 +949,37 @@ function Get-TcItemSource {
     return @{ declaration = $decl; implementation = $impl; code = $code }
 }
 
+function Test-TcInterfacePou {
+    <#
+    .SYNOPSIS
+        Return $true when a POU tree item's declaration is an INTERFACE.
+
+    .DESCRIPTION
+        Methods and properties added under an INTERFACE parent must be
+        created with the InterfaceMethod / InterfaceProperty kind, not
+        the regular Method / Property kind — XAE rejects CreateChild
+        otherwise with "Cannot insert '<name>' below '<interface>'".
+
+        Detection is done on the declaration text rather than a COM
+        property because tree items expose no clean "is interface" flag.
+        Block comments, line comments and attribute pragmas are stripped
+        so the first surviving POU keyword wins.
+    #>
+    param([Parameter(Mandatory)]$Item)
+
+    $decl = ''
+    try { $decl = [string]$Item.DeclarationText } catch { return $false }
+    if (-not $decl) { return $false }
+
+    $stripped = $decl
+    $stripped = [regex]::Replace($stripped, '\(\*[\s\S]*?\*\)', ' ')
+    $stripped = [regex]::Replace($stripped, '//[^\r\n]*',       ' ')
+    $stripped = [regex]::Replace($stripped, '\{[^}]*\}',        ' ')
+
+    $m = [regex]::Match($stripped, '(?im)\b(FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE)\b')
+    return $m.Success -and $m.Groups[1].Value.ToUpperInvariant() -eq 'INTERFACE'
+}
+
 # ------------------------------------------------------------------
 # Build via devenv.exe (Express edition has no ToolWindows.ErrorList)
 # ------------------------------------------------------------------
@@ -955,7 +1071,7 @@ Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
-    Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
+    Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `

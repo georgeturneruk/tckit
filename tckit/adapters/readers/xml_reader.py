@@ -25,6 +25,9 @@ from tckit.ports.reader import ProjectReader
 from tckit.ports.types import (
     DUT,
     GVL,
+    DUTKind,
+    DUTRef,
+    GVLRef,
     LibraryRef,
     MethodSignature,
     PLCSection,
@@ -303,7 +306,10 @@ class XmlReader(ProjectReader):
         return GVL(name=gvl_name, path=str(path), declaration=info["declaration"])
 
     def get_dut(self, dut_name: str, *, plc_name: str | None = None) -> DUT:
-        """Return declaration for a Data Unit Type (STRUCT, ENUM, UNION).
+        """Return declaration for a Data Unit Type (STRUCT, ENUM, UNION, ALIAS).
+
+        ``dut_kind`` discriminates the four variants; ``base_type`` is
+        the aliased type for ALIAS DUTs and empty otherwise.
 
         Raises:
             FileNotFoundError: If dut_name is not in the file index.
@@ -311,7 +317,13 @@ class XmlReader(ProjectReader):
         """
         path = self._resolve(dut_name, ".TcDUT", plc_name)
         info = parse_tcdut(path)
-        return DUT(name=dut_name, path=str(path), declaration=info["declaration"])
+        return DUT(
+            name=dut_name,
+            path=str(path),
+            declaration=info["declaration"],
+            dut_kind=DUTKind(info["dut_kind"]),
+            base_type=info["base_type"],
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -480,7 +492,7 @@ def _build_section_from_root(
             )
         )
 
-    gvls: list[str] = []
+    gvls: list[GVLRef] = []
     for tc_gvl in sorted(folder_root.rglob("*.TcGVL")):
         try:
             info = parse_tcgvl(tc_gvl)
@@ -488,9 +500,16 @@ def _build_section_from_root(
             continue
         name = info["name"]
         section_index[name] = tc_gvl
-        gvls.append(name)
+        gvls.append(
+            GVLRef(
+                name=name,
+                path=str(tc_gvl),
+                plc_name=plc_name,
+                folder=_folder_for(tc_gvl, folder_root),
+            )
+        )
 
-    duts: list[str] = []
+    duts: list[DUTRef] = []
     for tc_dut in sorted(folder_root.rglob("*.TcDUT")):
         try:
             info = parse_tcdut(tc_dut)
@@ -498,7 +517,15 @@ def _build_section_from_root(
             continue
         name = info["name"]
         section_index[name] = tc_dut
-        duts.append(name)
+        duts.append(
+            DUTRef(
+                name=name,
+                path=str(tc_dut),
+                plc_name=plc_name,
+                dut_kind=DUTKind(info["dut_kind"]),
+                folder=_folder_for(tc_dut, folder_root),
+            )
+        )
 
     libraries = _collect_libraries(libraries_from) if libraries_from else []
 

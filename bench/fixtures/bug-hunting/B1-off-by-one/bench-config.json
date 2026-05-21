@@ -1,0 +1,10 @@
+{
+  "sln": "B1RollingAverage.sln",
+  "libraryPlc": "B1RollingAverage_Plc",
+  "testsPlc": "RollingAverageTests",
+  "testsPouPath": "RollingAverageTests_Tc/RollingAverageTests/POUs/",
+  "probes": [
+    "MAIN.suite.Tests[1].TestIsFailed",
+    "MAIN.suite.NumberOfTests"
+  ]
+}

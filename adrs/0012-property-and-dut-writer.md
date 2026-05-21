@@ -76,8 +76,17 @@ parallel additions with the same shape.
 ## Status notes
 
 - 2026-05-18: Implementation outcome. Both tools ship with payload-shape
-  unit tests in `tests/unit/test_automation_writer.py`. Bridge handlers
-  smoke-tested via the T2-pid fixture-authoring path (Commit D in the same
-  PR). The cyclic-in-method and polymorphism-arrays topic rules in the
-  TwinCAT CLAUDE.md template (ADR-0008) are paired with this work because
-  they describe the patterns the new writer tools enable.
+  unit tests in `tests/unit/test_automation_writer.py`. The cyclic-in-method
+  and polymorphism-arrays topic rules in the TwinCAT CLAUDE.md template
+  (ADR-0008) are paired with this work because they describe the patterns
+  the new writer tools enable.
+- 2026-05-21: The earlier "Bridge handlers smoke-tested via the T2-pid
+  fixture-authoring path" claim was incorrect; `author_T2.py` only calls
+  `add_pou` / `add_method`, so the bridge to COM property path had never
+  actually run end-to-end before today. A new
+  `bench/fixtures/bug-hunting/_author/smoke_property.py` exercises it,
+  and surfaced four bugs in `Add-TcProperty.ps1` plus one in the
+  return-type regex. See
+  [2026-05-21 finding](../bench/findings/2026-05-21-t2-attempt-add-property-fix-and-popup-detection.md)
+  for the full sequence. Interface-property authoring (kinds 612 / 654 /
+  655) is implemented for symmetry but remains untested.

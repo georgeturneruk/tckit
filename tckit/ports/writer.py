@@ -44,6 +44,7 @@ class ProjectWriter(ABC):
         pou_type: POUType,
         code: str,
         *,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         """Add a new POU (FB, program, function, or interface) to the project.
@@ -51,6 +52,34 @@ class ProjectWriter(ABC):
         :param name: Name of the new POU.
         :param pou_type: POUType enum value.
         :param code: Full ST source text including VAR blocks.
+        :param parent_folder: Optional path under the POUs subtree where
+            the POU should live, slash-separated (e.g. ``"Drives/Motors"``).
+            Intermediate folders must already exist; create them with
+            :meth:`add_folder` first.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def add_folder(
+        self,
+        name: str,
+        *,
+        parent_path: str = "POUs",
+        plc_name: str | None = None,
+    ) -> Result:
+        """Add a folder to a PLC project's source tree.
+
+        Folders organise POUs, GVLs, and DUTs in XAE without affecting
+        the build. Wraps ``ITcSmTreeItem.CreateChild(name, 601, ...)``;
+        intermediate folders in ``parent_path`` must already exist.
+
+        :param name: Name of the new folder.
+        :param parent_path: Path under the PLC project's IDE-level node
+            where the folder should live, slash-separated. Examples:
+            ``"POUs"``, ``"POUs/Drives"``, ``"DUTs"``,
+            ``"DUTs/Motors"``. Defaults to ``"POUs"``.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
         """
@@ -63,6 +92,7 @@ class ProjectWriter(ABC):
         code: str,
         *,
         dut_kind: DUTKind = DUTKind.STRUCT,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         """Add a new Data Unit Type (struct, enum, or union) to the project.
@@ -92,6 +122,7 @@ class ProjectWriter(ABC):
         name: str,
         code: str,
         *,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         """Add a new Global Variable List (GVL) to the project.
@@ -116,6 +147,7 @@ class ProjectWriter(ABC):
         method_name: str,
         code: str,
         *,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         """Add a new method to an existing POU.
@@ -137,6 +169,7 @@ class ProjectWriter(ABC):
         *,
         getter_code: str | None = None,
         setter_code: str | None = None,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         """Add a new property to an existing POU.
@@ -318,6 +351,192 @@ class ProjectWriter(ABC):
             ``None`` (default) targets the FB declaration.
         :param plc_name: PLC project to write to; ``None`` follows the
             standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def delete_pou(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a POU (function block, function, program, or interface).
+
+        Routes through ``ITcSmTreeItem::DeleteChild``. The implementation
+        searches the POUs subtree by name so POUs nested in folders are
+        handled. Refuses to delete a ``PROGRAM`` that is still referenced
+        by a ``<PouCall>`` in any task (``.TcTTO``); detach the task first.
+        Other POU kinds skip the task scan, because they cannot be
+        task-bound.
+
+        :param name: Name of the POU to delete.
+        :param plc_name: PLC project to write to; ``None`` follows the
+            standard resolution order.
+        """
+        ...
+
+    @abstractmethod
+    def delete_method(
+        self,
+        pou_name: str,
+        method_name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a method (or action) from a POU.
+
+        The tree-item display name is the only key ``DeleteChild`` uses,
+        so this also covers actions and interface methods.
+
+        :param pou_name: Name of the containing POU.
+        :param method_name: Name of the method or action to delete.
+        """
+        ...
+
+    @abstractmethod
+    def delete_property(
+        self,
+        pou_name: str,
+        property_name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a property from a POU.
+
+        Defensively removes any Get/Set accessor children before
+        deleting the property body, because cascade behaviour is not
+        documented across all XAE versions.
+
+        :param pou_name: Name of the containing POU.
+        :param property_name: Name of the property to delete.
+        """
+        ...
+
+    @abstractmethod
+    def delete_gvl(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a GVL from a PLC project.
+
+        Validates that the named item is a GVL (kind 615) so a same-named
+        POU or folder cannot be deleted by mistake. Handles GVLs nested
+        in folders by resolving the parent via ``PathName``.
+
+        :param name: Name of the GVL to delete.
+        """
+        ...
+
+    @abstractmethod
+    def delete_dut(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a DUT (struct, enum, union, alias) from a PLC project.
+
+        Recognises alias DUTs (kind 623) even though writer-side
+        creation is not yet supported, so projects that already contain
+        alias DUTs can have them removed.
+
+        :param name: Name of the DUT to delete.
+        """
+        ...
+
+    @abstractmethod
+    def delete_variable(
+        self,
+        pou_name: str,
+        variable_name: str,
+        item_name: str | None = None,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Remove a single variable declaration from a POU or method.
+
+        Refuses multi-name lists (``bA, bB : BOOL;``) and variable lines
+        that don't terminate on the same physical line; both are pointed
+        at :meth:`update_pou_declaration_patch` for partial edits.
+
+        :param pou_name: Name of the containing POU.
+        :param variable_name: Name of the variable to remove.
+        :param item_name: Method name to target instead of the FB-level
+            declaration. ``None`` (default) targets the FB declaration.
+        """
+        ...
+
+    @abstractmethod
+    def delete_folder(
+        self,
+        name: str,
+        *,
+        parent_path: str = "",
+        recursive: bool = False,
+        plc_name: str | None = None,
+    ) -> Result:
+        """Delete a folder from a PLC project's source tree.
+
+        Refuses to delete a non-empty folder unless ``recursive=True``.
+        Validates that the named item is a folder (kind 601) so a
+        same-named POU/GVL/DUT cannot be deleted by mistake.
+
+        :param name: Name of the folder. With ``parent_path`` empty,
+            this is searched by name across the PLC project subtree.
+        :param parent_path: Optional explicit parent path under the
+            PLC project's IDE-level node, slash-separated (e.g.
+            ``"POUs/Drives"``). Disambiguates a name that exists in
+            multiple subtrees.
+        :param recursive: Allow deleting a folder that still contains
+            children.
+        """
+        ...
+
+    @abstractmethod
+    def delete_library_reference(
+        self,
+        consumer_plc_name: str,
+        library_name: str,
+        *,
+        version: str = "*",
+        distributor: str = "Tc3 Project",
+    ) -> Result:
+        """Remove a library reference from a consumer PLC project.
+
+        Wraps the 3-arg form of ``ITcPlcLibraryManager.RemoveReference``,
+        the symmetric counterpart to ``add_library_reference``. For
+        placeholder references use :meth:`delete_placeholder` instead.
+
+        :param consumer_plc_name: PLC project carrying the reference.
+        :param library_name: Library name as referenced.
+        :param version: Library version as referenced; ``"*"`` (default)
+            targets the latest / wildcard reference.
+        :param distributor: Library distributor / company string.
+            Defaults to ``"Tc3 Project"`` matching
+            :meth:`add_library_reference`.
+        """
+        ...
+
+    @abstractmethod
+    def delete_placeholder(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+    ) -> Result:
+        """Remove a placeholder reference from a consumer PLC project.
+
+        Wraps the 1-arg form of ``ITcPlcLibraryManager.RemoveReference``,
+        which targets placeholders. Whether the call also strips an
+        orphan ``<Parameters>`` block from ``.plcproj`` is undocumented;
+        the bench will confirm.
+
+        :param consumer_plc_name: PLC project carrying the placeholder.
+        :param placeholder_name: Placeholder name to remove (the
+            ``Include=`` attribute on the ``<PlaceholderReference>``
+            element).
         """
         ...
 

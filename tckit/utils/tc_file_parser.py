@@ -91,23 +91,40 @@ def detect_pou_type(declaration: str, element_tag: str = "POU") -> str:
     return "function_block"
 
 
+# Access modifiers (TwinCAT IEC 61131-3 ext): may appear between the
+# METHOD / PROPERTY keyword and the name. XAE writes them when the
+# accessor is created via the automation interface (CreateChild vInfo
+# carries the access string), so a declaration produced by add_property
+# / add_method looks like ``PROPERTY PUBLIC Foo : LREAL`` rather than
+# ``PROPERTY Foo : LREAL``. Both spellings must round-trip cleanly.
+_ACCESS_MOD = r"(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL|FINAL|ABSTRACT)\s+)*"
+
+
 def extract_method_return_type(declaration: str) -> str:
     """Extract return type from a METHOD declaration using regex.
 
-    Matches:  METHOD MethodName : ReturnType
+    Matches:  METHOD [<access>...] MethodName : ReturnType
     Returns empty string if not found.
     """
-    match = re.search(r"METHOD\s+\w+\s*:\s*(\w+)", declaration, re.IGNORECASE)
+    match = re.search(
+        rf"METHOD\s+{_ACCESS_MOD}\w+\s*:\s*(\w+)",
+        declaration,
+        re.IGNORECASE,
+    )
     return match.group(1) if match else ""
 
 
 def extract_property_return_type(declaration: str) -> str:
     """Extract return type from a PROPERTY declaration using regex.
 
-    Matches:  PROPERTY PropertyName : ReturnType
+    Matches:  PROPERTY [<access>...] PropertyName : ReturnType
     Returns empty string if not found.
     """
-    match = re.search(r"PROPERTY\s+\w+\s*:\s*(\w+)", declaration, re.IGNORECASE)
+    match = re.search(
+        rf"PROPERTY\s+{_ACCESS_MOD}\w+\s*:\s*(\w+)",
+        declaration,
+        re.IGNORECASE,
+    )
     return match.group(1) if match else ""
 
 
@@ -257,17 +274,72 @@ def parse_tcgvl(path: Path) -> dict:
 def parse_tcdut(path: Path) -> dict:
     """Parse a .TcDUT file and return a dict with DUT structure.
 
-    DUTs include STRUCT, ENUM, UNION, and TYPE alias definitions.
+    DUTs include STRUCT, ENUM, UNION, and TYPE alias definitions. The
+    discriminator inspects the declaration body after the ``TYPE <name> :``
+    header:
+
+        STRUCT ...               -> "struct"
+        UNION ...                -> "union"
+        ( name1, name2 )         -> "enum"
+        <type>;                  -> "alias", with ``base_type`` set to <type>.
+
+    Comments and pragma blocks are stripped before discrimination so
+    annotated DUTs round-trip correctly.
 
     Returns:
-        {"name": str, "declaration": str}
+        {"name": str, "declaration": str, "dut_kind": str, "base_type": str}
+        where ``dut_kind`` is one of ``"struct"`` / ``"enum"`` / ``"union"`` /
+        ``"alias"`` and ``base_type`` is empty for non-alias DUTs.
     """
     root = parse_file(path)
     dut_el = root.find("DUT")
     if dut_el is None:
         raise ValueError(f"No <DUT> element found in {path}")
 
-    return {"name": dut_el.get("Name", ""), "declaration": get_declaration(dut_el)}
+    declaration = get_declaration(dut_el)
+    dut_kind, base_type = _classify_dut_declaration(declaration)
+
+    return {
+        "name": dut_el.get("Name", ""),
+        "declaration": declaration,
+        "dut_kind": dut_kind,
+        "base_type": base_type,
+    }
+
+
+def _classify_dut_declaration(declaration: str) -> tuple[str, str]:
+    """Discriminate a DUT declaration into (kind, base_type).
+
+    Strips block comments, line comments, and pragma attributes before
+    matching so annotated DUTs classify correctly. Falls back to
+    ``("struct", "")`` if the declaration is empty or unparseable;
+    callers that need stricter validation should inspect the raw text.
+    """
+    stripped = re.sub(r"\(\*[\s\S]*?\*\)", " ", declaration)
+    stripped = re.sub(r"//[^\r\n]*", " ", stripped)
+    stripped = re.sub(r"\{[^}]*\}", " ", stripped)
+
+    match = re.search(
+        r"TYPE\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:EXTENDS\s+[A-Za-z_][A-Za-z0-9_.]*\s*)?:\s*(.+?)(?:END_TYPE|$)",
+        stripped,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return "struct", ""
+
+    body = match.group(1).strip()
+    upper = body.upper()
+    if upper.startswith("STRUCT"):
+        return "struct", ""
+    if upper.startswith("UNION"):
+        return "union", ""
+    if body.startswith("("):
+        return "enum", ""
+
+    # ALIAS: body is a type expression terminated by ';'.
+    semi = body.find(";")
+    base = body[:semi].strip() if semi >= 0 else body.strip()
+    return "alias", base
 
 
 # ---------------------------------------------------------------------------

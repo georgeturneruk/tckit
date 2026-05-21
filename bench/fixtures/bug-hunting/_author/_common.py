@@ -63,7 +63,7 @@ def _wipe_fixture(fixture_dir: Path, force: bool) -> None:
     """Clear generated content, keep static support files (CLAUDE.md, etc.)."""
     if not fixture_dir.exists():
         return
-    keepers = {"CLAUDE.md", "TASK.md", "README.md"}
+    keepers = {"CLAUDE.md", "TASK.md", "README.md", "bench-config.json"}
     generated = [p for p in fixture_dir.iterdir() if p.name not in keepers]
     if not generated:
         return
