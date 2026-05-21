@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Pid" Id="{d25203d2-b5cb-4131-b387-ddad8123338e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Pid
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

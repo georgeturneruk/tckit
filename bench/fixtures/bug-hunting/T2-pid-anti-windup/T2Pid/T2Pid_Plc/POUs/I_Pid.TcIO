@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <Itf Name="I_Pid" Id="{b5e48d33-99a7-455a-9a71-25c357c0c781}">
+    <Declaration><![CDATA[INTERFACE I_Pid]]></Declaration>
+    <Method Name="Reset" Id="{3a74c138-43f7-4dde-9295-168397c146fe}">
+      <Declaration><![CDATA[METHOD Reset]]></Declaration>
+    </Method>
+    <Method Name="Update" Id="{12494460-92f3-43f3-b78c-78528912bf97}">
+      <Declaration><![CDATA[METHOD Update : LREAL
+VAR_INPUT
+    fSetpoint    : LREAL;
+    fMeasurement : LREAL;
+    fDeltaT      : LREAL;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

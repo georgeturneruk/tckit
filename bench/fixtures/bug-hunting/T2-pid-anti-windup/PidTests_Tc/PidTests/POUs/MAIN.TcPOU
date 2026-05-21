@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{20d0be1b-d6d7-409c-a784-a75ceb56053b}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+    suite : FB_PidTests;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[suite();
+TcUnit.RUN();
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
