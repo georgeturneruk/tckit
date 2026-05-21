@@ -32,13 +32,14 @@
     Full ST source text (TYPE Foo : STRUCT ... END_STRUCT END_TYPE, etc.).
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
-    [string]$PlcName     = $env:PLC_PROJECT_NAME,
+    [string]$ProjectPath  = $env:PLC_PROJECT_PATH,
+    [string]$PlcName      = $env:PLC_PROJECT_NAME,
     [string]$Name,
     [ValidateSet('struct', 'enum', 'union')][string]$DutKind = 'struct',
-    [string]$Code        = '',
-    [string]$ComVersion  = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
-    [string]$XaeMode     = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
+    [string]$Code         = '',
+    [string]$ParentFolder = '',
+    [string]$ComVersion   = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
+    [string]$XaeMode      = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
 
 Set-StrictMode -Version Latest
@@ -58,7 +59,8 @@ try {
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 
     $duts = Get-TcDutsFolder -SysManager $sm -PlcName $plcName
-    $newItem = $duts.CreateChild($Name, $kind, $null, $null)
+    $parent = Resolve-TcFolderPath -Root $duts -Path $ParentFolder
+    $newItem = $parent.CreateChild($Name, $kind, $null, $null)
 
     if ($Code) {
         Set-TcItemSource -Item $newItem -Declaration $Code
@@ -67,7 +69,7 @@ try {
 
     return @{
         success = $true
-        details = @{ name = $Name; kind = $kind; dut_kind = $DutKind; plc = $plcName }
+        details = @{ name = $Name; kind = $kind; dut_kind = $DutKind; plc = $plcName; parent_folder = $ParentFolder }
     }
 }
 catch {

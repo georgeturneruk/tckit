@@ -41,15 +41,16 @@ class POUType(StrEnum):
 class DUTKind(StrEnum):
     """Kind discriminator for Data Unit Type creation.
 
-    Backs ``ProjectWriter.add_dut``. ALIAS (``TYPE x : LREAL; END_TYPE``)
-    is intentionally absent in v1: the TwinCAT automation interface kind
-    constant for it is undocumented in our spike notes and is not needed
-    by any current bench. Add it when a use case appears.
+    Backs ``ProjectWriter.add_dut`` (which accepts only STRUCT/ENUM/UNION
+    on write) and ``DUT.dut_kind`` on read. ALIAS DUTs map to TwinCAT
+    SubType 623 and are read-only for now: writer-side support is held
+    back until a real use case appears.
     """
 
     STRUCT = "struct"
     ENUM = "enum"
     UNION = "union"
+    ALIAS = "alias"
 
 
 @dataclass
@@ -59,6 +60,35 @@ class POURef:
     path: str
     plc_name: str  # PLC project (TIPC child) this POU belongs to.
     folder: str = ""  # Path relative to the PLC project root, e.g. "POUs/Functions".
+
+
+@dataclass
+class GVLRef:
+    """A GVL entry in a project structure listing.
+
+    Mirror of :class:`POURef`. Distinct from :class:`GVL`, which carries
+    the parsed declaration text returned by ``get_gvl``.
+    """
+
+    name: str
+    path: str
+    plc_name: str
+    folder: str = ""
+
+
+@dataclass
+class DUTRef:
+    """A DUT entry in a project structure listing.
+
+    Mirror of :class:`POURef`. ``dut_kind`` discriminates STRUCT / ENUM /
+    UNION / ALIAS so callers can prefilter without re-parsing each file.
+    """
+
+    name: str
+    path: str
+    plc_name: str
+    dut_kind: "DUTKind"
+    folder: str = ""
 
 
 @dataclass
@@ -92,8 +122,8 @@ class PLCSection:
     name: str
     plcproj_path: str
     pous: list[POURef] = field(default_factory=list)
-    gvls: list[str] = field(default_factory=list)
-    duts: list[str] = field(default_factory=list)
+    gvls: list[GVLRef] = field(default_factory=list)
+    duts: list[DUTRef] = field(default_factory=list)
     libraries: list[LibraryRef] = field(default_factory=list)
 
 
@@ -173,11 +203,18 @@ class GVL:
 
 @dataclass
 class DUT:
-    """A Data Unit Type — STRUCT, ENUM, UNION, or TYPE alias."""
+    """A Data Unit Type — STRUCT, ENUM, UNION, or TYPE alias.
+
+    ``dut_kind`` discriminates the four variants; ``base_type`` is the
+    aliased type for ALIAS DUTs (e.g. ``"LREAL"``,
+    ``"ARRAY [0..9] OF INT"``) and empty for the other kinds.
+    """
 
     name: str
     path: str
     declaration: str
+    dut_kind: DUTKind = DUTKind.STRUCT
+    base_type: str = ""
 
 
 # ---------------------------------------------------------------------------

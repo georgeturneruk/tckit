@@ -761,6 +761,84 @@ function Find-TcChild {
     return $null
 }
 
+function Resolve-TcFolderPath {
+    <#
+    .SYNOPSIS
+        Walk a slash-separated tree path under a root, returning the leaf
+        tree item.
+
+    .DESCRIPTION
+        Splits $Path on '/' or '\' and performs direct-child lookups
+        under $Root segment by segment. Throws with a precise error if
+        any segment is missing. An empty $Path returns $Root unchanged
+        so callers can pass it through.
+
+        Kind is intentionally not validated during traversal: the
+        well-known top-level subtrees (POUs, DUTs, References) don't
+        all carry ItemType=601, but they're the natural starting
+        point for "POUs/Drives/Motors"-style paths. The downstream
+        CreateChild call will fail loud if the resolved parent doesn't
+        accept the requested child kind. (XAE carries the kind on
+        ItemType; ItemSubType is reserved for I/O sub-discrimination
+        and is 0 on PLC source items.)
+
+        Tree path conventions are documented at
+        https://infosys.beckhoff.com/content/1033/tc3_automationinterface/242730891.html;
+        Beckhoff's CreatePlcFolder helper in TC_AI_DOTNET_Samples
+        GeneratePlcProject.cs is the canonical creation pattern.
+    #>
+    param(
+        [Parameter(Mandatory)]$Root,
+        [string]$Path = ''
+    )
+    if (-not $Path) { Write-Output $Root -NoEnumerate; return }
+    $cursor = $Root
+    foreach ($seg in ($Path -split '[/\\]')) {
+        if (-not $seg) { continue }
+        $next = $null
+        for ($i = 1; $i -le $cursor.ChildCount; $i++) {
+            $child = $cursor.Child($i)
+            if ($child.Name -eq $seg) { $next = $child; break }
+        }
+        if ($null -eq $next) {
+            throw "Path segment '$seg' not found under '$($cursor.PathName)'."
+        }
+        $cursor = $next
+    }
+    Write-Output $cursor -NoEnumerate
+}
+
+function Remove-TcTreeItem {
+    <#
+    .SYNOPSIS
+        Delete a tree item by resolving its parent via PathName and calling
+        ITcSmTreeItem::DeleteChild on the parent.
+
+    .DESCRIPTION
+        The Automation Interface deletion primitive is
+        DeleteChild(BSTR bstrName) on the parent item (single arg, by
+        display name; see https://infosys.beckhoff.com/content/1033/
+        tc3_automationinterface/242837387.html). Items returned by
+        recursive name lookups don't carry a Parent property, so we
+        derive the parent path by stripping the last segment of the
+        item's PathName and re-resolving via LookupTreeItem. This works
+        uniformly for POUs (in folders or at root), GVLs, DUTs, methods/
+        properties (whose parent is the POU), and folders.
+    #>
+    param(
+        [Parameter(Mandatory)]$SysManager,
+        [Parameter(Mandatory)]$Item
+    )
+    $pathSegments = $Item.PathName -split '\^'
+    if ($pathSegments.Count -lt 2) {
+        throw "Cannot resolve parent of '$($Item.Name)' (PathName=$($Item.PathName))."
+    }
+    $parentPath = ($pathSegments[0..($pathSegments.Count - 2)]) -join '^'
+    $parent = $SysManager.LookupTreeItem($parentPath)
+    $parent.DeleteChild($Item.Name)
+    return $parentPath
+}
+
 # ------------------------------------------------------------------
 # Source code write
 # ------------------------------------------------------------------
@@ -993,7 +1071,7 @@ Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
-    Find-TcChild, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
+    Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `

@@ -34,6 +34,7 @@ param(
     [string]$Code           = '',
     [string]$Declaration    = '',
     [string]$Implementation = '',
+    [string]$ParentFolder   = '',
     [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode        = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
@@ -56,7 +57,8 @@ try {
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 
     $pous = Get-TcPousFolder -SysManager $sm -PlcName $plcName
-    $newItem = $pous.CreateChild($Name, $kind, $null, $null)
+    $parent = Resolve-TcFolderPath -Root $pous -Path $ParentFolder
+    $newItem = $parent.CreateChild($Name, $kind, $null, $null)
 
     if ($Declaration -or $Implementation) {
         Set-TcItemSource -Item $newItem -Declaration $Declaration -Implementation $Implementation
@@ -67,7 +69,7 @@ try {
 
     return @{
         success = $true
-        details = @{ name = $Name; kind = $kind; plc = $plcName }
+        details = @{ name = $Name; kind = $kind; plc = $plcName; parent_folder = $ParentFolder }
     }
 }
 catch {

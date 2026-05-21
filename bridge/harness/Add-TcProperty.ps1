@@ -39,6 +39,7 @@ param(
     [string]$ReturnType,
     [string]$GetterCode   = '',
     [string]$SetterCode   = '',
+    [string]$ParentFolder = '',
     [string]$ComVersion   = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode      = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
@@ -66,7 +67,17 @@ try {
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 
     $plcProj = Get-TcPlcProjectNode -SysManager $sm -PlcName $plcName
-    $pou = Find-TcChild -Root $plcProj -Name $PouName
+    $pou = $null
+    if ($ParentFolder) {
+        $pous = Get-TcPousFolder -SysManager $sm -PlcName $plcName
+        $folder = Resolve-TcFolderPath -Root $pous -Path $ParentFolder
+        for ($i = 1; $i -le $folder.ChildCount; $i++) {
+            $child = $folder.Child($i)
+            if ($child.Name -eq $PouName) { $pou = $child; break }
+        }
+    } else {
+        $pou = Find-TcChild -Root $plcProj -Name $PouName
+    }
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
     # Properties under an INTERFACE need different CreateChild kinds (612 /
@@ -115,7 +126,9 @@ try {
     # invalidated by an earlier operation!" on XAE versions that revalidate
     # siblings during accessor creation. LookupTreeItem on the full path
     # gives us a stable single-call reference.
-    $propPath = "TIPC^$plcName^$plcName Project^POUs^$PouName^$PropertyName"
+    $folderSegments = if ($ParentFolder) { ($ParentFolder -split '[/\\]') | Where-Object { $_ } } else { @() }
+    $pathSegments = @("TIPC", $plcName, "$plcName Project", 'POUs') + $folderSegments + @($PouName, $PropertyName)
+    $propPath = $pathSegments -join '^'
 
     $accessors = @()
     $getItem = $null

@@ -36,6 +36,7 @@ param(
     [string]$Code           = '',
     [string]$Declaration    = '',
     [string]$Implementation = '',
+    [string]$ParentFolder   = '',
     [string]$ComVersion     = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
     [string]$XaeMode        = $(if ($env:XAE_MODE) { $env:XAE_MODE } else { 'attach' })
 )
@@ -56,7 +57,20 @@ try {
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 
     $plcProj = Get-TcPlcProjectNode -SysManager $sm -PlcName $plcName
-    $pou = Find-TcChild -Root $plcProj -Name $PouName
+    # ParentFolder, when given, is the folder under POUs where the parent
+    # POU lives; we use it for a direct lookup so a name collision in
+    # another subtree can't win. Empty means "search recursively".
+    $pou = $null
+    if ($ParentFolder) {
+        $pous = Get-TcPousFolder -SysManager $sm -PlcName $plcName
+        $folder = Resolve-TcFolderPath -Root $pous -Path $ParentFolder
+        for ($i = 1; $i -le $folder.ChildCount; $i++) {
+            $child = $folder.Child($i)
+            if ($child.Name -eq $PouName) { $pou = $child; break }
+        }
+    } else {
+        $pou = Find-TcChild -Root $plcProj -Name $PouName
+    }
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
     $kind = Get-TcKind -Type $ItemType

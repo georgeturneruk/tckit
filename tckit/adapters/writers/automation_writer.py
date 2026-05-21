@@ -45,16 +45,29 @@ class AutomationWriter(ProjectWriter):
         pou_type: POUType,
         code: str,
         *,
+        parent_folder: str = "",
+        plc_name: str | None = None,
+    ) -> Result:
+        payload: dict[str, Any] = {
+            "Name": name,
+            "PouType": pou_type.value,
+            "Code": code,
+        }
+        if parent_folder:
+            payload["ParentFolder"] = parent_folder
+        return self._call("/pou", self._with_project(payload, plc_name=plc_name))
+
+    def add_folder(
+        self,
+        name: str,
+        *,
+        parent_path: str = "POUs",
         plc_name: str | None = None,
     ) -> Result:
         return self._call(
-            "/pou",
+            "/add-folder",
             self._with_project(
-                {
-                    "Name": name,
-                    "PouType": pou_type.value,
-                    "Code": code,
-                },
+                {"Name": name, "ParentPath": parent_path},
                 plc_name=plc_name,
             ),
         )
@@ -64,15 +77,13 @@ class AutomationWriter(ProjectWriter):
         name: str,
         code: str,
         *,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
-        return self._call(
-            "/gvl",
-            self._with_project(
-                {"Name": name, "Code": code},
-                plc_name=plc_name,
-            ),
-        )
+        payload: dict[str, Any] = {"Name": name, "Code": code}
+        if parent_folder:
+            payload["ParentFolder"] = parent_folder
+        return self._call("/gvl", self._with_project(payload, plc_name=plc_name))
 
     def add_dut(
         self,
@@ -80,19 +91,17 @@ class AutomationWriter(ProjectWriter):
         code: str,
         *,
         dut_kind: DUTKind = DUTKind.STRUCT,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
-        return self._call(
-            "/dut",
-            self._with_project(
-                {
-                    "Name": name,
-                    "DutKind": dut_kind.value,
-                    "Code": code,
-                },
-                plc_name=plc_name,
-            ),
-        )
+        payload: dict[str, Any] = {
+            "Name": name,
+            "DutKind": dut_kind.value,
+            "Code": code,
+        }
+        if parent_folder:
+            payload["ParentFolder"] = parent_folder
+        return self._call("/dut", self._with_project(payload, plc_name=plc_name))
 
     def add_method(
         self,
@@ -100,19 +109,17 @@ class AutomationWriter(ProjectWriter):
         method_name: str,
         code: str,
         *,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
-        return self._call(
-            "/method",
-            self._with_project(
-                {
-                    "PouName": pou_name,
-                    "MethodName": method_name,
-                    "Code": code,
-                },
-                plc_name=plc_name,
-            ),
-        )
+        payload: dict[str, Any] = {
+            "PouName": pou_name,
+            "MethodName": method_name,
+            "Code": code,
+        }
+        if parent_folder:
+            payload["ParentFolder"] = parent_folder
+        return self._call("/method", self._with_project(payload, plc_name=plc_name))
 
     def add_property(
         self,
@@ -122,6 +129,7 @@ class AutomationWriter(ProjectWriter):
         *,
         getter_code: str | None = None,
         setter_code: str | None = None,
+        parent_folder: str = "",
         plc_name: str | None = None,
     ) -> Result:
         if getter_code is None and setter_code is None:
@@ -141,6 +149,8 @@ class AutomationWriter(ProjectWriter):
             payload["GetterCode"] = getter_code
         if setter_code is not None:
             payload["SetterCode"] = setter_code
+        if parent_folder:
+            payload["ParentFolder"] = parent_folder
         return self._call(
             "/property",
             self._with_project(payload, plc_name=plc_name),
@@ -276,6 +286,140 @@ class AutomationWriter(ProjectWriter):
             payload["ItemName"] = item_name
         return self._call(
             "/add-variable", self._with_project(payload, plc_name=plc_name)
+        )
+
+    def delete_pou(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/delete-pou",
+            self._with_project({"Name": name}, plc_name=plc_name),
+        )
+
+    def delete_method(
+        self,
+        pou_name: str,
+        method_name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/delete-method",
+            self._with_project(
+                {"PouName": pou_name, "MethodName": method_name},
+                plc_name=plc_name,
+            ),
+        )
+
+    def delete_property(
+        self,
+        pou_name: str,
+        property_name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/delete-property",
+            self._with_project(
+                {"PouName": pou_name, "PropertyName": property_name},
+                plc_name=plc_name,
+            ),
+        )
+
+    def delete_gvl(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/delete-gvl",
+            self._with_project({"Name": name}, plc_name=plc_name),
+        )
+
+    def delete_dut(
+        self,
+        name: str,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        return self._call(
+            "/delete-dut",
+            self._with_project({"Name": name}, plc_name=plc_name),
+        )
+
+    def delete_variable(
+        self,
+        pou_name: str,
+        variable_name: str,
+        item_name: str | None = None,
+        *,
+        plc_name: str | None = None,
+    ) -> Result:
+        payload: dict[str, Any] = {
+            "PouName": pou_name,
+            "VariableName": variable_name,
+        }
+        if item_name is not None:
+            payload["ItemName"] = item_name
+        return self._call(
+            "/delete-variable",
+            self._with_project(payload, plc_name=plc_name),
+        )
+
+    def delete_folder(
+        self,
+        name: str,
+        *,
+        parent_path: str = "",
+        recursive: bool = False,
+        plc_name: str | None = None,
+    ) -> Result:
+        payload: dict[str, Any] = {
+            "Name": name,
+            "Recursive": recursive,
+        }
+        if parent_path:
+            payload["ParentPath"] = parent_path
+        return self._call(
+            "/delete-folder",
+            self._with_project(payload, plc_name=plc_name),
+        )
+
+    def delete_library_reference(
+        self,
+        consumer_plc_name: str,
+        library_name: str,
+        *,
+        version: str = "*",
+        distributor: str = "Tc3 Project",
+    ) -> Result:
+        return self._call(
+            "/delete-library-reference",
+            self._with_project(
+                {
+                    "LibraryName": library_name,
+                    "Version": version,
+                    "Distributor": distributor,
+                },
+                plc_name=consumer_plc_name,
+            ),
+        )
+
+    def delete_placeholder(
+        self,
+        consumer_plc_name: str,
+        placeholder_name: str,
+    ) -> Result:
+        return self._call(
+            "/delete-placeholder",
+            self._with_project(
+                {"PlaceholderName": placeholder_name},
+                plc_name=consumer_plc_name,
+            ),
         )
 
     def add_plc_project(
