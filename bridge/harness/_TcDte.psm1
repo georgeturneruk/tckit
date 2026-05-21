@@ -65,11 +65,13 @@ function Get-TcKind {
         'function'       { return $script:TcKind.Function }
         'program'        { return $script:TcKind.Program }
         'interface'      { return $script:TcKind.Interface }
-        'method'         { return $script:TcKind.Method }
-        'action'         { return $script:TcKind.Action }
-        'property'       { return $script:TcKind.Property }
-        'property_get'   { return $script:TcKind.PropertyGet }
-        'property_set'   { return $script:TcKind.PropertySet }
+        'method'             { return $script:TcKind.Method }
+        'interface_method'   { return $script:TcKind.InterfaceMethod }
+        'action'             { return $script:TcKind.Action }
+        'property'           { return $script:TcKind.Property }
+        'interface_property' { return $script:TcKind.InterfaceProperty }
+        'property_get'       { return $script:TcKind.PropertyGet }
+        'property_set'       { return $script:TcKind.PropertySet }
         'gvl'            { return $script:TcKind.GVL }
         'struct'         { return $script:TcKind.Struct }
         'enum'           { return $script:TcKind.Enum }
@@ -864,6 +866,37 @@ function Get-TcItemSource {
     return @{ declaration = $decl; implementation = $impl; code = $code }
 }
 
+function Test-TcInterfacePou {
+    <#
+    .SYNOPSIS
+        Return $true when a POU tree item's declaration is an INTERFACE.
+
+    .DESCRIPTION
+        Methods and properties added under an INTERFACE parent must be
+        created with the InterfaceMethod / InterfaceProperty kind, not
+        the regular Method / Property kind — XAE rejects CreateChild
+        otherwise with "Cannot insert '<name>' below '<interface>'".
+
+        Detection is done on the declaration text rather than a COM
+        property because tree items expose no clean "is interface" flag.
+        Block comments, line comments and attribute pragmas are stripped
+        so the first surviving POU keyword wins.
+    #>
+    param([Parameter(Mandatory)]$Item)
+
+    $decl = ''
+    try { $decl = [string]$Item.DeclarationText } catch { return $false }
+    if (-not $decl) { return $false }
+
+    $stripped = $decl
+    $stripped = [regex]::Replace($stripped, '\(\*[\s\S]*?\*\)', ' ')
+    $stripped = [regex]::Replace($stripped, '//[^\r\n]*',       ' ')
+    $stripped = [regex]::Replace($stripped, '\{[^}]*\}',        ' ')
+
+    $m = [regex]::Match($stripped, '(?im)\b(FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE)\b')
+    return $m.Success -and $m.Groups[1].Value.ToUpperInvariant() -eq 'INTERFACE'
+}
+
 # ------------------------------------------------------------------
 # Build via devenv.exe (Express edition has no ToolWindows.ErrorList)
 # ------------------------------------------------------------------
@@ -955,7 +988,7 @@ Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
-    Find-TcChild, Set-TcItemSource, Get-TcItemSource, Split-TcCode, Find-Devenv, `
+    Find-TcChild, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `

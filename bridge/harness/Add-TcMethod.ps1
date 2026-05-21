@@ -60,6 +60,9 @@ try {
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
     $kind = Get-TcKind -Type $ItemType
+    if ($ItemType -eq 'method' -and (Test-TcInterfacePou -Item $pou)) {
+        $kind = Get-TcKind -Type 'interface_method'
+    }
     $newItem = $pou.CreateChild($MethodName, $kind, $null, $null)
 
     if ($Declaration -or $Implementation) {
