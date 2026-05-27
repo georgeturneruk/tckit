@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="F_EndsWith" Id="{1f7dac19-833e-4d40-a03c-3c7468787a8b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_EndsWith : BOOL
+VAR_INPUT
+    s      : STRING;
+    suffix : STRING;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

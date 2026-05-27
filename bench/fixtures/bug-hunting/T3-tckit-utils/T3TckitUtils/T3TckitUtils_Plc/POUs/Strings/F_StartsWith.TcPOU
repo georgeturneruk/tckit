@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="F_StartsWith" Id="{96153f37-1b5d-43e0-bc68-5b729921d176}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_StartsWith : BOOL
+VAR_INPUT
+    s      : STRING;
+    prefix : STRING;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

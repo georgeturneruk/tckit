@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_StringBuilder" Id="{5f4330c0-fdcf-43b1-92f5-22a7ffcee2f1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StringBuilder
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
