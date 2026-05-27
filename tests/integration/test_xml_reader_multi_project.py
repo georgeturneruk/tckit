@@ -111,6 +111,36 @@ def test_solution_path_picks_first_alphabetically_when_multiple(
     assert structure.solution_path == str((tmp_path / "AA_First.sln").resolve())
 
 
+def test_sln_file_path_equivalent_to_directory(
+    multi_project_sln_path: Path,
+) -> None:
+    """A ``.sln`` file path is shorthand for its parent directory.
+
+    The MCP tool docstring documents both forms, and both should yield the
+    same structure. Without the file-path branch the walk silently falls
+    through to the anonymous-fallback path and returns a single empty PLC
+    named after the .sln file — a confusing failure mode for users who
+    follow a tab-completed path.
+    """
+    sln = multi_project_sln_path / "multi_project_sln.sln"
+    from_dir = XmlReader().get_structure(str(multi_project_sln_path))
+    from_sln = XmlReader().get_structure(str(sln))
+
+    # project_path echoes the caller's input verbatim; everything else
+    # should match.
+    assert from_sln.solution_path == from_dir.solution_path
+    assert set(from_sln.plcs) == set(from_dir.plcs)
+    for name, section in from_dir.plcs.items():
+        other = from_sln.plcs[name]
+        assert [p.name for p in other.pous] == [p.name for p in section.pous]
+        assert [g.name for g in other.gvls] == [g.name for g in section.gvls]
+        assert [d.name for d in other.duts] == [d.name for d in section.duts]
+        assert {lib.name for lib in other.libraries} == {
+            lib.name for lib in section.libraries
+        }
+    assert [t.name for t in from_sln.tasks] == [t.name for t in from_dir.tasks]
+
+
 # ---------------------------------------------------------------------------
 # Symbol resolution
 # ---------------------------------------------------------------------------

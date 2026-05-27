@@ -83,10 +83,13 @@ class XmlReader(ProjectReader):
 
         Walks every ``.plcproj`` under the project root and indexes each PLC
         project's POUs / GVLs / DUTs separately. Tasks come from .TcTTO
-        (preferred) and .tsproj (fallback) and live at the solution level —
-        not per PLC project — because TwinCAT tasks are sln-wide.
+        (preferred) and .tsproj (fallback) and live at the solution level,
+        not per PLC project, because TwinCAT tasks are sln-wide.
 
-        :param project_path: Absolute path to the solution root.
+        :param project_path: Absolute path to the solution root directory,
+            or to a ``.sln`` file inside it. Both forms are accepted and
+            produce the same structure; a ``.sln`` path is treated as a
+            shorthand for its parent directory.
         :param plc_name: When given, restrict the index and the returned
             ProjectStructure to a single PLC project. Otherwise scan
             every .plcproj.
@@ -98,6 +101,12 @@ class XmlReader(ProjectReader):
         root = Path(project_path)
         if not root.exists():
             raise FileNotFoundError(f"Project path not found: {project_path}")
+
+        # Accept a .sln file path as shorthand for its containing directory.
+        # Without this, rglob() against a file path yields nothing and the
+        # walk silently produces an anonymous empty PLC named after the .sln.
+        if root.is_file() and root.suffix.lower() == ".sln":
+            root = root.parent
 
         sln_paths = sorted(root.rglob("*.sln"))
         solution_path = str(sln_paths[0].resolve()) if sln_paths else ""
