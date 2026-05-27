@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <DUT Name="ST_Sample" Id="{6c7f18d1-5fa7-4c87-927b-da332acf5e47}">
+    <Declaration><![CDATA[TYPE ST_Sample :
+STRUCT
+    t : LREAL;
+    v : LREAL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_RingBuffer" Id="{33c9426c-7440-438e-b718-b6fa38b9b4e1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RingBuffer
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

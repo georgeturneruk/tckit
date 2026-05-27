@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="F_Contains" Id="{83736892-b9f9-479f-8686-bbc3853ffa25}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_Contains : BOOL
+VAR_INPUT
+    s      : STRING;
+    needle : STRING;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

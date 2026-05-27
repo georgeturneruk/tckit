@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_StringTests" Id="{94b2db85-066b-47f7-8c11-084a22e4e0a1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StringTests EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[BuilderEmptyOnInit();
+BuilderAppendOnce();
+BuilderAppendMany();
+BuilderAppendOverflowReturnsFalse();
+BuilderClearResetsLength();
+TrimStripsSurroundingWhitespace();
+StartsWithEndsWithBoundaries();
+ContainsFindsSubstring();
+]]></ST>
+    </Implementation>
+    <Method Name="BuilderAppendMany" Id="{fb906b1b-7292-4f6e-8d94-b98cad357715}">
+      <Declaration><![CDATA[METHOD BuilderAppendMany : BOOL
+VAR
+    sb : T3TckitUtils_Plc.FB_StringBuilder;
+    i  : DINT;
+    ok : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    ok := TRUE;
+    FOR i := 1 TO 500 DO
+        ok := ok AND sb.Append('ab');
+    END_FOR
+    AssertTrue(Condition := ok,
+        Message := 'Each of the 500 two-byte appends must succeed (1000 < 4095)');
+    AssertEquals_UDINT(Expected := 1000, Actual := sb.Length,
+        Message := 'Length after 500 x "ab" must be 1000');
+    AssertFalse(Condition := sb.IsFull,
+        Message := 'IsFull must remain FALSE while Length < Capacity');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BuilderAppendOnce" Id="{f9ec2d8d-3f3c-434f-8543-fcadf8575dc0}">
+      <Declaration><![CDATA[METHOD BuilderAppendOnce : BOOL
+VAR
+    sb       : T3TckitUtils_Plc.FB_StringBuilder;
+    buf      : ARRAY[1..32] OF BYTE;
+    written  : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    AssertTrue(Condition := sb.Append('hello'),
+        Message := 'Append("hello") must succeed on an empty builder');
+    AssertEquals_UDINT(Expected := 5, Actual := sb.Length,
+        Message := 'Length after Append("hello") must be 5');
+    written := sb.CopyTo(ADR(buf), SIZEOF(buf));
+    AssertEquals_UDINT(Expected := 5, Actual := written,
+        Message := 'CopyTo must report 5 payload bytes');
+    AssertEquals_BYTE(Expected := 16#68, Actual := buf[1],
+        Message := 'First copied byte must be ASCII "h" (0x68)');
+    AssertEquals_BYTE(Expected := 16#6F, Actual := buf[5],
+        Message := 'Fifth copied byte must be ASCII "o" (0x6F)');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BuilderAppendOverflowReturnsFalse" Id="{401f1bb2-4aa9-40de-877d-5f4517db9c01}">
+      <Declaration><![CDATA[METHOD BuilderAppendOverflowReturnsFalse : BOOL
+VAR
+    sb        : T3TckitUtils_Plc.FB_StringBuilder;
+    i         : DINT;
+    rejected  : BOOL;
+    lengthAt  : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    rejected := FALSE;
+    FOR i := 1 TO 4100 DO
+        IF NOT sb.Append('X') THEN
+            rejected := TRUE;
+            lengthAt := sb.Length;
+            EXIT;
+        END_IF
+    END_FOR
+    AssertTrue(Condition := rejected,
+        Message := 'A single-byte Append must return FALSE before 4100 calls have completed');
+    AssertEquals_UDINT(Expected := 4095, Actual := lengthAt,
+        Message := 'Length at refusal point must equal Capacity (4095)');
+    AssertTrue(Condition := sb.IsFull,
+        Message := 'IsFull must be TRUE at the refusal point');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BuilderClearResetsLength" Id="{85fb6740-6e3e-4550-9b7a-de3daa69ea40}">
+      <Declaration><![CDATA[METHOD BuilderClearResetsLength : BOOL
+VAR
+    sb : T3TckitUtils_Plc.FB_StringBuilder;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    sb.Append('payload');
+    AssertTrue(Condition := sb.Length > 0,
+        Message := 'Builder must have non-zero Length before Clear for the test to be meaningful');
+    sb.Clear();
+    AssertEquals_UDINT(Expected := 0, Actual := sb.Length,
+        Message := 'Clear must zero Length');
+    AssertTrue(Condition := sb.Append('again'),
+        Message := 'Append after Clear must succeed');
+    AssertEquals_UDINT(Expected := 5, Actual := sb.Length,
+        Message := 'Length must reflect the post-Clear Append');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="BuilderEmptyOnInit" Id="{2ac897f4-6f7c-4c73-96d3-6cb20c387983}">
+      <Declaration><![CDATA[METHOD BuilderEmptyOnInit : BOOL
+VAR
+    sb : T3TckitUtils_Plc.FB_StringBuilder;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    AssertEquals_UDINT(Expected := 0, Actual := sb.Length,
+        Message := 'Freshly constructed builder Length must be 0');
+    AssertFalse(Condition := sb.IsFull,
+        Message := 'Freshly constructed builder IsFull must be FALSE');
+    AssertEquals_UDINT(Expected := 4095, Actual := sb.Capacity,
+        Message := 'Builder Capacity must be the documented 4095 bytes');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ContainsFindsSubstring" Id="{f930843a-c618-4abf-a0f5-c0c451b90807}">
+      <Declaration><![CDATA[METHOD ContainsFindsSubstring : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    AssertTrue(Condition := T3TckitUtils_Plc.F_Contains('one two three', 'two'),
+        Message := 'F_Contains must find an interior substring');
+    AssertFalse(Condition := T3TckitUtils_Plc.F_Contains('abc', 'd'),
+        Message := 'F_Contains must return FALSE when the needle is absent');
+    AssertTrue(Condition := T3TckitUtils_Plc.F_Contains('any', ''),
+        Message := 'F_Contains with an empty needle must return TRUE');
+    AssertFalse(Condition := T3TckitUtils_Plc.F_Contains('', 'x'),
+        Message := 'F_Contains over an empty string must return FALSE for a non-empty needle');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StartsWithEndsWithBoundaries" Id="{b8f3f9b9-e5aa-432b-995f-fa7c91284e69}">
+      <Declaration><![CDATA[METHOD StartsWithEndsWithBoundaries : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    AssertTrue(Condition := T3TckitUtils_Plc.F_StartsWith('foobar', 'foo'),
+        Message := 'F_StartsWith must return TRUE for a matching prefix');
+    AssertFalse(Condition := T3TckitUtils_Plc.F_StartsWith('foo', 'foobar'),
+        Message := 'F_StartsWith must return FALSE when the prefix is longer than the string');
+    AssertTrue(Condition := T3TckitUtils_Plc.F_StartsWith('anything', ''),
+        Message := 'F_StartsWith with an empty prefix must return TRUE');
+    AssertTrue(Condition := T3TckitUtils_Plc.F_EndsWith('foobar', 'bar'),
+        Message := 'F_EndsWith must return TRUE for a matching suffix');
+    AssertFalse(Condition := T3TckitUtils_Plc.F_EndsWith('bar', 'foobar'),
+        Message := 'F_EndsWith must return FALSE when the suffix is longer than the string');
+    AssertTrue(Condition := T3TckitUtils_Plc.F_EndsWith('anything', ''),
+        Message := 'F_EndsWith with an empty suffix must return TRUE');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TrimStripsSurroundingWhitespace" Id="{f4c22934-9964-47e2-9473-99ba42076a8a}">
+      <Declaration><![CDATA[METHOD TrimStripsSurroundingWhitespace : BOOL]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF TEST_ORDERED(__POUNAME()) THEN
+    AssertEquals_STRING(Expected := 'hi', Actual := T3TckitUtils_Plc.F_Trim('  hi  '),
+        Message := 'F_Trim must strip surrounding spaces');
+    AssertEquals_STRING(Expected := 'hi', Actual := T3TckitUtils_Plc.F_Trim('$Thi$N'),
+        Message := 'F_Trim must strip tab/CR/LF as well as space');
+    AssertEquals_STRING(Expected := '', Actual := T3TckitUtils_Plc.F_Trim(''),
+        Message := 'F_Trim of the empty string must return the empty string');
+    AssertEquals_STRING(Expected := 'inner space', Actual := T3TckitUtils_Plc.F_Trim('inner space'),
+        Message := 'F_Trim must preserve internal whitespace');
+    TEST_FINISHED();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
