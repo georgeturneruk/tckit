@@ -14,7 +14,8 @@ This skill orchestrates first-time setup and ongoing edits via the `tckit` CLI. 
 - **`tckit init --print`** — emit the bundled template to stdout. The skill uses this as its single source of truth for the template content.
 - **`tckit config show`** — print resolved config and its sources.
 - **`tckit config validate`** — check the config for malformed values (returns non-zero on issues).
-- **`tckit doctor`** — run health checks: config file present + config validation + bridge reachability.
+- **`tckit doctor`** — run health checks: config file present + config validation + bridge reachability. When the bridge is reachable but its launcher isn't installed yet, doctor offers to run `tckit bridge install` for you.
+- **`tckit bridge install`** — copy the bundled Windows bridge (`Start-Bridge.ps1` + `harness/`) to `~/.tckit/bridge/`. Refuses to overwrite without `--force`.
 
 ## When the user wants to set up TcKit
 
@@ -50,11 +51,11 @@ If a file already exists and the user said yes to overwrite, prefer `tckit init 
 
 ### Verify
 
-Run `tckit doctor` and surface the result. If the bridge is down (typical on first-run before `Start-Bridge.ps1` has launched), tell the user to start it in a separate PowerShell window with TcXaeShell open, and retry.
+Run `tckit doctor` and surface the result. If the bridge is down on first run, doctor will offer to install the bundled bridge to `~/.tckit/bridge/`; accept the prompt (or run `tckit bridge install` manually). Then tell the user to start `~/.tckit/bridge/Start-Bridge.ps1` in a separate PowerShell window with TcXaeShell open, and retry.
 
 ### Final prompt
 
-"Done. Open or reload Claude Code, then ask a real question to use TcKit. The Windows bridge (`.\bridge\Start-Bridge.ps1`) needs to be running for write/build/deploy/test tools to work; read-only tools work without it."
+"Done. Open or reload Claude Code, then ask a real question to use TcKit. The Windows bridge (`~/.tckit/bridge/Start-Bridge.ps1`) needs to be running for write/build/deploy/test tools to work; read-only tools work without it."
 
 ## When the user wants to change just one thing
 
@@ -74,7 +75,8 @@ Run `tckit doctor` and read the FAIL lines. Map common failures to next steps:
 
 - **Config file FAIL** ("no config file at ..., TARGET_AMS_ID unset") → run `tckit init`, then edit `~/.tckit/config.toml`.
 - **Config FAIL** with NetId issues → drive the edit flow above.
-- **Bridge FAIL** → tell them to start the bridge with `.\bridge\Start-Bridge.ps1`. Verify TcXaeShell is open first.
+- **Bridge FAIL, launcher not installed yet** → accept doctor's install prompt, or run `tckit bridge install` manually, then start `~/.tckit/bridge/Start-Bridge.ps1` in a PowerShell window with TcXaeShell open.
+- **Bridge FAIL, launcher already at `~/.tckit/bridge/`** → tell them to start `~/.tckit/bridge/Start-Bridge.ps1` in a PowerShell window. Verify TcXaeShell is open first.
 - **Bridge dependencies FAIL** → re-run `tckit doctor` and accept the install prompt, or `Install-Module -Name <name> -Scope CurrentUser -Force` manually.
 
 ## Anti-patterns

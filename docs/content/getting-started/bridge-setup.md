@@ -29,7 +29,13 @@ The bridge requires `>= 6.0` to cover both TwinCAT 4024 and 4026 sites. `tckit d
 
 ## Starting the bridge
 
-Open PowerShell as Administrator in the TcKit directory:
+If you installed via the plugin or pip, run `tckit bridge install` once to copy the bundled bridge to `~/.tckit/bridge/`, then start it from there:
+
+```powershell
+~/.tckit/bridge/Start-Bridge.ps1
+```
+
+Contributors working from a repo checkout can run the source copy directly so edits to bridge code take effect without reinstalling:
 
 ```powershell
 .\bridge\Start-Bridge.ps1
@@ -40,7 +46,7 @@ The bridge listens on `http://localhost:8765` by default.
 To use a different port:
 
 ```powershell
-.\bridge\Start-Bridge.ps1 -Port 9000
+~/.tckit/bridge/Start-Bridge.ps1 -Port 9000
 ```
 
 ## Verify the bridge is running
