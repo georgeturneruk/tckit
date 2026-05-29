@@ -54,6 +54,18 @@ def test_unknown_subcommand_rejected() -> None:
         parser.parse_args(["bogus-subcommand"])
 
 
+def test_bridge_install_recognised() -> None:
+    args = cli._build_parser().parse_args(["bridge", "install"])
+    assert args.command == "bridge"
+    assert args.bridge_command == "install"
+    assert args.force is False
+
+
+def test_bridge_install_force_flag() -> None:
+    args = cli._build_parser().parse_args(["bridge", "install", "--force"])
+    assert args.force is True
+
+
 # ---------------------------------------------------------------------------
 # main() dispatch — each subcommand routes correctly
 # ---------------------------------------------------------------------------
@@ -743,3 +755,186 @@ def test_doctor_surfaces_claude_md_nudge_when_applicable(
     assert rc == 0
     assert "[INFO] CLAUDE.md" in out
     assert "tckit init --with-claude-md" in out
+
+
+# ---------------------------------------------------------------------------
+# _bridge_install — copy bundled bridge to ~/.tckit/bridge/
+# ---------------------------------------------------------------------------
+
+
+def test_main_dispatches_bridge_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, bool] = {}
+
+    def fake_install(force: bool = False) -> int:
+        captured["force"] = force
+        return 0
+
+    monkeypatch.setattr(cli, "_bridge_install", fake_install)
+    rc = cli.main(["bridge", "install", "--force"])
+    assert rc == 0
+    assert captured["force"] is True
+
+
+def test_bridge_install_copies_launcher_and_harness(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._bridge_install()
+    assert rc == 0
+
+    installed = tmp_path / "bridge"
+    assert (installed / "Start-Bridge.ps1").exists()
+    assert (installed / "harness").is_dir()
+    # Harness must be non-empty (the actual cmdlets ship inside).
+    assert any((installed / "harness").iterdir())
+    # tests/ is dev-only and must not be copied.
+    assert not (installed / "tests").exists()
+    assert "Installed bridge to" in buf.getvalue()
+
+
+def test_bridge_install_refuses_to_overwrite_without_force(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    existing = tmp_path / "bridge"
+    existing.mkdir()
+    (existing / "sentinel.txt").write_text("hands off", encoding="utf-8")
+
+    rc = cli._bridge_install()
+    assert rc == 1
+    # Existing tree must be untouched.
+    assert (existing / "sentinel.txt").read_text(encoding="utf-8") == "hands off"
+    err = capsys.readouterr().err
+    assert "already exists" in err
+    assert "--force" in err
+
+
+def test_bridge_install_force_overwrites_existing(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    existing = tmp_path / "bridge"
+    existing.mkdir()
+    (existing / "stale.txt").write_text("stale", encoding="utf-8")
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._bridge_install(force=True)
+    assert rc == 0
+    # Stale file gone, fresh bridge in its place.
+    assert not (existing / "stale.txt").exists()
+    assert (existing / "Start-Bridge.ps1").exists()
+
+
+def test_bridge_install_reports_missing_source_cleanly(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+
+    def raise_missing():
+        raise FileNotFoundError("bridge files vanished from the wheel")
+
+    monkeypatch.setattr(cli, "_bridge_source_root", raise_missing)
+
+    rc = cli._bridge_install()
+    assert rc == 1
+    assert "vanished" in capsys.readouterr().err
+    assert not (tmp_path / "bridge").exists()
+
+
+# ---------------------------------------------------------------------------
+# Doctor x bridge-install integration
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_offers_to_install_bridge_when_down_and_not_installed(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bridge unreachable, no launcher on disk: doctor prompts to install."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (False, "not reachable")
+    )
+    _stub_doctor_deps(monkeypatch, {})
+    monkeypatch.setattr("tckit.cli._prompt_yes", lambda question: True)
+    called: dict[str, bool] = {}
+
+    def fake_install(force: bool = False) -> int:
+        called["install"] = True
+        return 0
+
+    monkeypatch.setattr("tckit.cli._bridge_install", fake_install)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=False)
+    assert rc == 1  # bridge still down for this run
+    assert called.get("install") is True
+
+
+def test_doctor_no_install_skips_bridge_install_prompt(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`tckit doctor --no-install` must never reach for the install path."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (False, "not reachable")
+    )
+    _stub_doctor_deps(monkeypatch, {})
+
+    def reject_install(force: bool = False) -> int:
+        raise AssertionError("_bridge_install must not be called with --no-install")
+
+    monkeypatch.setattr("tckit.cli._bridge_install", reject_install)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=True)
+    assert rc == 1
+    # Hint should still point at the install command, not the contributor path.
+    assert "tckit bridge install" in buf.getvalue()
+
+
+def test_doctor_hint_uses_installed_path_when_launcher_present(
+    tmp_path,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bridge down but already installed locally: hint points at the installed launcher."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    (tmp_path / "bridge").mkdir()
+    (tmp_path / "bridge" / "Start-Bridge.ps1").write_text("# stub", encoding="utf-8")
+
+    _stub_config_file_present(monkeypatch)
+    monkeypatch.setattr("tckit.cli.validate_config", lambda cfg: [])
+    monkeypatch.setattr(
+        "tckit.cli.bridge_health", lambda url=None: (False, "not reachable")
+    )
+    _stub_doctor_deps(monkeypatch, {})
+
+    def reject_install(force: bool = False) -> int:
+        raise AssertionError("install must not be offered when launcher exists")
+
+    monkeypatch.setattr("tckit.cli._bridge_install", reject_install)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = cli._doctor(no_install=False)
+    assert rc == 1
+    out = buf.getvalue()
+    assert str(tmp_path / "bridge" / "Start-Bridge.ps1") in out
+    assert "tckit bridge install" not in out

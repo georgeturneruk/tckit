@@ -35,7 +35,8 @@ class ProjectReader(ABC):
     ) -> ProjectStructure:
         """Return the top-level map of POUs, GVLs, and tasks per PLC project.
 
-        :param project_path: Absolute path to the solution root.
+        :param project_path: Absolute path to the solution root directory,
+            or to a ``.sln`` file inside it (both forms are accepted).
         :param plc_name: When given, restrict the walk to a single PLC project;
             otherwise scan every ``.plcproj`` under ``project_path``.
         :returns: ProjectStructure keyed by PLC-project name.

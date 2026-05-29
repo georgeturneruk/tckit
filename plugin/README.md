@@ -24,14 +24,15 @@ The bundled `tc-config` skill drives a guided init: prompts for your AMS Net IDs
 - **Claude Code** (CLI / IDE extension / desktop app).
 - **`uv`** — install via `pip install uv` or your platform's installer. The plugin's MCP server runs as `uvx tckit`, which fetches the Python package from PyPI on first use.
 - **TwinCAT 3.1 Build 4026** + **TcXaeShell** on a Windows host (only required for write/build/deploy/test; read-only operations work without it).
-- **Bridge service**: run `.\bridge\Start-Bridge.ps1` in a separate PowerShell window to expose TcXaeShell COM to TcKit. Requires TcXaeShell to be open.
+- **Bridge service**: run `tckit bridge install` once to copy the bundled Windows bridge to `~/.tckit/bridge/`, then start `~/.tckit/bridge/Start-Bridge.ps1` in a separate PowerShell window. `tckit doctor` will offer to run the install for you the first time. Requires TcXaeShell to be open.
 
 ## What you get
 
-Five skills that load on demand based on what you ask:
+Six skills that load on demand based on what you ask:
 
 | Skill | Loads when |
 |-------|------------|
+| `tckit:tc-orient-project` | First touch on a TwinCAT project ("what's in this project") |
 | `tckit:tc-read-project` | Inspecting / navigating a TwinCAT project |
 | `tckit:tc-beckhoff-docs` | Researching a Beckhoff library FB or function |
 | `tckit:tc-write-st` | Writing or modifying Structured Text |

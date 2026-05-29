@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tckit"
-version = "0.2.1"
+version = "0.3.0"
 description = "AI-assisted development toolchain for TwinCAT 3 PLC engineering"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -58,6 +58,15 @@ packages = ["tckit"]
 # tckit/templates/config.toml.example is package data used by `tckit init`
 # and `tckit init --print`. Hatch picks it up automatically because it lives
 # inside the `tckit` package directory.
+
+# The Windows bridge lives at `bridge/` at the repo root so contributors can
+# run `.\bridge\Start-Bridge.ps1` directly during dev. For end users on the
+# plugin or pip install path it ships as package data under `tckit/_bridge/`,
+# from where `tckit bridge install` copies it to `~/.tckit/bridge/`. Tests
+# are dev-only and excluded.
+[tool.hatch.build.targets.wheel.force-include]
+"bridge/Start-Bridge.ps1" = "tckit/_bridge/Start-Bridge.ps1"
+"bridge/harness" = "tckit/_bridge/harness"
 
 [tool.ruff]
 target-version = "py311"

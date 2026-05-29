@@ -138,7 +138,9 @@ def get_structure(project_path: str, plc_name: str = "") -> str:
     If ``plcs`` has more than one entry, pass ``plc_name`` on that same
     first ``build()`` call to skip the multi-PLC disambiguation step.
 
-    :param project_path: Absolute path to the solution root.
+    :param project_path: Absolute path to the solution root directory, or
+        to a ``.sln`` file inside it. Both forms are accepted; the ``.sln``
+        path is treated as a shorthand for its parent directory.
     :param plc_name: Optional PLC project to restrict the walk to. Leave
         empty to scan every ``.plcproj``.
     """

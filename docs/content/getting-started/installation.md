@@ -48,10 +48,16 @@ Docker mode is supported for CI and contributor workflows, not as a user install
 
 ## Bridge (Windows, for write/build/deploy/test)
 
-Both install paths use the same bridge service for write operations. In a separate PowerShell window with TcXaeShell open:
+Both install paths use the same bridge service for write operations. The bridge ships inside the `tckit` Python package; install it to `~/.tckit/bridge/` with:
 
 ```powershell
-.\bridge\Start-Bridge.ps1
+tckit bridge install
+```
+
+(`tckit doctor` will offer to run this for you when it spots that the bridge is down and not yet installed.) Then, in a separate PowerShell window with TcXaeShell open:
+
+```powershell
+~/.tckit/bridge/Start-Bridge.ps1
 ```
 
 See [Bridge Setup](bridge-setup.md) for firewall and XAE-mode details.

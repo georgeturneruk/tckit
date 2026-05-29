@@ -10,6 +10,7 @@ Dispatches subcommands:
 - ``tckit config show``            print resolved config and its sources.
 - ``tckit config validate``        check config for missing or malformed values.
 - ``tckit doctor``                 run health checks (config + bridge).
+- ``tckit bridge install``         copy the bundled bridge to ``~/.tckit/bridge/``.
 - ``tckit docgen SRC OUT``         render HTML docs from a TwinCAT solution.
 
 The console script ``tckit`` is wired to :func:`main` via ``pyproject.toml``.
@@ -21,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from importlib import resources
 from pathlib import Path
@@ -113,6 +115,24 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # `tckit bridge install`
+    bridge_parser = sub.add_parser(
+        "bridge",
+        help="Manage the Windows bridge service shipped with tckit.",
+    )
+    bridge_sub = bridge_parser.add_subparsers(
+        dest="bridge_command", metavar="SUBCOMMAND"
+    )
+    bridge_install_parser = bridge_sub.add_parser(
+        "install",
+        help="Copy the bundled bridge to ~/.tckit/bridge/.",
+    )
+    bridge_install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite ~/.tckit/bridge/ if it already exists.",
+    )
+
     # `tckit docgen <project_path> <output_path>`
     docgen_parser = sub.add_parser(
         "docgen",
@@ -152,6 +172,13 @@ def main(argv: list[str] | None = None) -> int:
             print_only=args.print_only,
             with_claude_md=args.with_claude_md,
         )
+
+    if args.command == "bridge":
+        if args.bridge_command == "install":
+            return _bridge_install(force=args.force)
+        # `tckit bridge` with no subcommand: print the bridge-subcommand help.
+        parser.parse_args(["bridge", "--help"])
+        return 0
 
     if args.command == "docgen":
         return _docgen(args.project_path, args.output_path)
@@ -296,6 +323,76 @@ def _init(
     return 0
 
 
+def _bridge_source_root() -> Path:
+    """Locate the bundled bridge tree.
+
+    Wheel installs find it at ``tckit/_bridge/`` (force-included by hatch).
+    Editable installs from a source checkout don't have ``tckit/_bridge/``;
+    fall back to the repo's ``bridge/`` directory so contributors can drive
+    the install command from a dev checkout without building a wheel first.
+    """
+    wheel_path = Path(__file__).parent / "_bridge"
+    if (wheel_path / "Start-Bridge.ps1").exists():
+        return wheel_path
+
+    repo_path = Path(__file__).parent.parent / "bridge"
+    if (repo_path / "Start-Bridge.ps1").exists():
+        return repo_path
+
+    raise FileNotFoundError(
+        "Could not locate the bundled bridge files. This is a packaging "
+        "bug; please file an issue at "
+        "https://github.com/georgeturneruk/tckit/issues."
+    )
+
+
+def _bridge_install(force: bool = False) -> int:
+    """Copy the bundled bridge tree into ``~/.tckit/bridge/``.
+
+    Mirrors ``tckit init``'s overwrite behaviour: refuses to clobber an
+    existing directory unless ``--force`` is passed. The bridge tests
+    directory is dev-only and intentionally excluded from the wheel, so
+    end users only get ``Start-Bridge.ps1`` and ``harness/``.
+    """
+    try:
+        src = _bridge_source_root()
+    except FileNotFoundError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    dst = _user_home() / "bridge"
+
+    if dst.exists() and not force:
+        print(
+            f"{dst} already exists. Re-run with --force to overwrite, or "
+            "delete it first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    if dst.exists():
+        shutil.rmtree(dst)
+
+    # Copy only the runtime files: Start-Bridge.ps1 + harness/. Skip tests/
+    # even when the source is the repo (editable install), to keep the
+    # installed tree identical in both layouts.
+    dst.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src / "Start-Bridge.ps1", dst / "Start-Bridge.ps1")
+    shutil.copytree(src / "harness", dst / "harness")
+
+    print(f"Installed bridge to {dst}")
+    print(
+        "Start it in a separate PowerShell window with TcXaeShell open:\n"
+        f"  {dst / 'Start-Bridge.ps1'}"
+    )
+    return 0
+
+
+def _bridge_installed_script() -> Path:
+    """Where ``tckit bridge install`` lands the launcher."""
+    return _user_home() / "bridge" / "Start-Bridge.ps1"
+
+
 def _docgen(project_path: str, output_path: str) -> int:
     """Run the HTML doc generator against a TwinCAT solution."""
     from tckit.adapters.doc_generators.html_generator import HtmlGenerator
@@ -355,7 +452,7 @@ def _doctor(no_install: bool = False) -> int:
         if not deps:
             dep_lines.append(
                 "bridge /health returned no dependencies block "
-                "(older bridge? upgrade Start-Bridge.ps1)"
+                "(older bridge? run `tckit bridge install --force` to refresh)"
             )
         else:
             for name, version in sorted(deps.items()):
@@ -406,6 +503,23 @@ def _doctor(no_install: bool = False) -> int:
                     f"    Install-Module -Name {dep} -Scope CurrentUser -Force"
                 )
 
+    # Offer to install the bridge itself if it's down and not yet on disk.
+    # This is the typical first-run state for users coming in via the
+    # Claude Code plugin: the MCP server is running but they have no
+    # ~/.tckit/bridge/ because nothing has copied it there yet.
+    installed_script = _bridge_installed_script()
+    if not bridge_ok and not installed_script.exists() and not no_install:
+        if _prompt_yes(
+            f"\nBridge isn't reachable and {installed_script} doesn't exist. "
+            "Install the bundled bridge to ~/.tckit/bridge/ now?"
+        ):
+            rc = _bridge_install(force=False)
+            if rc == 0:
+                print(
+                    f"\nNow start it: {installed_script}\n"
+                    "(open in a PowerShell window with TcXaeShell running)"
+                )
+
     nudge = _claude_md_nudge()
     if nudge:
         print("\n[INFO] CLAUDE.md")
@@ -415,10 +529,20 @@ def _doctor(no_install: bool = False) -> int:
     print(f"Overall: {'PASS' if overall else 'FAIL'}")
     if not overall:
         if not bridge_ok:
-            print(
-                "\nHint: if the bridge is down, start it with .\\bridge\\Start-Bridge.ps1 "
-                "(Windows) or check BRIDGE_URL."
-            )
+            installed_script = _bridge_installed_script()
+            if installed_script.exists():
+                print(
+                    f"\nHint: start the bridge with {installed_script} in a "
+                    "PowerShell window with TcXaeShell open, or check BRIDGE_URL."
+                )
+            else:
+                print(
+                    "\nHint: bridge isn't installed yet. Run `tckit bridge install` "
+                    "to copy it to ~/.tckit/bridge/Start-Bridge.ps1, then start it "
+                    "in a PowerShell window with TcXaeShell open. Contributors "
+                    "working from a repo checkout can also run "
+                    ".\\bridge\\Start-Bridge.ps1 directly."
+                )
         elif missing_deps and no_install:
             print(
                 "\nHint: bridge dependencies missing. Run without --no-install "

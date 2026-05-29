@@ -107,6 +107,8 @@ PLC_PROJECT_PATH=/path/to/my/plc/project
 
 Recursively scans `project_path` for `*.TcPOU`, `*.TcGVL`, and `*.TcDUT` files. Populates an internal file index (name → path) reused by all subsequent calls.
 
+`project_path` accepts either the solution root directory or a `.sln` file inside it; the `.sln` form is treated as a shorthand for its parent directory.
+
 ```python
 structure = reader.get_structure("/projects/MyPLC")
 section = structure.plcs["MyPLC"]

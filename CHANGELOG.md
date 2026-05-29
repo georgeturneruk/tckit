@@ -4,6 +4,29 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-05-27
+
+### Added
+
+- **`tckit bridge install`.** The Windows bridge (`Start-Bridge.ps1` and its
+  `harness/`) now ships as package data inside the `tckit` wheel and can be
+  copied to `~/.tckit/bridge/` with a single CLI command. Closes the plugin
+  install-path gap where users had no way to obtain the bridge without also
+  cloning the repo. Refuses to overwrite without `--force`.
+- **`tckit doctor` install prompt.** When the bridge is unreachable and the
+  launcher isn't yet at `~/.tckit/bridge/Start-Bridge.ps1`, doctor offers to
+  run the install for you, mirroring the existing prompt pattern for missing
+  PowerShell-module dependencies. Hint output now points at the installed
+  path, with a separate contributor-path note for repo checkouts.
+
+### Changed
+
+- **Plugin bundle.** The `tc-orient-project` skill is now listed in the
+  plugin README's skills table (it was already shipped but undocumented).
+- **Manifests.** `plugin/.claude-plugin/plugin.json` and
+  `.claude-plugin/marketplace.json` were stuck at 0.2.0 while the Python
+  package moved to 0.2.1; this release re-aligns all three at 0.3.0.
+
 ## [0.2.1] - 2026-05-18
 
 ### Changed
@@ -103,5 +126,6 @@ Five skills now ship: `tc-read-project`, `tc-beckhoff-docs`, `tc-write-st`,
 `tc-build-test-loop`, `tc-config`. The first four were introduced in #23 (a
 0.1.x change); `tc-config` is new in 0.2.0.
 
+[0.3.0]: https://github.com/georgeturneruk/tckit/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/georgeturneruk/tckit/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/georgeturneruk/tckit/releases/tag/v0.2.0
