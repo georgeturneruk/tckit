@@ -7,7 +7,10 @@
 !.env.example
 docs/
 scripts/
-bridge/
+# bridge/Start-Bridge.ps1 and bridge/harness are force-included into the
+# wheel by pyproject.toml, so they must be visible to Hatchling during
+# `pip install -e .`. Only the dev-only bridge tests get excluded.
+bridge/tests/
 cache/
 site/
 *.md
