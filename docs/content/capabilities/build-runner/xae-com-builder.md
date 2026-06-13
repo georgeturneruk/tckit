@@ -23,11 +23,9 @@ Builds TwinCAT projects via the Windows bridge → COM automation interface and 
 Two-tier build inside `Invoke-TcBuild.ps1`:
 
 1. **Tier 1 — fast in-process compile check.** Calls `ITcPlcIECProject2.CheckAllObjects()` on the PLC project node. Returns `True` when the PLC source compiles cleanly, `False` when there are errors. This is the happy-path signal — no extra processes spawned.
-2. **Tier 2 — structured diagnostics.** When tier 1 returns `False` (or `ForceLog` is set), the harness reads the IDE **Error List** (`DTE.ToolWindows.ErrorList`), which holds the actual PLC errors, warnings and info messages with file, line, compiler `code` and `project`. On TcXaeShell **Express**, which doesn't expose the Error List, it falls back to a `/rebuild … /out <build.txt>` build-output parse:
+2. **Tier 2 — structured diagnostics.** When tier 1 returns `False` (or `ForceLog` is set), the harness reads the IDE **Error List** (`DTE.ToolWindows.ErrorList`), which holds the actual PLC errors, warnings and info messages with file, line, compiler `code` and `project`. This needs a full TcXaeShell or Visual Studio.
 
-    ```powershell
-    TcXaeShell.exe <sln> /rebuild "Release|TwinCAT RT (x64)" /out <build.txt>
-    ```
+    **TcXaeShell Express** exposes neither the Error List nor the Output window to automation (and `/rebuild /out` writes nothing), so per-error detail can't be retrieved there. On Express the build still reports pass/fail correctly and returns a message saying detail isn't available — open the solution in TcXaeShell to read the errors, or point `DEVENV_PATH` at a full TcXaeShell / Visual Studio, which the harness then drives with `/rebuild … /out <build.txt>`.
 
 ## Error format
 

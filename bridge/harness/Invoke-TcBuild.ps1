@@ -85,11 +85,28 @@ try {
     # editions that don't expose ToolWindows.ErrorList (Express).
     if (-not $checkOk -or $ForceLog) {
         $el = Read-TcErrorList -Dte $dte
+        $edition = ''
+        try { $edition = [string]$dte.Edition } catch { }
         if ($null -ne $el) {
+            # Full TcXaeShell / Visual Studio: the Error List has the real
+            # PLC diagnostics.
             $errors   = @($el.errors)
             $warnings = @($el.warnings)
             $infos    = @($el.infos)
+        } elseif ($edition -eq 'Express') {
+            # TcXaeShell Express exposes neither the Error List nor the
+            # Output window to automation, and /out writes nothing, so
+            # per-error detail can't be retrieved. Skip the slow, pointless
+            # rebuild and report the failure honestly.
+            if (-not $checkOk) {
+                $errors += @{
+                    file = ''; line = 0; severity = 'error'; code = ''; project = ''
+                    message = "PLC compile failed. TcXaeShell Express does not expose the Error List or build output to automation, so per-error detail isn't available here. Open the solution in TcXaeShell to see the errors, or build with full TcXaeShell / Visual Studio (set DEVENV_PATH)."
+                }
+            }
         } else {
+            # Non-Express edition that still didn't expose the Error List
+            # (unusual). Try a /out build-output parse.
             $outPath = Join-Path $env:TEMP "tckit-build-$([Guid]::NewGuid()).txt"
             try {
                 $code = Invoke-TcDevenvBuild -SolutionPath $ProjectPath -OutPath $outPath `
@@ -100,7 +117,7 @@ try {
                 if ($code -ne 0 -and $errors.Count -eq 0) {
                     $errors += @{
                         file = ''; line = 0; severity = 'error'; code = ''; project = ''
-                        message = "devenv.exe /rebuild exit code $code (no structured diagnostics parsed; check $outPath)"
+                        message = "Build failed (devenv exit code $code) and no structured diagnostics could be parsed from the build output."
                     }
                 }
             } finally {
