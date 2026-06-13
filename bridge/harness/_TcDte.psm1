@@ -1207,6 +1207,35 @@ function Read-TcBuildLog {
     return @{ errors = $errors; warnings = $warnings }
 }
 
+function Get-TcActivateHint {
+    <#
+    .SYNOPSIS
+        Map a known deploy / activate / licence COM failure to a short,
+        actionable hint. Returns '' when nothing specific matches, so the
+        caller can append it to the raw message without clutter.
+
+    .DESCRIPTION
+        ActivateConfiguration and friends surface opaque COM errors
+        (E_UNEXPECTED from FindActiveProjectCfgName when no solution
+        configuration is selected, ADS licence HRESULTs when the target
+        has no TwinCAT 3 licence). We match on the message text rather than
+        brittle HRESULT numbers and tell the operator what to do next.
+    #>
+    param([Parameter(Mandatory)][string]$Message)
+
+    $m = $Message.ToLowerInvariant()
+    if ($m -match 'findactiveprojectcfgname' -or $m -match 'e_unexpected') {
+        return ' No active solution configuration is selected. In XAE choose one (Build > Configuration Manager), or check the project has a build configuration.'
+    }
+    if ($m -match 'licen' -or $m -match '0x9811') {
+        return " The target may be missing a TwinCAT 3 licence. Check the target's licences (SYSTEM > License in Solution Explorer), or activate a 7-day trial."
+    }
+    if ($m -match 'route' -or $m -match 'target machine' -or $m -match 'timeout') {
+        return ' The target may be unreachable. Verify the AMS route to the NetId and that the target is online.'
+    }
+    return ''
+}
+
 # ------------------------------------------------------------------
 # Module exports
 # ------------------------------------------------------------------
@@ -1217,6 +1246,7 @@ Export-ModuleMember -Function `
     Get-TcDutsFolder, `
     Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, Read-TcErrorList, Read-TcBuildOutput, `
+    Get-TcActivateHint, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `
     Test-TcPlcProjHasPlaceholder

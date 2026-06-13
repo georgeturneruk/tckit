@@ -75,7 +75,8 @@ try {
     try {
         $sm.SetTargetNetId($TargetAmsId)
     } catch {
-        return @{ success = $false; error = "SetTargetNetId('$TargetAmsId') failed: $($_.Exception.Message)" }
+        $msg = $_.Exception.Message
+        return @{ success = $false; error = "SetTargetNetId('$TargetAmsId') failed: $msg$(Get-TcActivateHint -Message $msg)" }
     }
 
     # Enable autostart on the PLC project so the runtime actually runs
@@ -92,9 +93,10 @@ try {
             $plcSmNode.BootProjectAutostart = $true
             $plcSmNode.GenerateBootProject($true)
         } catch {
+            $msg = $_.Exception.Message
             return @{
                 success = $false
-                error   = "Enabling autostart on '$resolvedPlc' failed: $($_.Exception.Message)"
+                error   = "Enabling autostart on '$resolvedPlc' failed: $msg$(Get-TcActivateHint -Message $msg)"
             }
         }
     }
@@ -102,7 +104,8 @@ try {
     try {
         $sm.ActivateConfiguration()
     } catch {
-        return @{ success = $false; error = "ActivateConfiguration failed: $($_.Exception.Message)" }
+        $msg = $_.Exception.Message
+        return @{ success = $false; error = "ActivateConfiguration failed: $msg$(Get-TcActivateHint -Message $msg)" }
     }
 
     return @{

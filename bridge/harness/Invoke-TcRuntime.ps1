@@ -47,6 +47,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 Import-Module TcXaeMgmt -MinimumVersion 6.0 -ErrorAction Stop
+# For Get-TcActivateHint only — no DTE attach happens unless Get-TcDte is called.
+Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
     if (-not $TargetAmsId) { return @{ success = $false; error = 'TargetAmsId required.' } }
@@ -78,9 +80,10 @@ try {
     }
     if (-not $info.Succeeded -or $info.AdsErrorCode -ne 'NoError') {
         $logs = @($info.LogMessages) -join '; '
+        $msg = "Restart-TwinCAT -Command $restartCommand failed (AdsErrorCode=$($info.AdsErrorCode); logs: $logs)."
         return @{
             success = $false
-            error   = "Restart-TwinCAT -Command $restartCommand failed (AdsErrorCode=$($info.AdsErrorCode); logs: $logs)."
+            error   = "$msg$(Get-TcActivateHint -Message $msg)"
         }
     }
     return @{
@@ -100,8 +103,9 @@ try {
     }
 }
 catch {
+    $msg = $_.Exception.Message
     return @{
         success = $false
-        error   = "Restart-TwinCAT -Command $($cmdMap[$Mode]) on $TargetAmsId failed: $($_.Exception.Message)"
+        error   = "Restart-TwinCAT -Command $($cmdMap[$Mode]) on $TargetAmsId failed: $msg$(Get-TcActivateHint -Message $msg)"
     }
 }
