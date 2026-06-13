@@ -116,9 +116,11 @@ terminal:
 
 ```powershell
 .\.venv-bench\Scripts\Activate.ps1
-$env:PLC_PROJECT_PATH = "C:/TcKit-bench/TcUnit-writer/TcUnit.sln"
 python -m tckit.server --transport sse
 ```
+
+The server operates on whatever solution is open in the attached XAE, so
+make sure your bench sln is loaded (open it in XAE, or call `open_project`).
 
 The MCP server listens on `http://localhost:8000/sse` (matching
 `bench/configs/tckit.json`) and talks to the bridge internally for
@@ -219,12 +221,13 @@ The `-Task` parameter takes the fixture directory name; tab
 completion enumerates every directory under
 `bench/fixtures/bug-hunting/` that has a `bench-config.json`.
 
-The bench owns the MCP server lifecycle per run with `PLC_PROJECT_PATH`
-pointing at the temp fixture path when `--isolate-cwd` is on. Without
-that, the model's MCP writer calls would land in the operator's
-long-lived MCP env path while Read sees the temp copy — the model
-cannot observe its own writes (see the 2026-05-17 finding). Port 8000
-must be free; the script aborts if anything is listening there.
+The bench owns the MCP server lifecycle per run and `/opens` the temp
+fixture sln when `--isolate-cwd` is on so the server (which follows the
+open solution) targets it. Without that, the model's MCP writer calls
+would land in whatever solution the operator's long-lived XAE had open
+while Read sees the temp copy — the model cannot observe its own writes
+(see the 2026-05-17 finding). Port 8000 must be free; the script aborts
+if anything is listening there.
 
 `Get-Help .\bench\run-bench.ps1 -Detailed` for the full parameter list
 and the self-validate trade-off.

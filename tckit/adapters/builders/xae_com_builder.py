@@ -25,8 +25,17 @@ _VALID_PROJECT_SUFFIXES = (".sln", ".tsproj")
 class XaeComBuilder(BuildRunner):
     """Builds and deploys TwinCAT projects via the XAE COM automation interface."""
 
-    def __init__(self, client: BridgeClient | None = None) -> None:
+    def __init__(
+        self,
+        client: BridgeClient | None = None,
+        project_path: str | None = None,
+    ) -> None:
         self._client = client or BridgeClient()
+        # Explicit solution path for deploy / start_runtime on the
+        # programmatic / headless path. The MCP server leaves this None so
+        # those operations target the solution open in the attached XAE.
+        # ``build`` takes its path as an explicit argument and ignores this.
+        self._project_path = project_path or None
         self._last_status: BuildStatus = BuildStatus.IDLE
 
     # ------------------------------------------------------------------
@@ -65,10 +74,11 @@ class XaeComBuilder(BuildRunner):
         boot_autostart: bool = True,
     ) -> Result:
         payload: dict[str, Any] = {
-            "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
             "TargetAmsId": target_ams_id,
             "BootAutostart": bool(boot_autostart),
         }
+        if self._project_path:
+            payload["ProjectPath"] = self._project_path
         _attach_plc(payload, plc_name)
         try:
             resp = self._client.post("/deploy", payload)
@@ -77,12 +87,13 @@ class XaeComBuilder(BuildRunner):
         return _to_result(resp)
 
     def start_runtime(self, target_ams_id: str) -> Result:
-        payload = {
-            "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
+        payload: dict[str, Any] = {
             "TargetAmsId": target_ams_id,
             "Mode": "Run",
             "Wait": True,
         }
+        if self._project_path:
+            payload["ProjectPath"] = self._project_path
         try:
             resp = self._client.post("/runtime", payload)
         except BridgeError as exc:

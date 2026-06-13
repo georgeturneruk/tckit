@@ -12,7 +12,7 @@
     recursive deletion is requested.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Name of the PLC project. Optional if exactly one is present. Falls
@@ -32,7 +32,7 @@
     Allow deleting a folder that still contains children.
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath = '',
     [string]$PlcName     = $env:PLC_PROJECT_NAME,
     [string]$Name,
     [string]$ParentPath  = '',
@@ -47,11 +47,10 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath) { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $Name)        { return @{ success = $false; error = 'Name required.' } }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
     $plcName = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 

@@ -15,7 +15,7 @@
     file/line/message detail. CheckAllObjects gives us a fast happy path.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Name of the PLC project. Optional if exactly one is present. Falls back

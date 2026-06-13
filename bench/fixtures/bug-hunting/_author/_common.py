@@ -15,7 +15,6 @@ shape.
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import sys
 from dataclasses import dataclass
@@ -112,14 +111,14 @@ def scaffold_fixture(
     fixture_dir.mkdir(parents=True, exist_ok=True)
     _wipe_fixture(fixture_dir, force=force)
 
-    writer = AutomationWriter(client=client)
-    builder = XaeComBuilder(client=client)
-
     sln_path = fixture_dir / f"{sln_name}.sln"
     library_plc = f"{sln_name}_Plc"
 
+    # Target this sln explicitly on every adapter call (headless authoring).
+    writer = AutomationWriter(client=client, project_path=str(sln_path))
+    builder = XaeComBuilder(client=client, project_path=str(sln_path))
+
     _check("create_project", writer.create_project(sln_name, str(fixture_dir)))
-    os.environ["PLC_PROJECT_PATH"] = str(sln_path)
 
     _check(
         f"add_plc_project({tests_plc})",

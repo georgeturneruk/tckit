@@ -40,7 +40,7 @@ param(
     [Parameter(Mandatory)][ValidateSet('Run', 'Config')][string]$Mode,
     [bool]  $Wait           = $false,
     [int]   $WaitTimeoutSec = 45,
-    [string]$ProjectPath    = $env:PLC_PROJECT_PATH
+    [string]$ProjectPath    = ''
 )
 
 Set-StrictMode -Version Latest

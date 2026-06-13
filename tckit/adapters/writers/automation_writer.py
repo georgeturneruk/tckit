@@ -4,12 +4,13 @@ Calls bridge REST API → PowerShell harness → TcXaeShell.DTE.17.0 COM interfa
 Requires the bridge service to be running on the Windows machine with XAE
 installed. The Docker container reads ``BRIDGE_URL`` from the environment.
 
-Each method posts to the corresponding bridge route. The active project +
-PLC sub-project name are forwarded from ``PLC_PROJECT_PATH`` and
-``PLC_PROJECT_NAME`` env vars when not provided explicitly. A per-call
-``plc_name`` keyword always wins over the env var; see ADR-0005.
-``PLC_PROJECT_NAME`` is optional — the harness auto-resolves it when
-there's only one PLC project in the sln.
+Each method posts to the corresponding bridge route. By default the bridge
+operates on the solution already open in the attached XAE; an explicit
+solution path is only sent when the writer is constructed with
+``project_path`` (programmatic / headless callers). The PLC sub-project name
+comes from the per-call ``plc_name`` keyword, falling back to the
+``PLC_PROJECT_NAME`` env var (see ADR-0005); both are optional, and the
+harness auto-resolves the name when there's only one PLC project in the sln.
 """
 
 from __future__ import annotations
@@ -26,8 +27,17 @@ from tckit.utils.results import to_result
 class AutomationWriter(ProjectWriter):
     """Writes to TwinCAT project via the automation interface (bridge → COM)."""
 
-    def __init__(self, client: BridgeClient | None = None) -> None:
+    def __init__(
+        self,
+        client: BridgeClient | None = None,
+        project_path: str | None = None,
+    ) -> None:
         self._client = client or BridgeClient()
+        # Explicit solution path for programmatic / headless callers. The
+        # MCP server leaves this None so edits land in whatever solution is
+        # open in the attached XAE; passing a path here force-opens it,
+        # which is only wanted off the interactive path (bench, scripts).
+        self._project_path = project_path or None
 
     # ------------------------------------------------------------------
     # ProjectWriter interface
@@ -537,16 +547,19 @@ class AutomationWriter(ProjectWriter):
         *,
         plc_name: str | None = None,
     ) -> dict[str, Any]:
-        """Attach the active solution path + PLC-project name to the payload.
+        """Attach the explicit solution path (if any) + PLC-project name.
 
-        Per-call ``plc_name`` wins over ``PLC_PROJECT_NAME`` env var; both
-        are optional. When neither is set, the bridge auto-resolves on a
-        single-project sln and throws on a multi-project sln (see
-        ``Resolve-TcPlcName`` in bridge/harness/_TcDte.psm1).
+        ``ProjectPath`` is only sent when this writer was constructed with an
+        explicit path; otherwise it is omitted and the bridge operates on the
+        solution already open in the attached XAE. Per-call ``plc_name`` wins
+        over ``PLC_PROJECT_NAME`` env var; both are optional. When neither is
+        set, the bridge auto-resolves on a single-project sln and throws on a
+        multi-project sln (see ``Resolve-TcPlcName`` in
+        bridge/harness/_TcDte.psm1).
         """
-        merged: dict[str, Any] = {
-            "ProjectPath": os.getenv("PLC_PROJECT_PATH", "")
-        }
+        merged: dict[str, Any] = {}
+        if self._project_path:
+            merged["ProjectPath"] = self._project_path
         resolved_plc = plc_name or os.getenv("PLC_PROJECT_NAME")
         if resolved_plc:
             merged["PlcName"] = resolved_plc

@@ -33,7 +33,7 @@ class FakeBridgeClient:
 
 def test_open_project_posts_to_open_endpoint() -> None:
     client = FakeBridgeClient({"success": True, "details": {"solution": "C:/x.sln"}})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = writer.open_project("C:/x.sln")
 
@@ -44,7 +44,7 @@ def test_open_project_posts_to_open_endpoint() -> None:
 
 def test_create_project_posts_to_create_endpoint() -> None:
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.create_project("MyProj", "C:/work")
 
@@ -54,10 +54,9 @@ def test_create_project_posts_to_create_endpoint() -> None:
 def test_add_pou_includes_project_path_and_translates_pou_type(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_pou("FB_Test", POUType.FUNCTION_BLOCK, "VAR END_VAR")
 
@@ -73,11 +72,25 @@ def test_add_pou_includes_project_path_and_translates_pou_type(
     assert "PlcName" not in payload
 
 
-def test_add_pou_includes_plc_name_when_env_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
-    monkeypatch.setenv("PLC_PROJECT_NAME", "MyPlc")
+def test_add_pou_omits_project_path_when_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With no explicit project_path the writer sends no ProjectPath, so the
+    # bridge operates on the solution open in the attached XAE.
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
     writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+
+    writer.add_pou("FB_Test", POUType.FUNCTION_BLOCK, "VAR END_VAR")
+
+    _, payload = client.calls[0]
+    assert "ProjectPath" not in payload
+
+
+def test_add_pou_includes_plc_name_when_env_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLC_PROJECT_NAME", "MyPlc")
+    client = FakeBridgeClient({"success": True})
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_pou("FB_X", POUType.FUNCTION_BLOCK, "decl")
 
@@ -86,10 +99,9 @@ def test_add_pou_includes_plc_name_when_env_set(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_add_method_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_method("FB_X", "DoThing", "code")
 
@@ -104,10 +116,9 @@ def test_add_method_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_property_with_getter_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_property(
         "FB_Pid", "Kp", "LREAL", getter_code="Kp := fKp;"
@@ -126,10 +137,9 @@ def test_add_property_with_getter_only(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_property_with_setter_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_property(
         "FB_Pid", "Kp", "LREAL", setter_code="IF Kp >= 0 THEN fKp := Kp; END_IF"
@@ -142,10 +152,9 @@ def test_add_property_with_setter_only(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_property_with_both_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_property(
         "FB_Pid",
@@ -169,10 +178,9 @@ def test_add_property_with_both_accessors(monkeypatch: pytest.MonkeyPatch) -> No
 def test_add_property_rejects_when_no_accessors_supplied(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = writer.add_property("FB_Pid", "Kp", "LREAL")
 
@@ -182,10 +190,9 @@ def test_add_property_rejects_when_no_accessors_supplied(
 
 
 def test_add_property_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_property(
         "FB_Pid",
@@ -200,10 +207,9 @@ def test_add_property_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_dut_defaults_to_struct(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_dut(
         "ST_Config",
@@ -221,10 +227,9 @@ def test_add_dut_defaults_to_struct(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_dut_enum_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_dut(
         "E_PidMode",
@@ -237,10 +242,9 @@ def test_add_dut_enum_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_add_dut_union_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_dut(
         "U_FloatBytes",
@@ -253,10 +257,9 @@ def test_add_dut_union_routes_correctly(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_add_dut_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_dut(
         "ST_Config",
@@ -269,10 +272,9 @@ def test_add_dut_passes_plc_name(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_update_pou_declaration_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_pou_declaration("FB_X", "FUNCTION_BLOCK FB_X\nVAR\nEND_VAR\n")
 
@@ -288,10 +290,9 @@ def test_update_pou_declaration_payload_shape(monkeypatch: pytest.MonkeyPatch) -
 def test_update_pou_implementation_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_pou_implementation("FB_X", "x := 1;\n")
 
@@ -305,10 +306,9 @@ def test_update_pou_implementation_payload_shape(
 
 
 def test_update_method_body_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_method_body("FB_X", "Execute", "METHOD Execute : BOOL\nbDone := TRUE;\n")
 
@@ -325,10 +325,9 @@ def test_update_method_body_payload_shape(monkeypatch: pytest.MonkeyPatch) -> No
 def test_update_pou_declaration_patch_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_pou_declaration_patch("FB_X", "OLD", "NEW")
 
@@ -345,10 +344,9 @@ def test_update_pou_declaration_patch_payload_shape(
 def test_update_pou_implementation_patch_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_pou_implementation_patch("FB_X", "OLD", "NEW")
 
@@ -365,10 +363,9 @@ def test_update_pou_implementation_patch_payload_shape(
 def test_update_method_body_patch_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.update_method_body_patch("FB_X", "Execute", "OLD", "NEW")
 
@@ -387,7 +384,7 @@ def test_update_method_body_patch_failure_translated_to_result() -> None:
     client = FakeBridgeClient(
         {"success": False, "error": "OldString appears 2 times; anchor must be unique."}
     )
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = writer.update_method_body_patch("FB_X", "Execute", "x", "y")
     assert result.success is False
@@ -395,10 +392,9 @@ def test_update_method_body_patch_failure_translated_to_result() -> None:
 
 
 def test_add_variable_payload_shape_fb_level(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_variable("FB_X", "VAR_INPUT", "bNewParam : BOOL;")
 
@@ -415,10 +411,9 @@ def test_add_variable_payload_shape_fb_level(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_add_variable_payload_shape_method_level(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     writer.add_variable("FB_X", "VAR", "nLocal : INT;", item_name="Execute")
 
@@ -429,7 +424,7 @@ def test_add_variable_payload_shape_method_level(monkeypatch: pytest.MonkeyPatch
 
 def test_failure_response_translated_to_result() -> None:
     client = FakeBridgeClient({"success": False, "error": "POU not found"})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = writer.update_method_body("Missing", "X", "code")
     assert result.success is False
@@ -438,7 +433,7 @@ def test_failure_response_translated_to_result() -> None:
 
 def test_bridge_unavailable_returned_as_failure_result() -> None:
     client = FakeBridgeClient(raise_exc=BridgeUnavailableError("not reachable at http://foo"))
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = writer.open_project("C:/x.sln")
     assert result.success is False

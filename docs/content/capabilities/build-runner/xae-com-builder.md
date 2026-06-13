@@ -16,7 +16,7 @@ Builds TwinCAT projects via the Windows bridge → COM automation interface and 
 }
 ```
 
-Required environment variables: `BRIDGE_URL`, `PLC_PROJECT_PATH`. Optional: `PLC_PROJECT_NAME`, `TCKIT_BUILD_TIMEOUT` (seconds, default 600), `DEVENV_PATH` (path to `TcXaeShell.exe` if not at the default install location), `TC_BUILD_CONFIG` (default `Release`), `TC_BUILD_PLATFORM` (default `TwinCAT RT (x64)`).
+`build` takes the project path as an explicit argument; `deploy` and `start_runtime` operate on the solution open in the attached XAE. Required environment variables: `BRIDGE_URL`. Optional: `PLC_PROJECT_NAME`, `TCKIT_BUILD_TIMEOUT` (seconds, default 600), `DEVENV_PATH` (path to `TcXaeShell.exe` if not at the default install location), `TC_BUILD_CONFIG` (default `Release`), `TC_BUILD_PLATFORM` (default `TwinCAT RT (x64)`).
 
 ## How it works
 

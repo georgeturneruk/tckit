@@ -17,8 +17,9 @@ Required environment variables:
 | Variable | Purpose |
 |----------|---------|
 | `BRIDGE_URL` | Where the bridge service listens (default `http://localhost:8765`). |
-| `PLC_PROJECT_PATH` | Absolute path to the active `.sln`. |
 | `PLC_PROJECT_NAME` | (Optional) Name of the PLC sub-project under `TIPC`. Auto-resolved when there's only one. |
+
+Edits land in the solution open in the attached XAE; there is no project-path setting (open your project in XAE, or call `open_project` once).
 
 ## How it works
 

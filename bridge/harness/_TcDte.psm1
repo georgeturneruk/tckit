@@ -226,6 +226,42 @@ function Open-TcSolution {
     return $Dte.Solution
 }
 
+function Use-TcSolution {
+    <#
+    .SYNOPSIS
+        Resolve the solution to operate on: open an explicit path when one
+        is given, otherwise use the solution already open in the attached
+        instance.
+
+    .DESCRIPTION
+        TcKit's default model is "operate on whatever solution is open in
+        the attached TcXaeShell". The operator (or a one-off open_project)
+        chooses it and every subsequent call follows. An explicit -Path is
+        only needed for a headless spawn or to switch solutions on purpose;
+        passing one on every edit is what used to yank the IDE to a stale
+        configured path. So: with a -Path, defer to Open-TcSolution
+        (idempotent); with an empty -Path, require a solution to already be
+        loaded and return it, raising a clear, actionable error otherwise.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [string]$Path = ''
+    )
+    if ($Path) {
+        return Open-TcSolution -Dte $Dte -Path $Path
+    }
+    $current = ''
+    try { $current = $Dte.Solution.FullName } catch { }
+    if (-not $current) {
+        throw 'No solution is open in TcXaeShell. Open your project in XAE (or call open_project) before this operation, or pass an explicit project path.'
+    }
+    # An existing sln can have its PLC source trees lazy-loaded; force
+    # them in so downstream LookupTreeItem calls resolve (same rationale
+    # as Open-TcSolution after a fresh open).
+    try { Wait-TcPlcProjectsLoaded -Dte $Dte | Out-Null } catch { }
+    return $Dte.Solution
+}
+
 function Save-TcSolution {
     <#
     .SYNOPSIS
@@ -1068,7 +1104,7 @@ function Read-TcBuildLog {
 # ------------------------------------------------------------------
 
 Export-ModuleMember -Function `
-    Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
+    Get-TcKind, Get-TcDte, Open-TcSolution, Use-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
     Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `

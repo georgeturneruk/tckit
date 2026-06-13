@@ -32,22 +32,20 @@ def _project_or_skip() -> str:
     return project
 
 
-def test_clean_build_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_clean_build_succeeds() -> None:
     client = _bridge_or_skip()
     project = _project_or_skip()
-    monkeypatch.setenv("PLC_PROJECT_PATH", project)
 
     builder = XaeComBuilder(client=client)
     result = builder.build(project)
     assert result.success, f"clean build failed: {[e.message for e in result.errors]}"
 
 
-def test_broken_fb_produces_structured_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_broken_fb_produces_structured_error() -> None:
     client = _bridge_or_skip()
     project = _project_or_skip()
-    monkeypatch.setenv("PLC_PROJECT_PATH", project)
 
-    writer = AutomationWriter(client=client)
+    writer = AutomationWriter(client=client, project_path=project)
     builder = XaeComBuilder(client=client)
 
     # Add a deliberately broken FB referencing an undeclared variable.

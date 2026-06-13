@@ -152,7 +152,12 @@ class TcKitConfig:
             cls = _READER_REGISTRY.get(name)
             if cls is None:
                 raise ValueError(f"Unknown reader adapter: {name!r}")
-            self._reader = cls()
+            # Inject the active-solution resolver so reads without a prior
+            # get_structure() follow whatever solution is open in the
+            # attached XAE, instead of a configured path.
+            self._reader = cls(  # type: ignore[call-arg]
+                active_solution=self.bridge_client().active_solution
+            )
         return self._reader
 
     def writer(self) -> ProjectWriter:

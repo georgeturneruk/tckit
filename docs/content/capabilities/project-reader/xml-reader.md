@@ -93,11 +93,7 @@ tckit/adapters/readers/
 }
 ```
 
-Set `PLC_PROJECT_PATH` in your `.env` as a fallback when `get_structure()` hasn't been called yet:
-
-```env
-PLC_PROJECT_PATH=/path/to/my/plc/project
-```
+When `get_structure()` hasn't been called yet, the reader resolves the project from the solution open in the attached XAE (via the bridge), so reads follow whatever you have loaded. Call `get_structure()` with an explicit path to read a project that isn't the open one (or when running without a bridge, e.g. headless docs generation).
 
 ---
 

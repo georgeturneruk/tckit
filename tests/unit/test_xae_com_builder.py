@@ -112,14 +112,13 @@ def test_deploy_posts_to_deploy_endpoint() -> None:
     assert result.success is True
     path, payload, _ = client.calls[0]
     assert path == "/deploy"
-    # ProjectPath comes from PLC_PROJECT_PATH env (empty in this unit test);
-    # the bridge handler falls back to its own env when the payload value is
-    # empty. Mirrors TcUnitRunner._with_target_and_plc.
+    # No explicit project_path was configured, so ProjectPath is omitted and
+    # the bridge deploys whatever solution is open in the attached XAE.
     assert payload == {
         "TargetAmsId": "1.2.3.4.1.1",
-        "ProjectPath": "",
         "BootAutostart": True,
     }
+    assert "ProjectPath" not in payload
 
 
 def test_deploy_passes_boot_autostart_false() -> None:
@@ -141,11 +140,11 @@ def test_start_runtime_posts_to_runtime_endpoint() -> None:
     path, payload, _ = client.calls[0]
     assert path == "/runtime"
     assert payload == {
-        "ProjectPath": "",
         "TargetAmsId": "1.2.3.4.1.1",
         "Mode": "Run",
         "Wait": True,
     }
+    assert "ProjectPath" not in payload
 
 
 def test_get_status_starts_idle() -> None:

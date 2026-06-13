@@ -19,6 +19,7 @@ Property access via get_pou_item():
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from tckit.ports.reader import ProjectReader
@@ -56,7 +57,18 @@ from tckit.utils.tc_file_parser import (
 class XmlReader(ProjectReader):
     """Reads TwinCAT project structure and code via XML parsing (stdlib only)."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        active_solution: Callable[[], str | None] | None = None,
+    ) -> None:
+        # Optional resolver for "which solution is open in the attached
+        # XAE", used to hydrate the index when get_structure() was never
+        # called this session and no explicit path is known. Injected by
+        # the config layer so the reader stays filesystem-only and the
+        # bridge dependency lives behind a callable (testable, mockable).
+        # None means "no live resolution" — reads then require a prior
+        # get_structure() call.
+        self._active_solution = active_solution
         # Per-PLC-project file indices. Outer key is the PLC-project name
         # (.plcproj filename stem), inner key is the symbol name (POU /
         # GVL / DUT). Populated by get_structure(); reused by all
@@ -372,8 +384,9 @@ class XmlReader(ProjectReader):
              return it.
           4. Otherwise, raise listing the PLC projects that contain it.
 
-        Falls back to scanning ``PLC_PROJECT_PATH`` if the index is empty
-        (e.g. ``get_structure`` was never called this session).
+        Hydrates the index from the solution open in the attached XAE
+        (via the injected ``active_solution`` resolver) when it is empty
+        — e.g. ``get_structure`` was never called this session.
 
         Raises:
             FileNotFoundError: If the file cannot be located.
@@ -381,19 +394,21 @@ class XmlReader(ProjectReader):
         """
         self._refresh_index_if_stale()
 
-        # Lazy index hydration from PLC_PROJECT_PATH when get_structure
-        # was never called this session.
-        if not self._file_index:
-            env_path = os.getenv("PLC_PROJECT_PATH")
-            if env_path:
-                self.get_structure(env_path)
+        # Lazy index hydration from the open solution when get_structure
+        # was never called this session. The reader operates on whatever
+        # solution is loaded in the attached instance, resolved through
+        # the injected callable rather than a configured path.
+        if not self._file_index and self._active_solution is not None:
+            open_sln = self._active_solution()
+            if open_sln:
+                self.get_structure(open_sln)
 
         if not self._file_index:
-            searched = os.getenv("PLC_PROJECT_PATH", "(no PLC_PROJECT_PATH set)")
             raise FileNotFoundError(
                 f"No {extension} file found for {name!r}. "
-                f"Call get_structure() first, or set PLC_PROJECT_PATH. "
-                f"Searched: {searched}"
+                "Call get_structure() with a project path first, or open a "
+                "solution in TcXaeShell (the reader then follows the open "
+                "solution)."
             )
 
         # Caller asked for a specific PLC project.

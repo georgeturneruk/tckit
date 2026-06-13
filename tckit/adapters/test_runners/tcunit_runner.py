@@ -31,8 +31,16 @@ from tckit.utils.results import to_result
 class TcUnitRunner(TestRunner):
     """Runs TcUnit tests and parses XML results into structured TestResults."""
 
-    def __init__(self, client: BridgeClient | None = None) -> None:
+    def __init__(
+        self,
+        client: BridgeClient | None = None,
+        project_path: str | None = None,
+    ) -> None:
         self._client = client or BridgeClient()
+        # Explicit solution path for programmatic / headless callers. The
+        # MCP server leaves this None so test runs target the solution open
+        # in the attached XAE.
+        self._project_path = project_path or None
 
     # ------------------------------------------------------------------
     # TestRunner interface
@@ -91,16 +99,19 @@ class TcUnitRunner(TestRunner):
         target_ams_id: str,
         plc_name: str | None,
     ) -> dict[str, Any]:
-        """Attach project path, target, and resolved PLC name to the payload.
+        """Attach the explicit solution path (if any), target, and PLC name.
 
         Mirrors ``AutomationWriter._with_project`` but with an additional
         ``TargetAmsId`` (ADR-0005: every test-execution call carries an
-        explicit target). Per-call ``plc_name`` wins over the env var.
+        explicit target). ``ProjectPath`` is sent only when this runner was
+        constructed with one; otherwise the bridge uses the open solution.
+        Per-call ``plc_name`` wins over the ``PLC_PROJECT_NAME`` env var.
         """
         merged: dict[str, Any] = {
-            "ProjectPath": os.getenv("PLC_PROJECT_PATH", ""),
             "TargetAmsId": target_ams_id,
         }
+        if self._project_path:
+            merged["ProjectPath"] = self._project_path
         resolved_plc = plc_name or os.getenv("PLC_PROJECT_NAME")
         if resolved_plc:
             merged["PlcName"] = resolved_plc

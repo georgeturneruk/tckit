@@ -29,7 +29,7 @@
          /results).
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER TargetAmsId
     AMS Net ID of the target runtime. Falls back to TARGET_AMS_ID env var.
@@ -50,7 +50,7 @@
     'attach' (default) or 'headless'.
 #>
 param(
-    [string]$ProjectPath    = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath    = '',
     [string]$TargetAmsId    = $env:TARGET_AMS_ID,
     [string]$PlcName        = $env:PLC_PROJECT_NAME,
     [int]   $TimeoutSeconds = 120,
@@ -83,7 +83,6 @@ Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot '_TcUnit.psm1') -Force
 
 try {
-    if (-not $ProjectPath) { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $TargetAmsId) { return @{ success = $false; error = 'TargetAmsId required.' } }
 
     # ----------------------------------------------------------------

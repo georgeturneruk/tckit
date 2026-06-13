@@ -15,8 +15,9 @@ JUnit-shaped XML output into a structured `TestResults`.
 ```
 
 The runner reads no env config of its own; it picks up `BRIDGE_URL`,
-`PLC_PROJECT_PATH`, `PLC_PROJECT_NAME`, and `TARGET_AMS_ID` from the
-shared environment along with the rest of TcKit. The optional
+`PLC_PROJECT_NAME`, and `TARGET_AMS_ID` from the shared environment along
+with the rest of TcKit, and runs against the solution open in the attached
+XAE. The optional
 `TCKIT_TEST_RUN_TIMEOUT` env var (default 180 seconds) caps the HTTP
 timeout on the `/tcunit-run` call when the test suites take a long
 time to complete.

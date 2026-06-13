@@ -27,6 +27,9 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     "/results": 60.0,
     "/save-as-library": 180.0,
     "/install-dependency": 120.0,
+    # Attaching to XAE and enumerating PLC projects; quick on a warm
+    # instance, but allow headroom for a cold attach.
+    "/active-solution": 30.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {
@@ -124,6 +127,21 @@ class BridgeClient:
         except BridgeUnavailableError:
             return False
         return resp.get("status") == "ok"
+
+    def active_solution(self) -> str | None:
+        """Return the .sln path open in the attached XAE, or None.
+
+        Best-effort like :meth:`health`: an unreachable bridge or no open
+        solution yields None rather than raising, so callers can fall back
+        to their own context-specific error.
+        """
+        try:
+            resp = self.get("/active-solution")
+        except BridgeError:
+            return None
+        if resp.get("success") and resp.get("solution_path"):
+            return str(resp["solution_path"])
+        return None
 
     # ------------------------------------------------------------------
     # Internals
