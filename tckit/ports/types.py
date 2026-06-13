@@ -235,6 +235,12 @@ class BuildError:
     line: int
     message: str
     severity: str = "error"
+    # PLC Error List detail (populated when the build reads the IDE Error
+    # List). ``code`` is the compiler code (e.g. "C0046"); ``project`` is
+    # the PLC project the item belongs to. Both default empty so older
+    # callers and the build-output fallback stay compatible.
+    code: str = ""
+    project: str = ""
 
 
 @dataclass
@@ -242,6 +248,8 @@ class BuildResult:
     success: bool
     errors: list[BuildError] = field(default_factory=list)
     warnings: list[BuildError] = field(default_factory=list)
+    # Info-level Error List messages, when the IDE surfaces them.
+    infos: list[BuildError] = field(default_factory=list)
     duration_seconds: float | None = None
 
 

@@ -202,10 +202,12 @@ def _validate_project_path(project_path: str) -> BuildError | None:
 def _to_build_result(resp: dict[str, Any]) -> BuildResult:
     duration = resp.get("duration_seconds")
     warnings_raw = resp.get("warnings") or []
+    infos_raw = resp.get("infos") or []
     return BuildResult(
         success=bool(resp.get("success", False)),
         errors=[_to_build_error(e) for e in resp.get("errors") or []],
         warnings=[_to_build_error(w, default_severity="warning") for w in warnings_raw],
+        infos=[_to_build_error(i, default_severity="info") for i in infos_raw],
         duration_seconds=float(duration) if duration is not None else None,
     )
 
@@ -216,6 +218,8 @@ def _to_build_error(item: dict[str, Any], default_severity: str = "error") -> Bu
         line=int(item.get("line", 0) or 0),
         message=str(item.get("message", "")),
         severity=str(item.get("severity", default_severity)),
+        code=str(item.get("code", "")),
+        project=str(item.get("project", "")),
     )
 
 
