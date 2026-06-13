@@ -9,10 +9,7 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[pidSuite();
-rbSuite();
-strSuite();
-TcUnit.RUN();
+      <ST><![CDATA[TcUnit.RUN_IN_SEQUENCE();
 ]]></ST>
     </Implementation>
   </POU>
