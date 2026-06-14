@@ -22,18 +22,16 @@ Describe 'Invoke-TcRuntime.ps1 (mocked Restart-TwinCAT)' {
         # Restart-TwinCAT that records its arguments.
         $script:fakeModuleDir = Join-Path ([IO.Path]::GetTempPath()) ("TcXaeMgmtFake-" + [Guid]::NewGuid())
         New-Item -ItemType Directory -Path $script:fakeModuleDir -Force | Out-Null
-        $psd1 = @"
-@{
-    ModuleVersion = '6.0.0'
-    GUID = '$([Guid]::NewGuid())'
-    RootModule = 'TcXaeMgmt.psm1'
-    FunctionsToExport = @('Restart-TwinCAT')
-}
-"@
-        Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psd1') -Value $psd1
-        Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psm1') -Value @'
-if (-not ('TwinCAT.Management.Automation.WriteControlInfo' -as [type])) {
-    Add-Type -TypeDefinition @'
+        # The fake module's Restart-TwinCAT returns a WriteControlInfo, and the
+        # harness filters its output on that type too. Define it in the test
+        # process rather than inside the generated .psm1: a single-quoted
+        # here-string can't contain a nested here-string (the inner '@ at
+        # column 0 closes the outer one, which is what broke this file's
+        # parse). Add-Type is AppDomain-wide, so both the module and the
+        # harness see the type once it's added here. Guarded so repeated
+        # BeforeEach runs don't re-add it.
+        if (-not ('TwinCAT.Management.Automation.WriteControlInfo' -as [type])) {
+            Add-Type -TypeDefinition @'
 namespace TwinCAT.Management.Automation {
     public class WriteControlInfo {
         public bool Succeeded { get; set; }
@@ -47,7 +45,18 @@ namespace TwinCAT.Management.Automation {
     }
 }
 '@
+        }
+
+        $psd1 = @"
+@{
+    ModuleVersion = '6.0.0'
+    GUID = '$([Guid]::NewGuid())'
+    RootModule = 'TcXaeMgmt.psm1'
+    FunctionsToExport = @('Restart-TwinCAT')
 }
+"@
+        Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psd1') -Value $psd1
+        Set-Content -LiteralPath (Join-Path $script:fakeModuleDir 'TcXaeMgmt.psm1') -Value @'
 function Restart-TwinCAT {
     [CmdletBinding()]
     param(

@@ -94,14 +94,22 @@ try {
             $warnings = @($el.warnings)
             $infos    = @($el.infos)
         } elseif ($edition -eq 'Express') {
-            # TcXaeShell Express exposes neither the Error List nor the
-            # Output window to automation, and /out writes nothing, so
-            # per-error detail can't be retrieved. Skip the slow, pointless
-            # rebuild and report the failure honestly.
-            if (-not $checkOk) {
+            # TcXaeShell Express exposes no EnvDTE tool-window automation, but
+            # the Error List is still a live WPF grid that UI Automation can
+            # read whenever the XAE GUI is open on the interactive desktop.
+            # CheckAllObjects above already populated it; scrape it. Only fall
+            # back to the honest message when the GUI can't be reached or the
+            # compile failed yet no error rows could be read. See ADR-0014.
+            $uia = Read-TcErrorListUia -SolutionPath $ProjectPath -CompileSucceeded $checkOk
+            if ($null -ne $uia) {
+                $errors   = @($uia.errors)
+                $warnings = @($uia.warnings)
+                $infos    = @($uia.infos)
+            }
+            if (-not $checkOk -and $errors.Count -eq 0) {
                 $errors += @{
                     file = ''; line = 0; severity = 'error'; code = ''; project = ''
-                    message = "PLC compile failed. TcXaeShell Express does not expose the Error List or build output to automation, so per-error detail isn't available here. Open the solution in TcXaeShell to see the errors, or build with full TcXaeShell / Visual Studio (set DEVENV_PATH)."
+                    message = "PLC compile failed, but per-error detail couldn't be read from the TcXaeShell Express Error List via UI Automation. Is the solution open in TcXaeShell on the interactive desktop? Open it to see the errors, or build with full TcXaeShell / Visual Studio (set DEVENV_PATH)."
                 }
             }
         } else {

@@ -1236,6 +1236,276 @@ function Get-TcActivateHint {
     return ''
 }
 
+function ConvertTo-TcErrorRow {
+    <#
+    .SYNOPSIS
+        Normalise one Error List row (raw column strings) into a structured
+        diagnostic row plus its severity bucket.
+
+    .DESCRIPTION
+        Shared post-processing for an Error List row however it was read. Maps
+        a free-text Severity ("Error" / "Warning" / "Message") to the
+        errors / warnings / infos bucket, and — when no explicit Code column
+        value is supplied — lifts a leading compiler-code prefix ("C0046: ...")
+        out of the description, the same convention Read-TcErrorList applies to
+        EnvDTE descriptions.
+
+        Severity rules: "Warning*" -> warnings; "Error*" -> errors; "Message",
+        "Info*" or an empty label -> infos (an unrealised or merged TwinCAT
+        message row carries no Severity text and must not inflate the error
+        count); any other non-empty label -> errors, so a severity we don't
+        recognise is never silently downgraded.
+
+    .OUTPUTS
+        @{ row = @{ file; line; message; severity; code; project }
+           bucket = 'errors' | 'warnings' | 'infos' }
+    #>
+    param(
+        [string]$Severity = '',
+        [string]$Code = '',
+        [string]$Description = '',
+        [string]$File = '',
+        [int]$Line = 0,
+        [string]$Project = ''
+    )
+
+    $desc = [string]$Description
+    $code = [string]$Code
+
+    if (-not $code) {
+        $m = [regex]::Match($desc, '^\s*(?<code>[A-Za-z]\d{3,})\s*:\s*(?<msg>.*)$')
+        if ($m.Success) {
+            $code = $m.Groups['code'].Value
+            $desc = $m.Groups['msg'].Value.Trim()
+        }
+    }
+
+    $sevText = ([string]$Severity).Trim().ToLowerInvariant()
+    $bucket =
+        if     ($sevText -match '^warn')                       { 'warnings' }
+        elseif ($sevText -match '^err')                        { 'errors' }
+        elseif ($sevText -eq '' -or $sevText -match '^(message|info)') { 'infos' }
+        else                                                   { 'errors' }
+    $severity = switch ($bucket) { 'warnings' { 'warning' } 'infos' { 'info' } default { 'error' } }
+
+    $row = @{
+        file     = [string]$File
+        line     = [int]$Line
+        message  = $desc
+        severity = $severity
+        code     = $code
+        project  = [string]$Project
+    }
+    return @{ row = $row; bucket = $bucket }
+}
+
+function Read-TcErrorListUia {
+    <#
+    .SYNOPSIS
+        Read the IDE Error List via UI Automation, for editions where EnvDTE's
+        ToolWindows.ErrorList is null (TcXaeShell Express).
+
+    .DESCRIPTION
+        TcXaeShell Express exposes no EnvDTE tool-window automation, but the
+        rendered Error List is still a live WPF grid that UI Automation reads
+        regardless of edition (the GUI shows the errors; we scrape the GUI).
+        This finds the running TcXaeShell window for the given solution,
+        locates the Error List's "Results" ListView (GridPattern +
+        TablePattern), realises each row — the grid is UI-virtualised, so only
+        scrolled-into-view rows carry text — and reads the
+        Severity / Code / Description / Project / File / Line columns into the
+        same structure as Read-TcErrorList.
+
+        Severity caveat: the Express Error List does not expose per-row
+        severity to UI Automation — every row's severity-column image reports
+        the same static 'Error' name. So severity is *inferred* from the
+        reliable columns instead: a PLC compile diagnostic carries a compiler
+        code (e.g. C0046) whereas TwinCAT system / deploy / test messages do
+        not. A coded row is an error when CheckAllObjects failed
+        (-CompileSucceeded:$false) and a warning when it passed; every
+        non-coded row is an info. This keeps errors/warnings limited to real
+        compile diagnostics so the build's pass/fail stays honest, while
+        TwinCAT messages are still surfaced as infos.
+
+        Returns $null when the GUI can't be reached (no window on this desktop,
+        list grid absent), so the caller keeps its honest-message fallback. The
+        XAE window must be present on the interactive desktop, the same
+        precondition as attach-mode COM. See ADR-0014.
+
+    .OUTPUTS
+        @{ errors = @(...); warnings = @(...); infos = @(...) } or $null.
+        Each row: @{ file; line; message; severity; code; project }.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$SolutionPath,
+        [bool]$CompileSucceeded = $false,
+        [int]$MaxRows = 500
+    )
+
+    try {
+        Add-Type -AssemblyName UIAutomationClient -ErrorAction Stop
+        Add-Type -AssemblyName UIAutomationTypes -ErrorAction Stop
+    } catch {
+        return $null
+    }
+
+    # Locate the TcXaeShell window for this solution. The VS title is
+    # "<name> - TcXaeShell"; match on the solution file stem, and fall back to
+    # a lone TcXaeShell instance when the title doesn't carry the stem.
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($SolutionPath)
+    $candidates = @(Get-Process -Name TcXaeShell -ErrorAction SilentlyContinue |
+                    Where-Object { $_.MainWindowHandle -ne 0 })
+    if ($candidates.Count -eq 0) { return $null }
+    $proc = $candidates | Where-Object { $_.MainWindowTitle -like "*$stem*" } | Select-Object -First 1
+    if ($null -eq $proc) {
+        if ($candidates.Count -eq 1) { $proc = $candidates[0] } else { return $null }
+    }
+
+    $root = $null
+    try { $root = [System.Windows.Automation.AutomationElement]::FromHandle($proc.MainWindowHandle) } catch { return $null }
+    if ($null -eq $root) { return $null }
+
+    # Best-effort restore so WPF realises virtualised rows even when minimised.
+    try {
+        if (-not ('TcWin32' -as [type])) {
+            Add-Type -Namespace 'TcKit' -Name 'TcWin32' -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+'@ -ErrorAction Stop
+        }
+        [TcKit.TcWin32]::ShowWindow([System.IntPtr]$proc.MainWindowHandle, 9) | Out-Null  # SW_RESTORE
+    } catch { }
+
+    # Reused condition: cell text lives in a descendant Text element, not the
+    # grid cell's own Name (the cell is a ContentPresenter with an empty Name).
+    $txtCond = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Text)
+
+    # The Error List grid is only present in the UIA tree when its tool-window
+    # tab is the selected one — WPF virtualises away the content of unselected
+    # tabs. Select the 'Error List' tab first, then poll for the grid to
+    # realise (it appears a beat after selection).
+    try {
+        $tabCond = New-Object System.Windows.Automation.AndCondition(
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::TabItem)),
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty, 'Error List')))
+        $tab = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
+        if ($null -ne $tab) {
+            $tabSel = $tab.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+            if (-not $tabSel.Current.IsSelected) { $tabSel.Select() }
+        }
+    } catch { }
+
+    # Find the Error List grid: the VS error list is a ListView with
+    # AutomationId 'Tracking List View'; fall back to Name 'Results'.
+    $idCond = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'Tracking List View')
+    $resultsCond = New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::NameProperty, 'Results')),
+        (New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'ListView')))
+    $grid = $null
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        try { $grid = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $idCond) } catch { }
+        if ($null -eq $grid) {
+            try { $grid = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $resultsCond) } catch { }
+        }
+        if ($null -ne $grid) { break }
+        Start-Sleep -Milliseconds 200
+    }
+    if ($null -eq $grid) { return $null }
+
+    $gp = $null
+    try { $gp = $grid.GetCurrentPattern([System.Windows.Automation.GridPattern]::Pattern) } catch { return $null }
+    $rowCount = 0; $colCount = 0
+    try { $rowCount = [int]$gp.Current.RowCount } catch { }
+    try { $colCount = [int]$gp.Current.ColumnCount } catch { }
+    if ($rowCount -le 0 -or $colCount -le 0) { return @{ errors = @(); warnings = @(); infos = @() } }
+
+    # Map column header text -> column index, so we don't assume order.
+    $colMap = @{}
+    try {
+        $tp = $grid.GetCurrentPattern([System.Windows.Automation.TablePattern]::Pattern)
+        $headers = $tp.Current.GetColumnHeaders()
+        for ($h = 0; $h -lt $headers.Count; $h++) {
+            $hn = ''
+            try { $hn = [string]$headers[$h].Current.Name } catch { }
+            switch -Regex ($hn) {
+                '^\s*Severity'    { $colMap['severity'] = $h }
+                '^\s*Code'        { $colMap['code'] = $h }
+                '^\s*Description' { $colMap['description'] = $h }
+                '^\s*Project'     { $colMap['project'] = $h }
+                '^\s*File'        { $colMap['file'] = $h }
+                '^\s*Line'        { $colMap['line'] = $h }
+            }
+        }
+    } catch { }
+    # VS Error List column order is stable; fall back to known indices.
+    if (-not $colMap.ContainsKey('description')) {
+        $colMap = @{ severity = 1; code = 2; description = 3; project = 4; file = 5; line = 6 }
+    }
+
+    $getCell = {
+        param($r, $key)
+        if (-not $colMap.ContainsKey($key)) { return '' }
+        $c = [int]$colMap[$key]
+        if ($c -ge $colCount) { return '' }
+        try {
+            $cell = $gp.GetItem($r, $c)
+            if ($null -eq $cell) { return '' }
+            $t = $cell.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $txtCond)
+            if ($null -ne $t) { return [string]$t.Current.Name }
+            return [string]$cell.Current.Name
+        } catch { return '' }
+    }
+
+    $errors = @(); $warnings = @(); $infos = @()
+    $limit = [Math]::Min($rowCount, $MaxRows)
+    for ($r = 0; $r -lt $limit; $r++) {
+        # Realise the (virtualised) row by scrolling its description cell into
+        # view, then read its columns.
+        try {
+            $anchor = $gp.GetItem($r, [int]$colMap['description'])
+            if ($null -ne $anchor) {
+                $sip = $anchor.GetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern)
+                $sip.ScrollIntoView()
+            }
+        } catch { }
+
+        $code    = & $getCell $r 'code'
+        $desc    = & $getCell $r 'description'
+        $proj    = & $getCell $r 'project'
+        $file    = & $getCell $r 'file'
+        $lineStr = & $getCell $r 'line'
+        $lineNum = 0; [void][int]::TryParse(($lineStr -replace '[^\d]', ''), [ref]$lineNum)
+
+        # Skip rows that didn't realise (no text at all).
+        if (-not $desc -and -not $code) { continue }
+
+        # Severity is not readable from the Express Error List (see the
+        # function header), so infer it: a compiler code marks a PLC compile
+        # diagnostic — error when CheckAllObjects failed, warning when it
+        # passed — and everything else is a TwinCAT message (info).
+        $sevLabel =
+            if ($code -match '^[A-Za-z]\d{3,}') {
+                if ($CompileSucceeded) { 'Warning' } else { 'Error' }
+            } else { 'Message' }
+
+        $res = ConvertTo-TcErrorRow -Severity $sevLabel -Code $code -Description $desc -File $file -Line $lineNum -Project $proj
+        switch ($res.bucket) {
+            'warnings' { $warnings += $res.row }
+            'infos'    { $infos += $res.row }
+            default    { $errors += $res.row }
+        }
+    }
+    return @{ errors = $errors; warnings = $warnings; infos = $infos }
+}
+
 # ------------------------------------------------------------------
 # Module exports
 # ------------------------------------------------------------------
@@ -1246,6 +1516,7 @@ Export-ModuleMember -Function `
     Get-TcDutsFolder, `
     Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, Read-TcErrorList, Read-TcBuildOutput, `
+    Read-TcErrorListUia, ConvertTo-TcErrorRow, `
     Get-TcActivateHint, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `
