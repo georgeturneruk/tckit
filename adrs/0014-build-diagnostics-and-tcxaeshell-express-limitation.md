@@ -12,28 +12,47 @@ related: [10]
 ## Current state
 
 **Decision (live):** `build` reads PLC compile diagnostics from the Visual
-Studio DTE Error List (`dte.ToolWindows.ErrorList.ErrorItems` →
-severity / code / description / file / line / project), the method Beckhoff
-documents. This works against TwinCAT integrated into full Visual Studio.
-**TcXaeShell Express exposes no EnvDTE tool-window automation at all** —
-`ToolWindows.ErrorList`, `ToolWindows.OutputWindow`, and even `Windows.Count`
-return null/empty — and there is no documented or empirical alternative, so on
-Express `build` returns the correct pass/fail with an honest "per-error detail
-not available on this edition" message and nothing finer.
+Studio Error List. On full Visual Studio that is the documented EnvDTE path
+(`dte.ToolWindows.ErrorList.ErrorItems` → severity / code / description /
+file / line / project). **TcXaeShell Express exposes no EnvDTE tool-window
+automation** (`ToolWindows.ErrorList`, `OutputWindow`, `Windows.Count` all
+null), but the rendered Error List is still a live WPF grid, so on Express
+`build` reads it via **UI Automation** (`Read-TcErrorListUia`): it activates the
+Error List tab, walks the "Results" ListView's GridPattern, and returns real
+file / line / code / description / project per row. The honest "open it in XAE"
+message now fires only when the GUI can't be reached (no window on the
+interactive desktop, or the compile failed yet no error rows could be read).
+
+**Express severity is inferred, not read.** Every row's severity-column image
+reports the same static `Name='Error'` to UI Automation, so true severity is
+unavailable. It is inferred from the reliable columns instead: a row with a
+compiler code (e.g. `C0046`) is a compile diagnostic — an error when
+`CheckAllObjects` failed, a warning when it passed — and every code-less row
+(TwinCAT deploy / licence / test-log messages) is an info. This keeps
+`errors`/`warnings` limited to real compile diagnostics so the build's pass/fail
+stays honest, while TwinCAT messages are still surfaced as infos. Tier 2 only
+runs on failure or `-ForceLog`, so a clean build never reads the noisy list.
 
 **Where it lives:** `bridge/harness/Invoke-TcBuild.ps1` (Tier 1
-`CheckAllObjects` for pass/fail, Tier 2 `Read-TcErrorList`, Express
-short-circuit); `Read-TcErrorList` / `Read-TcBuildOutput` in
-`bridge/harness/_TcDte.psm1`; `code`/`project` on `BuildError` and `infos` on
-`BuildResult` in `tckit/ports/types.py`. Shipped in PR #123. Verified live this
-session against TcXaeShell Express on `C:\tckitdemo\T3TckitUtils.sln`.
+`CheckAllObjects` for pass/fail; Tier 2 prefers `Read-TcErrorList`, then
+`Read-TcErrorListUia` on Express, then the `/out` parse); `Read-TcErrorList` /
+`Read-TcErrorListUia` / `ConvertTo-TcErrorRow` / `Read-TcBuildOutput` in
+`bridge/harness/_TcDte.psm1`; `ConvertTo-TcErrorRow` unit-tested in
+`bridge/tests/ConvertTo-TcErrorRow.Tests.ps1`; `code`/`project` on `BuildError`
+and `infos` on `BuildResult` in `tckit/ports/types.py`. Original ErrorList read
+shipped in PR #123; the Express UIA read added this session. Verified live
+against TcXaeShell Express on `C:\tckitdemo\T3TckitUtils.sln`: a deliberate
+undefined-symbol POU returned `C0018` + `C0046` with file and line; a clean
+build returned a fast pass with no errors.
 
 **Open questions:**
-- Add a configurable DTE ProgID so the bridge can attach to
-  `VisualStudio.DTE.<ver>` (full VS) instead of `TcXaeShell.DTE.<ver>`. That is
-  the supported path to real build-error detail; not yet implemented.
-- Whether decoding the binary `_CompileInfo/*.compileinfo` is worth a try as an
-  Express-only fallback (undocumented; low confidence).
+- A configurable DTE ProgID to attach to `VisualStudio.DTE.<ver>` (full VS) is
+  still a nice-to-have, but no longer the *only* route to per-error detail on
+  Express now that the UIA read works.
+- The UIA read needs the XAE GUI open on the interactive desktop (same
+  precondition as attach-mode COM); it can't help a truly headless / SYSTEM
+  build. The severity icon stays unreadable on Express, so error-vs-warning is
+  inferred from `CheckAllObjects` rather than read.
 - On full VS the Error List also carries licence faults ("No license found"),
   which would feed issue #112's activate/deploy hints for free.
 
@@ -100,18 +119,33 @@ existing callers and the fallback path stay compatible.
   relies on `ToolWindows.OutputWindow`, null on Express; not Beckhoff-documented.
 - `ITcSysManager.GetLastErrorMessages()` / native `ITcSysLog` — coclass absent
   for TC3; the method is empty for PLC compile errors.
-- Decode `_CompileInfo/*.compileinfo` — undocumented binary; not attempted.
+- `ITcPlcProject.GenerateBootProject()` + check for a missing `.app` — only a
+  pass/fail signal, the same as Tier 1 `CheckAllObjects`; no per-error detail.
+- Decode `_CompileInfo/*.compileinfo` — probed this session: it's the CODESYS
+  post-compile symbol/codegen graph for a *successful* build (CRCs, external
+  names, FB_INIT / __MAIN link records), not a diagnostics log. Dead end.
+- Build via MSBuild + Beckhoff PLC targets — no `Beckhoff.TwinCAT.Build.targets`
+  exists; the `.plcproj` imports none and the `.tsproj` is the `<TcSmProject>`
+  schema, not MSBuild, so `msbuild <sln>` compiles no PLC and emits no errors.
+  Consistent with TwinCAT CI driving the automation interface, not MSBuild.
+- Read the Error List **UI Automation grid** (chosen for Express) — the
+  rendered WPF grid is readable even though EnvDTE is null; the only data it
+  won't surface is per-row severity (static icon name), which we infer.
 
 ## Consequences
 
 - On full Visual Studio, `build` returns real file/line/code/project
   diagnostics (and licence faults) via the documented API — matching standard
   TwinCAT CI (AllTwinCAT / Jenkins).
-- On TcXaeShell Express, `build` is honest pass/fail only; errors are read in
-  the XAE GUI. This is an edition limitation, not a TcKit bug, and is now
-  recorded so future sessions don't re-investigate the same dead ends.
-- A VS-DTE attach can be added later with no rework — the harness and Error
-  List code already behave correctly there.
+- On TcXaeShell Express, `build` now returns real file/line/code/project
+  diagnostics too, read from the GUI Error List via UI Automation, whenever the
+  XAE solution is open on the interactive desktop. Severity is inferred
+  (compiler code + `CheckAllObjects`) since the Express Error List doesn't
+  expose per-row severity to UIA. When the GUI can't be reached it falls back to
+  the honest pass/fail message. The earlier "edition limitation" is lifted for
+  the common case of an operator working with XAE open.
+- A VS-DTE attach can still be added later with no rework — the harness and
+  Error List code already behave correctly there.
 
 ## Status notes
 
@@ -122,3 +156,19 @@ existing callers and the fallback path stay compatible.
   is exactly the ErrorList read, and ruled out the OutputWindow-panes and
   `GetLastErrorMessages` workarounds. VS-DTE attach recorded as the open
   follow-up.
+- 2026-06-14: Express now reads real diagnostics via UI Automation. Probed the
+  two leftover leads and recorded both as dead ends in Alternatives:
+  `_CompileInfo/*.compileinfo` is a successful-compile symbol graph (no
+  diagnostics), and MSBuild has no Beckhoff PLC build targets installed.
+  Discovered the rendered Error List is a live WPF grid UIA can read on Express
+  even though EnvDTE is null: `Read-TcErrorListUia` selects the Error List tab,
+  walks the "Results" ListView (GridPattern/TablePattern), realises each
+  virtualised row via ScrollItemPattern and reads the columns. Severity is *not*
+  readable — every row's severity-column image reports a static `Name='Error'`
+  to UIA, and `LegacyIAccessible` isn't reachable — so it is inferred from the
+  compiler code plus the `CheckAllObjects` result; that classification lives in
+  the unit-tested pure helper `ConvertTo-TcErrorRow`. Wired into the Express
+  branch of `Invoke-TcBuild.ps1`. Verified live on
+  `C:\tckitdemo\T3TckitUtils.sln`: an undefined-symbol POU returned `C0018` +
+  `C0046` with file + line + project; a clean build was a fast pass with no
+  errors and no list read (Tier 2 runs only on failure / `-ForceLog`).
