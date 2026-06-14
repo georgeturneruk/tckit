@@ -121,6 +121,17 @@ def test_health_returns_false_when_unavailable() -> None:
     assert client.health() is False
 
 
+def test_health_returns_false_on_timeout() -> None:
+    # A connect to a dead local port can time out rather than be refused
+    # (which maps to BridgeError, not BridgeUnavailableError). health() must
+    # still report False so the auto-spawn treats it as "bridge down".
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timed out")
+
+    client = _client_with_handler(handler)
+    assert client.health() is False
+
+
 def test_active_solution_returns_path_on_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/active-solution"

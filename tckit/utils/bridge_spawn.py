@@ -79,10 +79,14 @@ def ensure_bridge_running(bridge_url: str | None = None, *, timeout: float = 20.
         except OSError:
             return False
 
-        creationflags = 0
-        detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+        # CREATE_NO_WINDOW, not DETACHED_PROCESS: under DETACHED_PROCESS,
+        # powershell.exe exits immediately (no console to attach), so the
+        # bridge never starts. CREATE_NO_WINDOW runs it windowless but
+        # intact; CREATE_NEW_PROCESS_GROUP detaches it from our Ctrl+C
+        # group. The child outlives this process on Windows either way.
+        no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         new_group = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        creationflags = detached | new_group
+        creationflags = no_window | new_group
 
         try:
             subprocess.Popen(
