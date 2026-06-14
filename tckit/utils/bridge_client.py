@@ -121,10 +121,18 @@ class BridgeClient:
         return self._request("GET", path, json=None, timeout=timeout)
 
     def health(self) -> bool:
-        """Return True if /health responds with status=ok."""
+        """Return True if /health responds with status=ok.
+
+        Any bridge-level failure counts as "not healthy" — not just an
+        unreachable bridge (``BridgeUnavailableError``) but also a
+        connect/read timeout (``BridgeError``). A connect to a dead local
+        port can *time out* rather than be refused (e.g. an IPv6 ``::1``
+        attempt that hangs when nothing is listening), so callers like the
+        auto-spawn must read that as "bridge down" instead of crashing.
+        """
         try:
             resp = self.get("/health", timeout=2.0)
-        except BridgeUnavailableError:
+        except BridgeError:
             return False
         return resp.get("status") == "ok"
 
