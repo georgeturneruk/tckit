@@ -20,7 +20,7 @@
     ADR-0009.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Consumer PLC project receiving the reference. Optional if exactly one
@@ -63,7 +63,7 @@
     for the surrounding library-manager API.
 #>
 param(
-    [string]$ProjectPath     = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath     = '',
     [string]$PlcName         = $env:PLC_PROJECT_NAME,
     [string]$PlaceholderName,
     [string]$DefaultLibrary,
@@ -80,12 +80,12 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath)     { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $PlaceholderName) { return @{ success = $false; error = 'PlaceholderName required.' } }
     if (-not $DefaultLibrary)  { return @{ success = $false; error = 'DefaultLibrary required.' } }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    if (-not $ProjectPath) { $ProjectPath = $dte.Solution.FullName }
     $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plc
 
@@ -134,7 +134,7 @@ try {
             -PlcProjPath $plcProjPath `
             -PlaceholderName $PlaceholderName `
             -Parameters $Parameters
-        Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+        Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
     }
 
     return @{

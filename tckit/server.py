@@ -1437,6 +1437,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = _build_parser().parse_args()
+    # Best-effort: bring the local bridge up if it's down, so the operator
+    # doesn't have to launch it by hand (#121). No-op off Windows or against
+    # a remote BRIDGE_URL, and must never block startup or write to stdout
+    # (which would corrupt the stdio MCP stream).
+    try:
+        from tckit.utils.bridge_spawn import ensure_bridge_running
+
+        ensure_bridge_running()
+    except Exception:  # noqa: BLE001 — auto-spawn is best-effort
+        pass
     mcp = _build_mcp(args.transport)
     _register_tools(mcp)
     mcp.run(transport=args.transport)

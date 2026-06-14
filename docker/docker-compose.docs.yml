@@ -9,6 +9,6 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PLC_PROJECT_PATH=/project
+      - PROJECT_PATH=/project
       - DOCS_OUTPUT_PATH=/docs-output
     command: python /app/docker/generate_docs_entrypoint.py

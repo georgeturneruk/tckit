@@ -36,6 +36,7 @@
       POST /tcunit-xml-resolve    -> harness\Resolve-TcUnitXmlPath.ps1
       POST /set-placeholder-parameters -> harness\Set-TcLibraryPlaceholderParameters.ps1
       POST /install-dependency    -> Install-Module (allow-listed modules only)
+      GET  /active-solution       -> harness\Get-TcActiveSolution.ps1
       GET  /health                -> {"status": "ok", "dependencies": {...}}
 
 .PARAMETER Port
@@ -274,6 +275,10 @@ try {
                         version      = '0.1.0'
                         dependencies = Get-BridgeDependencies
                     }
+                }
+                'GET /active-solution' {
+                    $result = Invoke-Harness -Script 'Get-TcActiveSolution.ps1'
+                    Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /install-dependency' {
                     $body   = Read-RequestBody -Request $req

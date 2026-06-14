@@ -61,14 +61,12 @@ def test_add_plc_project_rejects_library_project_type() -> None:
     assert client.calls == []
 
 
-def test_add_plc_project_ignores_plc_project_path_env(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # add_plc_project takes sln_path explicitly — it should never pick up
-    # PLC_PROJECT_PATH because the operation is solution-scoped.
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/wrong.sln")
+def test_add_plc_project_uses_explicit_sln_path() -> None:
+    # add_plc_project takes sln_path explicitly and posts it directly, so a
+    # configured project_path on the writer never overrides it — the
+    # operation is solution-scoped.
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/wrong.sln")  # type: ignore[arg-type]
 
     writer.add_plc_project("C:/right.sln", "Tests")
 
@@ -82,10 +80,9 @@ def test_add_plc_project_ignores_plc_project_path_env(
 
 
 def test_save_plc_as_library_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.save_plc_as_library("Library", "C:/out/Library.library")
 
@@ -104,9 +101,8 @@ def test_save_plc_as_library_payload_shape(monkeypatch: pytest.MonkeyPatch) -> N
 def test_save_plc_as_library_overwrite_passes_through(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.save_plc_as_library(
         "Library", "C:/out/Library.library", overwrite=True
@@ -117,9 +113,8 @@ def test_save_plc_as_library_overwrite_passes_through(
 
 
 def test_add_gvl_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_gvl(
         "GVL_Settings",
@@ -140,9 +135,8 @@ def test_add_gvl_payload_shape(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_save_plc_as_library_install_false_passes_through(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.save_plc_as_library(
         "Library", "C:/out/Library.library", install=False, repository="UserScope"
@@ -161,10 +155,9 @@ def test_save_plc_as_library_install_false_passes_through(
 def test_add_library_reference_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_reference("Tests", "Library")
 
@@ -182,9 +175,8 @@ def test_add_library_reference_payload_shape(
 def test_add_library_reference_explicit_version_and_distributor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_reference(
         "Tests", "Tc2_Standard", version="3.3.0.0", distributor="Beckhoff Automation GmbH"
@@ -216,10 +208,9 @@ def test_add_library_reference_failure_translated_to_result() -> None:
 def test_add_library_placeholder_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_placeholder(
         "Tests", "TcUnit", "TcUnit", distributor="www.tcunit.org"
@@ -240,9 +231,8 @@ def test_add_library_placeholder_payload_shape(
 def test_add_library_placeholder_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_placeholder("Tests", "Tc2_Standard", "Tc2_Standard")
 
@@ -256,9 +246,8 @@ def test_add_library_placeholder_distinct_name_from_default(
 ) -> None:
     # Placeholder name may differ from the default library it points to
     # (Beckhoff conventionally uses Placeholder_NC -> Tc2_NC).
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_placeholder(
         "Tests",
@@ -290,9 +279,8 @@ def test_add_library_placeholder_failure_translated_to_result() -> None:
 def test_add_library_placeholder_parameters_passed_through(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_placeholder(
         "Tests",
@@ -314,9 +302,8 @@ def test_add_library_placeholder_parameters_omitted_by_default(
     # When no parameters are passed the bridge payload should not carry a
     # `Parameters` key at all, so the harness's existing default behaviour
     # is unchanged for callers that don't care about overrides.
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.add_library_placeholder("Tests", "TcUnit", "TcUnit")
 
@@ -332,10 +319,9 @@ def test_add_library_placeholder_parameters_omitted_by_default(
 def test_set_placeholder_parameters_payload_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     writer.set_placeholder_parameters(
         "Tests",
@@ -356,14 +342,13 @@ def test_set_placeholder_parameters_payload_shape(
 def test_set_placeholder_parameters_surfaces_missing_placeholder(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/work/B1.sln")
     client = FakeBridgeClient(
         {
             "success": False,
             "error": "PlaceholderReference 'NotThere' not found in C:/x.plcproj. Use add_library_placeholder to add it first.",
         }
     )
-    writer = AutomationWriter(client=client)  # type: ignore[arg-type]
+    writer = AutomationWriter(client=client, project_path="C:/work/B1.sln")  # type: ignore[arg-type]
 
     result = writer.set_placeholder_parameters(
         "Tests", "NotThere", {"L": {"k": "v"}}

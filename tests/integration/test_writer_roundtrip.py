@@ -36,15 +36,14 @@ def _project_or_skip() -> str:
 
 
 @pytest.fixture()
-def writer(monkeypatch: pytest.MonkeyPatch) -> AutomationWriter:
+def writer() -> AutomationWriter:
     client = _bridge_or_skip()
     project = _project_or_skip()
-    monkeypatch.setenv("PLC_PROJECT_PATH", project)
-    return AutomationWriter(client=client)
+    return AutomationWriter(client=client, project_path=project)
 
 
 def test_open_project(writer: AutomationWriter) -> None:
-    project = os.environ["PLC_PROJECT_PATH"]
+    project = _project_or_skip()
     result = writer.open_project(project)
     assert result.success, f"open_project failed: {result.error}"
 

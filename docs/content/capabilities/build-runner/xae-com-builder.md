@@ -16,20 +16,16 @@ Builds TwinCAT projects via the Windows bridge → COM automation interface and 
 }
 ```
 
-Required environment variables: `BRIDGE_URL`, `PLC_PROJECT_PATH`. Optional: `PLC_PROJECT_NAME`, `TCKIT_BUILD_TIMEOUT` (seconds, default 600), `DEVENV_PATH` (path to `TcXaeShell.exe` if not at the default install location), `TC_BUILD_CONFIG` (default `Release`), `TC_BUILD_PLATFORM` (default `TwinCAT RT (x64)`).
+`build` takes the project path as an explicit argument; `deploy` and `start_runtime` operate on the solution open in the attached XAE. Required environment variables: `BRIDGE_URL`. Optional: `PLC_PROJECT_NAME`, `TCKIT_BUILD_TIMEOUT` (seconds, default 600), `DEVENV_PATH` (path to `TcXaeShell.exe` if not at the default install location), `TC_BUILD_CONFIG` (default `Release`), `TC_BUILD_PLATFORM` (default `TwinCAT RT (x64)`).
 
 ## How it works
 
 Two-tier build inside `Invoke-TcBuild.ps1`:
 
 1. **Tier 1 — fast in-process compile check.** Calls `ITcPlcIECProject2.CheckAllObjects()` on the PLC project node. Returns `True` when the PLC source compiles cleanly, `False` when there are errors. This is the happy-path signal — no extra processes spawned.
-2. **Tier 2 — structured error retrieval.** When tier 1 returns `False` (or `ForceLog` is set), the harness shells out to:
+2. **Tier 2 — structured diagnostics.** When tier 1 returns `False` (or `ForceLog` is set), the harness reads the IDE **Error List** (`DTE.ToolWindows.ErrorList`), which holds the actual PLC errors, warnings and info messages with file, line, compiler `code` and `project`. This needs a full TcXaeShell or Visual Studio.
 
-    ```powershell
-    TcXaeShell.exe <sln> /rebuild "Release|TwinCAT RT (x64)" /log <Log.xml>
-    ```
-
-    and parses the resulting log into structured `BuildError` rows. This is the only way to get per-error file/line/message detail on TcXaeShell **Express**, which does not expose `DTE.ToolWindows.ErrorList`.
+    **TcXaeShell Express** exposes neither the Error List nor the Output window to automation (and `/rebuild /out` writes nothing), so per-error detail can't be retrieved there. On Express the build still reports pass/fail correctly and returns a message saying detail isn't available — open the solution in TcXaeShell to read the errors, or point `DEVENV_PATH` at a full TcXaeShell / Visual Studio, which the harness then drives with `/rebuild … /out <build.txt>`.
 
 ## Error format
 
@@ -41,10 +37,13 @@ Two-tier build inside `Invoke-TcBuild.ps1`:
       "file": "FB_MotorControl.TcPOU",
       "line": 42,
       "message": "'nSpeed' is not declared",
-      "severity": "error"
+      "severity": "error",
+      "code": "C0046",
+      "project": "MyPlc"
     }
   ],
   "warnings": [],
+  "infos": [],
   "duration_seconds": 5.6,
   "details": { "plc": "MyPlc", "check_all_objects": false }
 }

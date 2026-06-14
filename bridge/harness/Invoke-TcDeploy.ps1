@@ -23,7 +23,7 @@
     for the canonical example.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER TargetAmsId
     AMS Net ID of the target (e.g. 192.168.1.100.1.1). Falls back to TARGET_AMS_ID env var.
@@ -48,7 +48,7 @@
     'attach' (default) or 'headless'.
 #>
 param(
-    [string]$ProjectPath  = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath  = '',
     [string]$TargetAmsId  = $env:TARGET_AMS_ID,
     [string]$PlcName      = $env:PLC_PROJECT_NAME,
     [bool]$BootAutostart  = $true,
@@ -62,11 +62,10 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath) { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $TargetAmsId) { return @{ success = $false; error = 'TargetAmsId required.' } }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
 
     $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
@@ -76,7 +75,8 @@ try {
     try {
         $sm.SetTargetNetId($TargetAmsId)
     } catch {
-        return @{ success = $false; error = "SetTargetNetId('$TargetAmsId') failed: $($_.Exception.Message)" }
+        $msg = $_.Exception.Message
+        return @{ success = $false; error = "SetTargetNetId('$TargetAmsId') failed: $msg$(Get-TcActivateHint -Message $msg)" }
     }
 
     # Enable autostart on the PLC project so the runtime actually runs
@@ -93,9 +93,10 @@ try {
             $plcSmNode.BootProjectAutostart = $true
             $plcSmNode.GenerateBootProject($true)
         } catch {
+            $msg = $_.Exception.Message
             return @{
                 success = $false
-                error   = "Enabling autostart on '$resolvedPlc' failed: $($_.Exception.Message)"
+                error   = "Enabling autostart on '$resolvedPlc' failed: $msg$(Get-TcActivateHint -Message $msg)"
             }
         }
     }
@@ -103,7 +104,8 @@ try {
     try {
         $sm.ActivateConfiguration()
     } catch {
-        return @{ success = $false; error = "ActivateConfiguration failed: $($_.Exception.Message)" }
+        $msg = $_.Exception.Message
+        return @{ success = $false; error = "ActivateConfiguration failed: $msg$(Get-TcActivateHint -Message $msg)" }
     }
 
     return @{

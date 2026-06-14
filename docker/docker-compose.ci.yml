@@ -5,6 +5,6 @@ services:
       dockerfile: docker/Dockerfile
     environment:
       - BRIDGE_URL=${BRIDGE_URL:-}
-      - PLC_PROJECT_PATH=${PLC_PROJECT_PATH:-}
+      - PROJECT_PATH=${PROJECT_PATH:-}
       - TARGET_AMS_ID=${TARGET_AMS_ID:-}
       - XAE_MODE=headless

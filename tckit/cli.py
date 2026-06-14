@@ -215,7 +215,6 @@ _RESOLVED_KEYS: tuple[str, ...] = (
     "SAFETY_CONFIRMATIONS",
     "COM_VERSION",
     "XAE_MODE",
-    "PLC_PROJECT_PATH",
     "PLC_PROJECT_NAME",
 )
 

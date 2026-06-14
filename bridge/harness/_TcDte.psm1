@@ -226,6 +226,42 @@ function Open-TcSolution {
     return $Dte.Solution
 }
 
+function Use-TcSolution {
+    <#
+    .SYNOPSIS
+        Resolve the solution to operate on: open an explicit path when one
+        is given, otherwise use the solution already open in the attached
+        instance.
+
+    .DESCRIPTION
+        TcKit's default model is "operate on whatever solution is open in
+        the attached TcXaeShell". The operator (or a one-off open_project)
+        chooses it and every subsequent call follows. An explicit -Path is
+        only needed for a headless spawn or to switch solutions on purpose;
+        passing one on every edit is what used to yank the IDE to a stale
+        configured path. So: with a -Path, defer to Open-TcSolution
+        (idempotent); with an empty -Path, require a solution to already be
+        loaded and return it, raising a clear, actionable error otherwise.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [string]$Path = ''
+    )
+    if ($Path) {
+        return Open-TcSolution -Dte $Dte -Path $Path
+    }
+    $current = ''
+    try { $current = $Dte.Solution.FullName } catch { }
+    if (-not $current) {
+        throw 'No solution is open in TcXaeShell. Open your project in XAE (or call open_project) before this operation, or pass an explicit project path.'
+    }
+    # An existing sln can have its PLC source trees lazy-loaded; force
+    # them in so downstream LookupTreeItem calls resolve (same rationale
+    # as Open-TcSolution after a fresh open).
+    try { Wait-TcPlcProjectsLoaded -Dte $Dte | Out-Null } catch { }
+    return $Dte.Solution
+}
+
 function Save-TcSolution {
     <#
     .SYNOPSIS
@@ -1002,24 +1038,132 @@ function Find-Devenv {
 function Invoke-TcDevenvBuild {
     <#
     .SYNOPSIS
-        Run TcXaeShell.exe /rebuild "<config>|<platform>" /log <logPath> <sln>.
-        Returns the exit code; the structured log lands at $LogPath.
+        Run TcXaeShell.exe /rebuild "<config>|<platform>" /out <outPath> <sln>.
+        Returns the exit code; the build OUTPUT (including PLC compiler
+        diagnostics) lands at $OutPath.
+
+    .DESCRIPTION
+        Used as the Error-List fallback on editions that don't expose
+        DTE.ToolWindows.ErrorList (TcXaeShell Express). /out captures the
+        build output pane — the actual "file(line): error CODE: message"
+        lines — unlike /log, which only records IDE activity (startup
+        events), and was the cause of builds returning no usable
+        diagnostics.
     #>
     param(
         [Parameter(Mandatory)][string]$SolutionPath,
-        [Parameter(Mandatory)][string]$LogPath,
+        [Parameter(Mandatory)][string]$OutPath,
         [string]$Configuration = 'Release',
         [string]$Platform = 'TwinCAT RT (x64)'
     )
     $devenv = Find-Devenv
-    if (Test-Path $LogPath) { Remove-Item $LogPath -Force }
+    if (Test-Path $OutPath) { Remove-Item $OutPath -Force }
     $args = @(
         $SolutionPath,
         '/rebuild', "$Configuration|$Platform",
-        '/log', $LogPath
+        '/out', $OutPath
     )
     $proc = Start-Process -FilePath $devenv -ArgumentList $args -Wait -PassThru -NoNewWindow
     return $proc.ExitCode
+}
+
+function Read-TcErrorList {
+    <#
+    .SYNOPSIS
+        Read the IDE Error List into structured errors / warnings / infos.
+
+    .DESCRIPTION
+        The Error List (EnvDTE80 ToolWindows.ErrorList) holds the PLC
+        compile diagnostics after CheckAllObjects() or a build. Returns
+        $null when the tool window is not exposed (e.g. TcXaeShell Express),
+        so the caller can fall back to parsing the build output.
+
+        vsBuildErrorLevel maps High(1) -> error, Medium(2) -> warning,
+        Low(3) -> info. TwinCAT PLC messages carry the compiler code at the
+        front of the description ("C0046: ..."), which we lift into `code`.
+
+    .OUTPUTS
+        @{ errors = @(...); warnings = @(...); infos = @(...) } or $null.
+        Each row: @{ file; line; message; severity; code; project }.
+    #>
+    param([Parameter(Mandatory)]$Dte)
+
+    $errorList = $null
+    try { $errorList = $Dte.ToolWindows.ErrorList } catch { return $null }
+    if ($null -eq $errorList) { return $null }
+    $items = $null
+    try { $items = $errorList.ErrorItems } catch { return $null }
+    if ($null -eq $items) { return @{ errors = @(); warnings = @(); infos = @() } }
+
+    $count = 0
+    try { $count = [int]$items.Count } catch { $count = 0 }
+
+    $errors = @(); $warnings = @(); $infos = @()
+    for ($i = 1; $i -le $count; $i++) {
+        $it = $null
+        try { $it = $items.Item($i) } catch { continue }
+        if ($null -eq $it) { continue }
+
+        $desc = ''; $file = ''; $line = 0; $project = ''; $level = 1
+        try { $desc    = [string]$it.Description } catch { }
+        try { $file    = [string]$it.FileName } catch { }
+        try { $line    = [int]$it.Line } catch { $line = 0 }
+        try { $project = [string]$it.Project } catch { }
+        try { $level   = [int]$it.ErrorLevel } catch { $level = 1 }
+
+        $code = ''
+        $m = [regex]::Match($desc, '^\s*(?<code>[A-Za-z]\d{3,})\s*:\s*(?<msg>.*)$')
+        if ($m.Success) {
+            $code = $m.Groups['code'].Value
+            $desc = $m.Groups['msg'].Value.Trim()
+        }
+
+        $severity = switch ($level) { 2 { 'warning' } 3 { 'info' } default { 'error' } }
+        $row = @{ file = $file; line = $line; message = $desc; severity = $severity; code = $code; project = $project }
+        switch ($severity) {
+            'warning' { $warnings += $row }
+            'info'    { $infos += $row }
+            default   { $errors += $row }
+        }
+    }
+    return @{ errors = $errors; warnings = $warnings; infos = $infos }
+}
+
+function Read-TcBuildOutput {
+    <#
+    .SYNOPSIS
+        Parse a devenv /out build-output text file into structured
+        errors / warnings (the Express-edition fallback).
+
+    .DESCRIPTION
+        The build-output pane lists PLC compiler diagnostics as
+        "<file>(<line>): error <code>: <message>" (or "warning"), which is
+        the real PLC error text — unlike the /log activity log.
+
+    .OUTPUTS
+        @{ errors = @(...); warnings = @(...) }. Each row:
+        @{ file; line; message; severity; code; project }.
+    #>
+    param([Parameter(Mandatory)][string]$OutPath)
+
+    $errors = @(); $warnings = @()
+    if (-not (Test-Path $OutPath)) { return @{ errors = $errors; warnings = $warnings } }
+    $lines = Get-Content -LiteralPath $OutPath -ErrorAction SilentlyContinue
+    foreach ($raw in $lines) {
+        $m = [regex]::Match([string]$raw, '^(?<file>.+?)\((?<line>\d+)(?:,\d+)?\)\s*:\s*(?<sev>error|warning)\s+(?<code>[A-Za-z]?\d+)?\s*:\s*(?<msg>.*)$')
+        if (-not $m.Success) { continue }
+        $sev = $m.Groups['sev'].Value.ToLowerInvariant()
+        $row = @{
+            file     = $m.Groups['file'].Value.Trim()
+            line     = [int]$m.Groups['line'].Value
+            message  = $m.Groups['msg'].Value.Trim()
+            severity = $sev
+            code     = $m.Groups['code'].Value.Trim()
+            project  = ''
+        }
+        if ($sev -eq 'warning') { $warnings += $row } else { $errors += $row }
+    }
+    return @{ errors = $errors; warnings = $warnings }
 }
 
 function Read-TcBuildLog {
@@ -1063,16 +1207,46 @@ function Read-TcBuildLog {
     return @{ errors = $errors; warnings = $warnings }
 }
 
+function Get-TcActivateHint {
+    <#
+    .SYNOPSIS
+        Map a known deploy / activate / licence COM failure to a short,
+        actionable hint. Returns '' when nothing specific matches, so the
+        caller can append it to the raw message without clutter.
+
+    .DESCRIPTION
+        ActivateConfiguration and friends surface opaque COM errors
+        (E_UNEXPECTED from FindActiveProjectCfgName when no solution
+        configuration is selected, ADS licence HRESULTs when the target
+        has no TwinCAT 3 licence). We match on the message text rather than
+        brittle HRESULT numbers and tell the operator what to do next.
+    #>
+    param([Parameter(Mandatory)][string]$Message)
+
+    $m = $Message.ToLowerInvariant()
+    if ($m -match 'findactiveprojectcfgname' -or $m -match 'e_unexpected') {
+        return ' No active solution configuration is selected. In XAE choose one (Build > Configuration Manager), or check the project has a build configuration.'
+    }
+    if ($m -match 'licen' -or $m -match '0x9811') {
+        return " The target may be missing a TwinCAT 3 licence. Check the target's licences (SYSTEM > License in Solution Explorer), or activate a 7-day trial."
+    }
+    if ($m -match 'route' -or $m -match 'target machine' -or $m -match 'timeout') {
+        return ' The target may be unreachable. Verify the AMS route to the NetId and that the target is online.'
+    }
+    return ''
+}
+
 # ------------------------------------------------------------------
 # Module exports
 # ------------------------------------------------------------------
 
 Export-ModuleMember -Function `
-    Get-TcKind, Get-TcDte, Open-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
+    Get-TcKind, Get-TcDte, Open-TcSolution, Use-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
     Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
     Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
-    Invoke-TcDevenvBuild, Read-TcBuildLog, `
+    Invoke-TcDevenvBuild, Read-TcBuildLog, Read-TcErrorList, Read-TcBuildOutput, `
+    Get-TcActivateHint, `
     Invoke-WithComRetry, Wait-TcPlcProjectsLoaded, Save-TcSolution, `
     Find-TcPlcProjFile, Set-TcPlcProjPlaceholderParameters, `
     Test-TcPlcProjHasPlaceholder

@@ -39,7 +39,7 @@ Ask the user, validating each:
 - **COM_VERSION** — default `"17.0"`. Don't change unless the user knows their TcXaeShell version is different.
 - **XAE_MODE** — default `"attach"`. `"headless"` is for CI.
 - **BRIDGE_URL** — default `http://localhost:8765`.
-- **PLC_PROJECT_PATH** — optional convenience. The absolute path to a `.sln` they mostly work with.
+- **PLC_PROJECT_NAME** — optional. Name of the PLC sub-project under `TIPC`; set it only to disambiguate a multi-PLC solution (auto-resolved when there's just one). There is no project-path setting: TcKit operates on whatever solution is open in TcXaeShell.
 
 ### Write the config
 

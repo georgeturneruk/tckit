@@ -48,15 +48,16 @@ XAE_MODE = "attach"
 COM_VERSION = "17.0"
 
 # ---------------------------------------------------------------------------
-# Default project (optional convenience)
+# Default PLC sub-project (optional)
 # ---------------------------------------------------------------------------
 
-# If you mostly work on one project, set its absolute path here so you don't
-# have to repeat it on every tool call.
-PLC_PROJECT_PATH = ""
+# TcKit operates on whatever solution is open in TcXaeShell; there is no
+# project-path setting to configure (open the project in XAE, or call
+# open_project once, and every tool follows it).
 
 # Name of the PLC sub-project under TIPC. Leave blank when there's exactly
-# one PLC project in the solution (the harness auto-resolves).
+# one PLC project in the solution (the harness auto-resolves); set it only
+# to disambiguate a multi-PLC solution.
 PLC_PROJECT_NAME = ""
 
 # ---------------------------------------------------------------------------

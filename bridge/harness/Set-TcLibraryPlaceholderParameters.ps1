@@ -15,7 +15,7 @@
     session see the new overrides.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Consumer PLC project hosting the placeholder. Optional if exactly
@@ -31,7 +31,7 @@
     verbatim (TwinCAT booleans need 'TRUE' / 'FALSE').
 #>
 param(
-    [string]$ProjectPath     = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath     = '',
     [string]$PlcName         = $env:PLC_PROJECT_NAME,
     [string]$PlaceholderName,
     [hashtable]$Parameters   = @{},
@@ -45,14 +45,14 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath)     { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $PlaceholderName) { return @{ success = $false; error = 'PlaceholderName required.' } }
     if ($Parameters.Count -eq 0) {
         return @{ success = $false; error = 'Parameters required and must be non-empty.' }
     }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    if (-not $ProjectPath) { $ProjectPath = $dte.Solution.FullName }
     $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
 
     $plcProjPath = Find-TcPlcProjFile -SolutionPath $ProjectPath -PlcName $plc
@@ -76,7 +76,7 @@ try {
         -PlcProjPath $plcProjPath `
         -PlaceholderName $PlaceholderName `
         -Parameters $Parameters
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
 
     return @{
         success = $true

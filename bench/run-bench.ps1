@@ -24,11 +24,11 @@
       - TcXaeShell is running (attach mode) with no solution loaded.
         The script will open and close the bench sln via the bridge.
       - The MCP port (-McpUrl, default 8000) is FREE. The bench
-        spawns its own MCP server per run with PLC_PROJECT_PATH set
-        to the active fixture path (temp under --isolate-cwd, else
-        the real sln). If you have an interactive MCP server
-        running on 8000, stop it first or pass -McpUrl pointing at
-        a free port.
+        spawns its own MCP server per run and /opens the active
+        fixture sln (temp under --isolate-cwd, else the real sln)
+        so the server targets it. If you have an interactive MCP
+        server running on 8000, stop it first or pass -McpUrl
+        pointing at a free port.
 
     Self-validation: the model session normally hits the safety-gate
     handshake on deploy / start_runtime and waits for human approval.
@@ -147,7 +147,7 @@ if ($needsMcp) {
     $mcpUri = [Uri]$McpUrl
     $existing = Get-NetTCPConnection -State Listen -LocalPort $mcpUri.Port -ErrorAction SilentlyContinue
     if ($existing) {
-        throw "$($mcpUri.Host):$($mcpUri.Port) is already in use. Stop the existing MCP server (the bench manages MCP lifecycle per run with the right PLC_PROJECT_PATH; sharing with an interactive MCP would hit the isolate-cwd staleness bug)."
+        throw "$($mcpUri.Host):$($mcpUri.Port) is already in use. Stop the existing MCP server (the bench manages MCP lifecycle per run and /opens the right sln; sharing with an interactive MCP would hit the isolate-cwd staleness bug)."
     }
 }
 
@@ -158,7 +158,6 @@ if ($needsMcp) {
 # claude -p non-interactive session.
 # ---------------------------------------------------------------------------
 $env:TARGET_AMS_ID    = $TargetAmsId
-$env:PLC_PROJECT_PATH = "$repoRoot/$slnPath" -replace '\\','/'
 if ($SelfValidate) {
     $env:SAFETY_CONFIRMATIONS = 'false'
     Remove-Item Env:ALLOWED_NETIDS -ErrorAction SilentlyContinue
@@ -204,8 +203,8 @@ function Invoke-Arm {
 
 try {
     if ($Arm -in 'tckit','both') {
-        # tckit arm: bench manages MCP per run with PLC_PROJECT_PATH pointing
-        # at the active fixture path (temp under --isolate-cwd).
+        # tckit arm: bench manages MCP per run and /opens the active fixture
+        # sln (temp under --isolate-cwd) so the server targets it.
         $tckitExtras = @(
             '--inject-skills', 'plugin/skills',
             '--mcp-cmd',       'uv run python -m tckit.server --transport sse',

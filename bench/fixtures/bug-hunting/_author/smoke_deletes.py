@@ -16,7 +16,6 @@ Exits 0 on success, non-zero on the first failing assertion.
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -144,7 +143,7 @@ def main() -> int:
 
     _check("create_project", writer.create_project(SLN_NAME, str(FIXTURE_DIR)))
     sln_path = FIXTURE_DIR / f"{SLN_NAME}.sln"
-    os.environ["PLC_PROJECT_PATH"] = str(sln_path)
+    _check("open_project", writer.open_project(str(sln_path)))
 
     # --- Wave 1: delete_pou ------------------------------------------------
 

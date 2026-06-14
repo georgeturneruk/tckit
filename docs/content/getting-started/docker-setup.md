@@ -22,13 +22,13 @@ cp docker/.env.example docker/.env
 Edit `docker/.env`:
 
 ```bash
-PLC_PROJECT_PATH=/projects/MyProject.sln
+PROJECT_PATH=/projects/MyProject.sln
 BRIDGE_URL=http://host.docker.internal:8765
 TARGET_AMS_ID=192.168.1.100.1.1
 XAE_MODE=attach
 ```
 
-Mount the host directory containing your projects via `PLC_PROJECTS_HOST_PATH` (defaults to `./projects`). Inside the container it appears as `/projects`. Any path the agent passes must resolve inside that mount.
+`PROJECT_PATH` is read by the docs service to know which project to document; bridge-backed tools (reads, edits, builds) operate on the solution open in the attached XAE and don't need it. Mount the host directory containing your projects via `PLC_PROJECTS_HOST_PATH` (defaults to `./projects`). Inside the container it appears as `/projects`. Any path the agent passes must resolve inside that mount.
 
 ## Start
 

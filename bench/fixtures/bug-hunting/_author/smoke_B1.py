@@ -162,13 +162,12 @@ def main() -> int:
     if not client.health():
         _fail(f"Bridge not reachable at {client.base_url}. Start the bridge first.")
 
-    writer = AutomationWriter(client=client)
-    builder = XaeComBuilder(client=client)
-    runner = TcUnitRunner(client=client)
+    # Target the existing sln explicitly so every call reaches the right
+    # solution (this script doesn't create or open it otherwise).
+    writer = AutomationWriter(client=client, project_path=str(SLN_PATH))
+    builder = XaeComBuilder(client=client, project_path=str(SLN_PATH))
+    runner = TcUnitRunner(client=client, project_path=str(SLN_PATH))
 
-    # The writer + builder + runner all attach the active project via
-    # PLC_PROJECT_PATH; setting it here lets every call reach the right sln.
-    os.environ["PLC_PROJECT_PATH"] = str(SLN_PATH)
     library_artefact = FIXTURE_DIR / f"{LIBRARY_PLC}.library"
 
     # -------- red pass: seeded bug should make TestIsFailed = TRUE

@@ -121,6 +121,38 @@ def test_health_returns_false_when_unavailable() -> None:
     assert client.health() is False
 
 
+def test_active_solution_returns_path_on_success() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/active-solution"
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "solution_path": "C:/work/MyProj.sln",
+                "plc_projects": ["MyPlc"],
+            },
+        )
+
+    client = _client_with_handler(handler)
+    assert client.active_solution() == "C:/work/MyProj.sln"
+
+
+def test_active_solution_returns_none_when_no_solution_open() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": False, "error": "no solution"})
+
+    client = _client_with_handler(handler)
+    assert client.active_solution() is None
+
+
+def test_active_solution_returns_none_when_bridge_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("nope")
+
+    client = _client_with_handler(handler)
+    assert client.active_solution() is None
+
+
 def test_build_timeout_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TCKIT_BUILD_TIMEOUT", raising=False)
     assert build_timeout() == 600.0

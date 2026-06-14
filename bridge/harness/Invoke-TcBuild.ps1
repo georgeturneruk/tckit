@@ -6,24 +6,27 @@
     Two-tier strategy:
       1. Attach to XAE, call ITcPlcIECProject2.CheckAllObjects() on the PLC
          project node — fast in-process binary signal of PLC compile state.
-      2. If errors are present (or always, if -ForceLog), shell out to
-         TcXaeShell.exe /rebuild /log <Log.xml>, then parse the structured
-         XML log into BuildError-shaped hashtables.
+         This also populates the IDE Error List.
+      2. If the build failed (or always, if -ForceLog), read structured
+         diagnostics. Prefer the IDE Error List (the actual PLC errors /
+         warnings / infos with file, line, code and project); fall back to
+         a /out build-output parse on editions that don't expose
+         DTE.ToolWindows.ErrorList (TcXaeShell Express).
 
-    Why two tiers? TcXaeShell Express does not expose
-    DTE.ToolWindows.ErrorList, so /log is the only way to retrieve
-    file/line/message detail. CheckAllObjects gives us a fast happy path.
+    The earlier implementation parsed the /log *activity* log, which records
+    IDE startup events rather than PLC diagnostics — so a failing build
+    returned no usable errors.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Name of the PLC project. Optional if exactly one is present. Falls back
     to PLC_PROJECT_NAME env var.
 
 .PARAMETER ForceLog
-    If true, always run devenv /log even if CheckAllObjects() succeeds.
-    Useful when the caller wants warnings as well as errors.
+    If true, always read diagnostics even if CheckAllObjects() succeeds.
+    Useful when the caller wants warnings / infos as well as errors.
 
 .PARAMETER Configuration
     Build configuration. Default 'Release'.
@@ -34,13 +37,14 @@
 .OUTPUTS
     @{
         success          = bool
-        errors           = @( @{file; line; message; severity='error'},   ... )
-        warnings         = @( @{file; line; message; severity='warning'}, ... )
+        errors           = @( @{file; line; message; severity='error'; code; project},   ... )
+        warnings         = @( @{file; line; message; severity='warning'; code; project}, ... )
+        infos            = @( @{file; line; message; severity='info'; code; project},    ... )
         duration_seconds = float
     }
 #>
 param(
-    [string]$ProjectPath   = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath   = '',
     [string]$PlcName       = $env:PLC_PROJECT_NAME,
     [bool]  $ForceLog      = $false,
     [string]$Configuration = $(if ($env:TC_BUILD_CONFIG)   { $env:TC_BUILD_CONFIG }   else { 'Release' }),
@@ -55,18 +59,16 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath) {
-        return @{ success = $false; errors = @(); warnings = @(); error = 'ProjectPath required.' }
-    }
-
     $start = Get-Date
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    if (-not $ProjectPath) { $ProjectPath = $dte.Solution.FullName }
     $plcName = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
     $plcProj = Get-TcPlcProjectNode -SysManager $sm -PlcName $plcName
 
-    # Tier 1 — fast binary signal via CheckAllObjects.
+    # Tier 1 — fast binary signal via CheckAllObjects. This compiles the PLC
+    # project and populates the IDE Error List.
     $checkOk = $false
     try { $checkOk = [bool]$plcProj.CheckAllObjects() } catch {
         # Some failure inside CheckAllObjects itself (rare). Treat as failure.
@@ -75,25 +77,52 @@ try {
 
     $errors = @()
     $warnings = @()
+    $infos = @()
 
-    # Tier 2 — devenv /log when we need structured detail (errors present, or
-    # caller asked for warnings via -ForceLog).
+    # Tier 2 — pull structured diagnostics when the build failed, or the
+    # caller asked for warnings via -ForceLog. Prefer the IDE Error List
+    # (the real PLC diagnostics); fall back to a /out build-output parse on
+    # editions that don't expose ToolWindows.ErrorList (Express).
     if (-not $checkOk -or $ForceLog) {
-        $logPath = Join-Path $env:TEMP "tckit-build-$([Guid]::NewGuid()).xml"
-        try {
-            $code = Invoke-TcDevenvBuild -SolutionPath $ProjectPath -LogPath $logPath `
-                                         -Configuration $Configuration -Platform $Platform
-            $parsed = Read-TcBuildLog -LogPath $logPath
-            $errors   = $parsed.errors
-            $warnings = $parsed.warnings
-            if ($code -ne 0 -and $errors.Count -eq 0) {
+        $el = Read-TcErrorList -Dte $dte
+        $edition = ''
+        try { $edition = [string]$dte.Edition } catch { }
+        if ($null -ne $el) {
+            # Full TcXaeShell / Visual Studio: the Error List has the real
+            # PLC diagnostics.
+            $errors   = @($el.errors)
+            $warnings = @($el.warnings)
+            $infos    = @($el.infos)
+        } elseif ($edition -eq 'Express') {
+            # TcXaeShell Express exposes neither the Error List nor the
+            # Output window to automation, and /out writes nothing, so
+            # per-error detail can't be retrieved. Skip the slow, pointless
+            # rebuild and report the failure honestly.
+            if (-not $checkOk) {
                 $errors += @{
-                    file = ''; line = 0; severity = 'error'
-                    message = "devenv.exe /rebuild exit code $code (no structured errors parsed; check $logPath)"
+                    file = ''; line = 0; severity = 'error'; code = ''; project = ''
+                    message = "PLC compile failed. TcXaeShell Express does not expose the Error List or build output to automation, so per-error detail isn't available here. Open the solution in TcXaeShell to see the errors, or build with full TcXaeShell / Visual Studio (set DEVENV_PATH)."
                 }
             }
-        } finally {
-            if (Test-Path $logPath) { Remove-Item $logPath -Force -ErrorAction SilentlyContinue }
+        } else {
+            # Non-Express edition that still didn't expose the Error List
+            # (unusual). Try a /out build-output parse.
+            $outPath = Join-Path $env:TEMP "tckit-build-$([Guid]::NewGuid()).txt"
+            try {
+                $code = Invoke-TcDevenvBuild -SolutionPath $ProjectPath -OutPath $outPath `
+                                             -Configuration $Configuration -Platform $Platform
+                $parsed = Read-TcBuildOutput -OutPath $outPath
+                $errors   = @($parsed.errors)
+                $warnings = @($parsed.warnings)
+                if ($code -ne 0 -and $errors.Count -eq 0) {
+                    $errors += @{
+                        file = ''; line = 0; severity = 'error'; code = ''; project = ''
+                        message = "Build failed (devenv exit code $code) and no structured diagnostics could be parsed from the build output."
+                    }
+                }
+            } finally {
+                if (Test-Path $outPath) { Remove-Item $outPath -Force -ErrorAction SilentlyContinue }
+            }
         }
     }
 
@@ -104,6 +133,7 @@ try {
         success          = $success
         errors           = $errors
         warnings         = $warnings
+        infos            = $infos
         duration_seconds = [Math]::Round($duration, 2)
         details          = @{ plc = $plcName; check_all_objects = $checkOk }
     }
@@ -111,8 +141,9 @@ try {
 catch {
     return @{
         success  = $false
-        errors   = @(@{ file = ''; line = 0; severity = 'error'; message = $_.Exception.Message })
+        errors   = @(@{ file = ''; line = 0; severity = 'error'; code = ''; project = ''; message = $_.Exception.Message })
         warnings = @()
+        infos    = @()
         error    = $_.Exception.Message
     }
 }

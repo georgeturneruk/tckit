@@ -91,6 +91,40 @@ def test_build_errors_parsed_with_severity(tmp_path: Path) -> None:
     assert builder.get_status() == BuildStatus.ERROR
 
 
+def test_build_maps_error_list_code_project_and_infos(tmp_path: Path) -> None:
+    # Error List detail (#110): code/project on each item plus info-level
+    # messages flow through to the structured BuildResult.
+    client = FakeBridgeClient(
+        {
+            "success": False,
+            "errors": [
+                {
+                    "file": "FB_X.TcPOU",
+                    "line": 42,
+                    "message": "'nUndeclaredVar' not defined",
+                    "severity": "error",
+                    "code": "C0046",
+                    "project": "MyPlc",
+                }
+            ],
+            "warnings": [],
+            "infos": [
+                {"file": "", "line": 0, "message": "build started", "severity": "info"}
+            ],
+            "duration_seconds": 2.0,
+        }
+    )
+    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
+
+    result = builder.build(str(_make_sln(tmp_path)))
+
+    assert result.errors[0].code == "C0046"
+    assert result.errors[0].project == "MyPlc"
+    assert len(result.infos) == 1
+    assert result.infos[0].severity == "info"
+    assert result.infos[0].message == "build started"
+
+
 def test_build_bridge_unavailable_yields_error_result(tmp_path: Path) -> None:
     client = FakeBridgeClient(raise_exc=BridgeUnavailableError("nope"))
     builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
@@ -112,14 +146,13 @@ def test_deploy_posts_to_deploy_endpoint() -> None:
     assert result.success is True
     path, payload, _ = client.calls[0]
     assert path == "/deploy"
-    # ProjectPath comes from PLC_PROJECT_PATH env (empty in this unit test);
-    # the bridge handler falls back to its own env when the payload value is
-    # empty. Mirrors TcUnitRunner._with_target_and_plc.
+    # No explicit project_path was configured, so ProjectPath is omitted and
+    # the bridge deploys whatever solution is open in the attached XAE.
     assert payload == {
         "TargetAmsId": "1.2.3.4.1.1",
-        "ProjectPath": "",
         "BootAutostart": True,
     }
+    assert "ProjectPath" not in payload
 
 
 def test_deploy_passes_boot_autostart_false() -> None:
@@ -141,11 +174,11 @@ def test_start_runtime_posts_to_runtime_endpoint() -> None:
     path, payload, _ = client.calls[0]
     assert path == "/runtime"
     assert payload == {
-        "ProjectPath": "",
         "TargetAmsId": "1.2.3.4.1.1",
         "Mode": "Run",
         "Wait": True,
     }
+    assert "ProjectPath" not in payload
 
 
 def test_get_status_starts_idle() -> None:

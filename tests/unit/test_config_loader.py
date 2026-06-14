@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -205,3 +206,47 @@ def test_load_config_uppercases_env_style_keys_from_json(
 
     cfg = load_config()
     assert cfg.get("COM_VERSION") == "17.2"
+
+
+# ---------------------------------------------------------------------------
+# Hot reload — edits to config files take effect without a reconnect
+# ---------------------------------------------------------------------------
+
+
+def test_get_hot_reloads_when_config_file_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Editing config.toml is picked up on the next get(), no restart needed."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
+
+    toml = tmp_path / "config.toml"
+    toml.write_text('plc_project_name = "FirstPlc"\n')
+    cfg = load_config()
+    assert cfg.get("PLC_PROJECT_NAME") == "FirstPlc"
+
+    # Edit the file and bump its mtime so the change is unambiguous on
+    # filesystems with coarse mtime resolution.
+    toml.write_text('plc_project_name = "SecondPlc"\n')
+    future = toml.stat().st_mtime + 10
+    os.utime(toml, (future, future))
+
+    assert cfg.get("PLC_PROJECT_NAME") == "SecondPlc"
+
+
+def test_get_hot_reloads_when_config_file_appears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A config.toml created after load_config() is still picked up."""
+    monkeypatch.setenv("TCKIT_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TCKIT_CONFIG", raising=False)
+    monkeypatch.delenv("XAE_MODE", raising=False)
+
+    cfg = load_config()
+    assert cfg.get("XAE_MODE", "attach") == "attach"
+
+    (tmp_path / "config.toml").write_text('xae_mode = "headless"\n')
+    assert cfg.get("XAE_MODE") == "headless"

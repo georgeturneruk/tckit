@@ -57,7 +57,6 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath) { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $PlcName)     { return @{ success = $false; error = 'PlcName required.' } }
     if ($ProjectType -ne 'standard') {
         return @{ success = $false; error = "ProjectType '$ProjectType' not supported (only 'standard')." }
@@ -71,7 +70,8 @@ try {
     }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    if (-not $ProjectPath) { $ProjectPath = $dte.Solution.FullName }
 
     # Guard against PlcName collision against every existing TwinCAT project.
     $existing = Get-TcSysManagers -Dte $dte

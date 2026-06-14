@@ -15,7 +15,7 @@
     targets the FB-level declaration.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Name of the PLC project. Optional if exactly one is present. Falls
@@ -35,7 +35,7 @@
     Method to add the local variable to. Default: FB-level declaration.
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath = '',
     [string]$PlcName     = $env:PLC_PROJECT_NAME,
     [string]$PouName,
     [string]$Scope       = '',
@@ -161,13 +161,12 @@ function Add-VariableToDeclaration {
 }
 
 try {
-    if (-not $ProjectPath) { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $PouName)     { return @{ success = $false; error = 'PouName required.' } }
     if (-not $Scope)       { return @{ success = $false; error = 'Scope required.' } }
     if (-not $Declaration) { return @{ success = $false; error = 'Declaration required.' } }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
     $plcName = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plcName
 

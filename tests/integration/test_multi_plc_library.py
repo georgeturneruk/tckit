@@ -62,7 +62,7 @@ def sln_workdir(monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_end_to_end_multi_plc_with_library_reference(
-    sln_workdir: Path, monkeypatch: pytest.MonkeyPatch
+    sln_workdir: Path,
 ) -> None:
     client = _bridge_or_skip()
     sln_name = "MultiPlcRoundtrip"
@@ -73,15 +73,12 @@ def test_end_to_end_multi_plc_with_library_reference(
     library_first_plc = f"{sln_name}_Plc"
     library_path = sln_workdir / f"{library_first_plc}.library"
 
-    writer = AutomationWriter(client=client)
-    builder = XaeComBuilder(client=client)
+    writer = AutomationWriter(client=client, project_path=str(sln_path))
+    builder = XaeComBuilder(client=client, project_path=str(sln_path))
 
     # 1) Create the sln + Library PLC project.
     created = writer.create_project(sln_name, str(sln_workdir))
     assert created.success, f"create_project failed: {created.error}"
-
-    # Subsequent calls scope to a specific PLC, so set the env path.
-    monkeypatch.setenv("PLC_PROJECT_PATH", str(sln_path))
 
     # Add a tiny FB to the auto-created PLC project (so the library has content).
     library_fb_decl = (
@@ -145,7 +142,7 @@ def test_end_to_end_multi_plc_with_library_reference(
 
 
 def test_end_to_end_add_library_placeholder(
-    sln_workdir: Path, monkeypatch: pytest.MonkeyPatch
+    sln_workdir: Path,
 ) -> None:
     """add_library_placeholder lands a <PlaceholderReference> entry on disk.
 
@@ -158,12 +155,11 @@ def test_end_to_end_add_library_placeholder(
     sln_name = "PlaceholderRoundtrip"
     sln_path = sln_workdir / f"{sln_name}.sln"
 
-    writer = AutomationWriter(client=client)
-    builder = XaeComBuilder(client=client)
+    writer = AutomationWriter(client=client, project_path=str(sln_path))
+    builder = XaeComBuilder(client=client, project_path=str(sln_path))
 
     created = writer.create_project(sln_name, str(sln_workdir))
     assert created.success, f"create_project failed: {created.error}"
-    monkeypatch.setenv("PLC_PROJECT_PATH", str(sln_path))
 
     first_plc = f"{sln_name}_Plc"  # see create_project naming default
     ph = writer.add_library_placeholder(

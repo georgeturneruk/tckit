@@ -128,8 +128,7 @@ def main() -> int:
     _check("create_project", writer.create_project(SLN_NAME, str(FIXTURE_DIR)))
 
     sln_path = FIXTURE_DIR / f"{SLN_NAME}.sln"
-    import os
-    os.environ["PLC_PROJECT_PATH"] = str(sln_path)
+    _check("open_project", writer.open_project(str(sln_path)))
 
     _check(
         f"add_pou({FB_NAME})",

@@ -17,7 +17,7 @@
     project node, which we leave commented in place for the day we need it.
 
 .PARAMETER ProjectPath
-    Absolute path to the .sln file. Falls back to PLC_PROJECT_PATH env var.
+    Absolute path to the .sln file. When omitted, the operation targets the solution already open in the attached XAE.
 
 .PARAMETER PlcName
     Consumer PLC project. Optional if exactly one PLC project is present.
@@ -28,7 +28,7 @@
     <PlaceholderReference> element in the consumer .plcproj).
 #>
 param(
-    [string]$ProjectPath     = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath     = '',
     [string]$PlcName         = $env:PLC_PROJECT_NAME,
     [string]$PlaceholderName,
     [string]$ComVersion      = $(if ($env:COM_VERSION) { $env:COM_VERSION } else { '17.0' }),
@@ -41,11 +41,10 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot '_TcDte.psm1') -Force
 
 try {
-    if (-not $ProjectPath)     { return @{ success = $false; error = 'ProjectPath required.' } }
     if (-not $PlaceholderName) { return @{ success = $false; error = 'PlaceholderName required.' } }
 
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
-    Open-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
+    Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
     $plc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $plc
 

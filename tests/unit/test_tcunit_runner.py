@@ -37,7 +37,6 @@ class FakeBridgeClient:
 def test_run_tests_posts_to_tcunit_run_with_target_and_plc(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient(
         {
@@ -47,7 +46,7 @@ def test_run_tests_posts_to_tcunit_run_with_target_and_plc(
             "xml_path": "C:/TwinCAT/3.1/Boot/Plc/TcUnitResults.xml",
         }
     )
-    runner = TcUnitRunner(client=client)  # type: ignore[arg-type]
+    runner = TcUnitRunner(client=client, project_path="C:/proj/foo.sln")  # type: ignore[arg-type]
 
     result = runner.run_tests("1.2.3.4.1.1", plc_name="TestPlc")
 
@@ -120,7 +119,6 @@ def test_run_tests_wait_for_results_false_opts_out_of_inline_parse(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """External callers that hand-roll polling pass wait_for_results=False."""
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient({"success": True})
     runner = TcUnitRunner(client=client)  # type: ignore[arg-type]
@@ -135,7 +133,6 @@ def test_run_tests_inline_results_pass_through_as_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When the bridge inlines suites + failures, both reach Result.details."""
-    monkeypatch.setenv("PLC_PROJECT_PATH", "C:/proj/foo.sln")
     monkeypatch.delenv("PLC_PROJECT_NAME", raising=False)
     client = FakeBridgeClient(
         {

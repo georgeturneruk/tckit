@@ -7,7 +7,7 @@ import sys
 
 from tckit.adapters.doc_generators.html_generator import HtmlGenerator
 
-project_path = os.environ.get("PLC_PROJECT_PATH", "/project")
+project_path = os.environ.get("PROJECT_PATH", "/project")
 output_path = os.environ.get("DOCS_OUTPUT_PATH", "/docs-output")
 
 print(f"Generating docs from {project_path} → {output_path}")

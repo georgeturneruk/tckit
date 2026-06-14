@@ -484,18 +484,18 @@ def _wait_mcp_ready(mcp_url: str, timeout_s: int) -> bool:
 
 def start_mcp_subprocess(
     mcp_cmd: str,
-    plc_project_path: str,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.Popen:
-    """Spawn an MCP server pointed at ``plc_project_path``.
+    """Spawn an MCP server.
 
-    The bench runs MCP per-run so PLC_PROJECT_PATH can switch between
-    the isolated temp fixture (during the model session) and the real
-    fixture (during post-run-tests). Inherits the parent process env
-    plus the overrides; ``extra_env`` is for safety knobs like
-    ``ALLOWED_NETIDS`` / ``SAFETY_CONFIRMATIONS`` that the operator
-    set on the bench's own env. Stdout/stderr go to DEVNULL — the
-    server is noisy and we are not debugging it from here.
+    The server operates on whatever solution is open in the attached XAE,
+    so the caller must ``/open`` the target sln (the isolated temp fixture
+    during the model session, or the real fixture for post-run tests)
+    before the model session begins. Inherits the parent process env plus
+    ``extra_env`` for safety knobs like ``ALLOWED_NETIDS`` /
+    ``SAFETY_CONFIRMATIONS`` that the operator set on the bench's own env.
+    Stdout/stderr go to DEVNULL — the server is noisy and we are not
+    debugging it from here.
 
     On Windows the spawn goes through a CREATE_NEW_PROCESS_GROUP so
     stop_mcp_subprocess can terminate the whole tree (otherwise the
@@ -506,7 +506,6 @@ def start_mcp_subprocess(
     import shlex
 
     env = dict(os.environ)
-    env["PLC_PROJECT_PATH"] = plc_project_path
     if extra_env:
         env.update(extra_env)
 
@@ -669,12 +668,10 @@ def save_plc_library(
             "output_path": str(output_path),
         }
 
-    # PLC_PROJECT_PATH steers the bridge to the right sln; set it here so
-    # the writer adapter forwards it on the POST body. Mirrors smoke_B1.py.
-    os.environ["PLC_PROJECT_PATH"] = sln_path
-
     client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
-    writer = AutomationWriter(client=client)
+    # Pass the sln explicitly so the writer targets this solution regardless
+    # of what XAE currently has open.
+    writer = AutomationWriter(client=client, project_path=sln_path)
     try:
         result = writer.save_plc_as_library(
             library_plc, str(output_path), install=True
@@ -711,7 +708,6 @@ def run_test_cycle(
     from tckit.adapters.writers.automation_writer import AutomationWriter
     from tckit.utils.bridge_client import BridgeClient, build_timeout
 
-    os.environ["PLC_PROJECT_PATH"] = sln_path
     out: dict[str, Any] = {
         "library_saved": None,
         "library_save_error": None,
@@ -728,9 +724,10 @@ def run_test_cycle(
     }
 
     client = BridgeClient(base_url=bridge_url, timeout=build_timeout())
-    writer = AutomationWriter(client=client)
-    builder = XaeComBuilder(client=client)
-    runner = TcUnitRunner(client=client)
+    # Target this sln explicitly on every adapter (headless / scripted path).
+    writer = AutomationWriter(client=client, project_path=sln_path)
+    builder = XaeComBuilder(client=client, project_path=sln_path)
+    runner = TcUnitRunner(client=client, project_path=sln_path)
     try:
         artefact = _library_artefact_path(sln_path, library_plc)
         if artefact.exists():
@@ -986,15 +983,15 @@ def main() -> int:
     parser.add_argument("--mcp-cmd", default="",
                         help=(
                             "If set, the bench manages a per-run MCP "
-                            "server with PLC_PROJECT_PATH pointing at "
-                            "the active fixture sln (the temp copy "
-                            "under --isolate-cwd, else the real "
-                            "fixture). Without this, the model's MCP "
-                            "writer calls write to the operator's "
-                            "long-lived MCP env path while Read sees "
-                            "the temp copy — the model cannot observe "
-                            "its own writes. Recommended for the tckit "
-                            "arm. Example: "
+                            "server and /opens the active fixture sln "
+                            "(the temp copy under --isolate-cwd, else "
+                            "the real fixture) so the server targets "
+                            "it. Without this, the model's MCP writer "
+                            "calls write to whatever solution the "
+                            "operator's long-lived XAE has open while "
+                            "Read sees the temp copy — the model cannot "
+                            "observe its own writes. Recommended for the "
+                            "tckit arm. Example: "
                             "'uv run python -m tckit.server --transport sse'."
                         ))
     parser.add_argument("--mcp-url", default="http://localhost:8000",
@@ -1065,8 +1062,8 @@ def main() -> int:
 
     # Pre-flight: refuse-and-explain if --mcp-cmd is set but the port is
     # already taken. Otherwise the spawn would silently fail and the
-    # claude -p arm would hit whatever MCP the operator had running with
-    # its own (probably stale) PLC_PROJECT_PATH.
+    # claude -p arm would hit whatever MCP the operator had running
+    # against a different open solution.
     if args.mcp_cmd:
         from urllib.parse import urlparse
 
@@ -1149,16 +1146,27 @@ def main() -> int:
                 )
                 print(f" inject-{n_skills}-skills...", end="", flush=True)
             run_cwd = str(tmp_fixture)
-        # MCP server lifecycle: per-run spawn with PLC_PROJECT_PATH pointing
-        # at the active sln (temp under --isolate-cwd, else the real
-        # fixture). Without this, the model's MCP writer calls would land
-        # in the operator's long-lived MCP env path while Read sees the
-        # temp copy — the model cannot observe its own writes.
+        # MCP server lifecycle: per-run spawn after /opening the active
+        # sln (temp under --isolate-cwd, else the real fixture). Without
+        # this, the model's MCP writer calls would land in whatever
+        # solution the operator's long-lived XAE has open while Read sees
+        # the temp copy — the model cannot observe its own writes.
         mcp_proc: subprocess.Popen | None = None
         if args.mcp_cmd:
             mcp_plc_path = _temp_sln_path(tmp_fixture, args.tcunit_path, args.sln_path)
+            # The MCP server follows the open solution, so point XAE at the
+            # right sln (the temp copy under --isolate-cwd) before the model
+            # session. /open is idempotent when it's already the open sln.
+            mcp_open = open_solution(args.bridge_url, mcp_plc_path)
+            if not mcp_open.get("success", False):
+                print(
+                    f"\n  /open ({mcp_plc_path}) failed: "
+                    f"{mcp_open.get('error', mcp_open)}",
+                    file=sys.stderr,
+                )
+                return 6
             print(" mcp-start...", end="", flush=True)
-            mcp_proc = start_mcp_subprocess(args.mcp_cmd, mcp_plc_path)
+            mcp_proc = start_mcp_subprocess(args.mcp_cmd)
             if not _wait_mcp_ready(args.mcp_url, args.mcp_startup_timeout):
                 stop_mcp_subprocess(mcp_proc)
                 print(

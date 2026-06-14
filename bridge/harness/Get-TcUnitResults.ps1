@@ -45,7 +45,7 @@
     'attach' (default) or 'headless'.
 #>
 param(
-    [string]$ProjectPath = $env:PLC_PROJECT_PATH,
+    [string]$ProjectPath = '',
     [string]$PlcName     = $env:PLC_PROJECT_NAME,
     [string]$TargetAmsId = $env:TARGET_AMS_ID,
     [string]$XmlPath     = '',

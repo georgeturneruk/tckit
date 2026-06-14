@@ -97,9 +97,19 @@ def _ensure_registries() -> None:
         _registries_loaded = True
 
 
+def _user_toml_path() -> Path:
+    """Path to the user-global ``config.toml``."""
+    return _user_home() / "config.toml"
+
+
+def _project_config_path() -> Path:
+    """Path to the project ``config.json`` (or ``TCKIT_CONFIG`` override)."""
+    return Path(os.getenv("TCKIT_CONFIG", "config.json"))
+
+
 def _load_user_toml() -> dict[str, Any]:
     """Read ``$TCKIT_HOME/config.toml`` if present, else return an empty dict."""
-    path = _user_home() / "config.toml"
+    path = _user_toml_path()
     if not path.exists():
         return {}
     with path.open("rb") as f:
@@ -108,18 +118,49 @@ def _load_user_toml() -> dict[str, Any]:
 
 def _load_project_config() -> dict[str, Any]:
     """Read project ``config.json`` (or path from ``TCKIT_CONFIG`` env)."""
-    config_path = Path(os.getenv("TCKIT_CONFIG", "config.json"))
+    config_path = _project_config_path()
     if not config_path.exists():
         return {}
     with config_path.open() as f:
         return json.load(f)  # type: ignore[no-any-return]
 
 
+def _config_source_mtimes() -> dict[str, float | None]:
+    """Snapshot the mtimes of the layered config files (None when absent).
+
+    Used to detect edits so :meth:`TcKitConfig.get` can re-read the files
+    per request instead of only at server start.
+    """
+    out: dict[str, float | None] = {}
+    for path in (_user_toml_path(), _project_config_path()):
+        try:
+            out[str(path)] = path.stat().st_mtime if path.exists() else None
+        except OSError:
+            out[str(path)] = None
+    return out
+
+
+def _load_merged_raw() -> dict[str, Any]:
+    """Load + normalise + merge the layered config files into one dict."""
+    user_cfg = _normalise_keys(_load_user_toml())
+    project_cfg = _normalise_keys(_load_project_config())
+    return {**user_cfg, **project_cfg}
+
+
 class TcKitConfig:
     """Holds resolved config values and provides adapter factory methods."""
 
-    def __init__(self, raw: dict[str, Any]) -> None:
+    def __init__(
+        self, raw: dict[str, Any], sources: dict[str, float | None] | None = None
+    ) -> None:
         self._raw = raw
+        # mtime snapshot of the config files this ``raw`` was loaded from,
+        # so get() can hot-reload when they change without a reconnect. Only
+        # configs built via load_config() carry sources and are watched;
+        # a config constructed from a literal dict (tests, callers) is left
+        # untouched.
+        self._watch_sources = sources is not None
+        self._sources = sources if sources is not None else {}
         # Single BridgeClient shared by all bridge-backed adapters so the
         # underlying httpx.Client (and its connection pool) lives for the
         # server's lifetime instead of being re-created per MCP call.
@@ -129,8 +170,23 @@ class TcKitConfig:
         # follow-up get_pou_interface / get_pou_item calls to use it.
         self._reader: ProjectReader | None = None
 
+    def _reload_if_changed(self) -> None:
+        """Re-read the config files when any has been edited (hot reload).
+
+        Cheap stat-based check so edits to ``~/.tckit/config.toml`` (safety
+        stance, AMS IDs, PLC_PROJECT_NAME, ...) take effect on the next tool
+        call rather than only after a full reconnect.
+        """
+        if not self._watch_sources:
+            return
+        current = _config_source_mtimes()
+        if current != self._sources:
+            self._raw = _load_merged_raw()
+            self._sources = current
+
     def get(self, key: str, default: Any = None) -> Any:
         """Resolve ``key`` from env (uppercased) first, then file values, then default."""
+        self._reload_if_changed()
         env_val = os.getenv(key.upper())
         if env_val is not None:
             return env_val
@@ -152,7 +208,12 @@ class TcKitConfig:
             cls = _READER_REGISTRY.get(name)
             if cls is None:
                 raise ValueError(f"Unknown reader adapter: {name!r}")
-            self._reader = cls()
+            # Inject the active-solution resolver so reads without a prior
+            # get_structure() follow whatever solution is open in the
+            # attached XAE, instead of a configured path.
+            self._reader = cls(  # type: ignore[call-arg]
+                active_solution=self.bridge_client().active_solution
+            )
         return self._reader
 
     def writer(self) -> ProjectWriter:
@@ -235,9 +296,8 @@ def load_config() -> TcKitConfig:
     Project ``config.json`` overrides user-global ``config.toml``; env vars
     override both at lookup time via :meth:`TcKitConfig.get`. Raw keys from
     both files are normalised so env-style lookups (``XAE_MODE``) find values
-    written as ``xae_mode`` in a JSON or TOML file.
+    written as ``xae_mode`` in a JSON or TOML file. The returned config
+    re-reads its source files when they change (see
+    :meth:`TcKitConfig._reload_if_changed`).
     """
-    user_cfg = _normalise_keys(_load_user_toml())
-    project_cfg = _normalise_keys(_load_project_config())
-    merged: dict[str, Any] = {**user_cfg, **project_cfg}
-    return TcKitConfig(merged)
+    return TcKitConfig(_load_merged_raw(), _config_source_mtimes())
