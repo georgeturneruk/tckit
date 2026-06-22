@@ -114,40 +114,63 @@ try {
     # 3rd arg (bstrBefore) is $null — insert at end. 4th arg (vInfo) shape
     # is the load-bearing thing: passing $null or a scalar string here is
     # what previously caused the 'Object reference not set' / 'Requested
-    # value LREAL was not found' errors.
-    $null = $pou.CreateChild($PropertyName, $kindProperty, $null, $propertyVInfo)
-
-    # Build the LookupTreeItem path for the new property so we can fetch a
-    # fresh reference for each subsequent CreateChild. PowerShell's
-    # apartment-threaded COM marshalling does not preserve tree-item refs
-    # across mutating calls reliably — re-using the parent ref between the
-    # Get and Set CreateChild calls surfaces "Item 'Get' is deleted or
-    # invalidated by an earlier operation!" on XAE versions that revalidate
-    # siblings during accessor creation. LookupTreeItem on the full path
-    # gives us a stable single-call reference.
-    $folderSegments = if ($ParentFolder) { ($ParentFolder -split '[/\\]') | Where-Object { $_ } } else { @() }
-    $pathSegments = @("TIPC", $plcName, "$plcName Project", 'POUs') + $folderSegments + @($PouName, $PropertyName)
-    $propPath = $pathSegments -join '^'
+    # value LREAL was not found' errors. Keep the returned property item — the
+    # interface branch creates its accessors directly on it.
+    $propItem = $pou.CreateChild($PropertyName, $kindProperty, $null, $propertyVInfo)
 
     $accessors = @()
-    $getItem = $null
-    $setItem = $null
 
-    # Accessor name is intentionally empty: the kind constant (613/614/654/655)
-    # already identifies which accessor this is, and XAE names the child item
-    # itself.
-    if ($GetterCode) {
-        $propParent = $sm.LookupTreeItem($propPath)
-        $getItem = $propParent.CreateChild('', $kindGet, $null, $getVInfo)
-        Set-TcItemSource -Item $getItem -Code $GetterCode
-        Save-TcSolution -Dte $dte  # flush tree mutations before adding sibling
-        $accessors += 'Get'
+    if ($isInterface) {
+        # Interface property accessors have no implementation body. Mirror the
+        # Beckhoff sample (TC_AI_DOTNET_Samples GeneratePlcProject.cs,
+        # AddProperty): create Get/Set directly on the property item with
+        # vInfo=$null, no Set-TcItemSource, and no Save between them. The
+        # accessor's declaration (PUBLIC / VAR..END_VAR) is created by XAE;
+        # GetterCode/SetterCode only signal *which* accessors to add — their
+        # content is ignored for interfaces.
+        #
+        # The FB branch below re-finds the parent via LookupTreeItem and Saves
+        # between accessors to dodge a stale-parent ref left behind by
+        # Set-TcItemSource writing a body. Applied to an interface that dance
+        # CRASHES TcXaeShell on the second CreateChild (surfacing as RPC
+        # 0x800706BE): there is no body to write, and the mid-operation Save +
+        # re-lookup hands CreateChild a property ref XAE faults on. Reusing the
+        # in-process $propItem ref with no mutation between the two creates is
+        # both correct per the sample and crash-free.
+        if ($GetterCode) { $null = $propItem.CreateChild('', $kindGet, $null, $null); $accessors += 'Get' }
+        if ($SetterCode) { $null = $propItem.CreateChild('', $kindSet, $null, $null); $accessors += 'Set' }
     }
-    if ($SetterCode) {
-        $propParent = $sm.LookupTreeItem($propPath)
-        $setItem = $propParent.CreateChild('', $kindSet, $null, $setVInfo)
-        Set-TcItemSource -Item $setItem -Code $SetterCode
-        $accessors += 'Set'
+    else {
+        # FB property: bodies must be written. PowerShell's apartment-threaded
+        # COM marshalling does not preserve tree-item refs across the mutating
+        # Set-TcItemSource call — re-using the parent ref between the Get and
+        # Set CreateChild calls surfaces "Item 'Get' is deleted or invalidated
+        # by an earlier operation!" on XAE versions that revalidate siblings
+        # during accessor creation. Save + LookupTreeItem on the full path
+        # gives a stable single-call reference for each accessor.
+        # Derive the property path from the created item, not by rebuilding it
+        # from $ParentFolder: when the POU is found by recursive search (no
+        # ParentFolder passed), the folder segment is unknown, so a path rebuilt
+        # as POUs^PouName drops it and LookupTreeItem fails for an FB in a
+        # subfolder. The item's own PathName is always the correct ^-delimited
+        # tree path (same property Resolve-TcParentPath splits on).
+        $propPath = $propItem.PathName
+
+        # Accessor name is intentionally empty: the kind constant (613/614)
+        # already identifies which accessor this is, and XAE names the child.
+        if ($GetterCode) {
+            $propParent = $sm.LookupTreeItem($propPath)
+            $getItem = $propParent.CreateChild('', $kindGet, $null, $getVInfo)
+            Set-TcItemSource -Item $getItem -Code $GetterCode
+            Save-TcSolution -Dte $dte  # flush tree mutations before adding sibling
+            $accessors += 'Get'
+        }
+        if ($SetterCode) {
+            $propParent = $sm.LookupTreeItem($propPath)
+            $setItem = $propParent.CreateChild('', $kindSet, $null, $setVInfo)
+            Set-TcItemSource -Item $setItem -Code $SetterCode
+            $accessors += 'Set'
+        }
     }
 
     Save-TcSolution -Dte $dte
