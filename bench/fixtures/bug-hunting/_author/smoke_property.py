@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -40,6 +41,7 @@ FIXTURE_DIR = REPO_ROOT / "bench" / "fixtures" / "_smoke-property"
 SLN_NAME = "PropertySmoke"
 LIBRARY_PLC = f"{SLN_NAME}_Plc"
 FB_NAME = "FB_PropertySmoke"
+ITF_NAME = "I_PropertySmoke"
 DUT_NAME = "E_PropertyMode"
 
 FB_DECL = f"""\
@@ -184,6 +186,36 @@ def main() -> int:
         "at least one of",
     )
 
+    # Interface properties. Regression for the crash fixed in
+    # Add-TcProperty.ps1: get+set on an INTERFACE used to crash TcXaeShell on
+    # the second accessor (the FB path's Save + LookupTreeItem-between-accessors
+    # dance, applied to a body-less interface accessor). Interface accessors
+    # have no implementation body, so getter_code / setter_code only signal
+    # WHICH accessors to create — their content is ignored.
+    _check(
+        f"add_pou({ITF_NAME}, INTERFACE)",
+        writer.add_pou(ITF_NAME, POUType.INTERFACE, "", plc_name=LIBRARY_PLC),
+    )
+    _check(
+        "add_property(itf Setpoint, get+set)",
+        writer.add_property(
+            ITF_NAME, "Setpoint", "LREAL",
+            getter_code="x", setter_code="x", plc_name=LIBRARY_PLC,
+        ),
+    )
+    _check(
+        "add_property(itf Feedback, get only)",
+        writer.add_property(
+            ITF_NAME, "Feedback", "LREAL", getter_code="x", plc_name=LIBRARY_PLC,
+        ),
+    )
+    _check(
+        "add_property(itf Enable, set only)",
+        writer.add_property(
+            ITF_NAME, "Enable", "BOOL", setter_code="x", plc_name=LIBRARY_PLC,
+        ),
+    )
+
     # DUT: enum. Parallel coverage for the other surface that shipped in
     # the same commit as add_property and has the same "unit tests only"
     # status.
@@ -247,6 +279,45 @@ def main() -> int:
             "round-trip: NoAccessors was rejected by the port but somehow "
             "ended up in the tree."
         )
+
+    # Interface round-trip: the XML reader only handles .TcPOU, so parse the
+    # .TcIO directly. Assert accessor presence per property, and that every
+    # interface accessor is declaration-only (no <Implementation> body).
+    itf_files = list(FIXTURE_DIR.rglob(f"{ITF_NAME}.TcIO"))
+    if not itf_files:
+        _fail(f"interface round-trip: {ITF_NAME}.TcIO not found on disk")
+    itf_root = ET.parse(itf_files[0]).getroot()
+    itf_props: dict[str, set[str]] = {}
+    for prop in itf_root.iter("Property"):
+        accessors: set[str] = set()
+        for child in prop:
+            if child.tag not in ("Get", "Set"):
+                continue
+            accessors.add(child.tag)
+            if child.find("Implementation") is not None:
+                _fail(
+                    f"interface {prop.get('Name')!r} {child.tag} carries an "
+                    "implementation body; interface accessors must be "
+                    "declaration-only"
+                )
+        itf_props[prop.get("Name")] = accessors
+    expected_itf = {
+        "Setpoint": {"Get", "Set"},
+        "Feedback": {"Get"},
+        "Enable": {"Set"},
+    }
+    for name, accessors in expected_itf.items():
+        if name not in itf_props:
+            _fail(
+                f"interface round-trip: property {name!r} missing from "
+                f"{ITF_NAME}. Found: {sorted(itf_props)}"
+            )
+        if itf_props[name] != accessors:
+            _fail(
+                f"interface round-trip: {name!r} accessors "
+                f"{sorted(itf_props[name])} != expected {sorted(accessors)}"
+            )
+        print(f"OK   interface round-trip {name} accessors={sorted(accessors)}")
 
     # DUT round-trip.
     dut = reader.get_dut(DUT_NAME, plc_name=LIBRARY_PLC)
