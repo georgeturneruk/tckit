@@ -436,3 +436,68 @@ class EtherCatStatus:
 
     master: EtherCatMasterState
     slaves: list[EtherCatSlaveInfo]
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — IPC hardware
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class IpcCpuInfo:
+    """CPU diagnostic data from MDP module type 0x000B."""
+
+    temperature_c: int | None
+    usage_pct: int
+    frequency_mhz: int
+
+
+@dataclass
+class IpcMemoryInfo:
+    """System memory from MDP module type 0x000C (values in MB)."""
+
+    total_mb: int
+    free_mb: int
+
+    @property
+    def used_mb(self) -> int:
+        return self.total_mb - self.free_mb
+
+
+@dataclass
+class IpcFanInfo:
+    """Fan speed from MDP module type 0x001B."""
+
+    index: int
+    rpm: int
+
+
+@dataclass
+class IpcNicInfo:
+    """Network adapter info from MDP module type 0x0002."""
+
+    index: int
+    mac: str
+    ipv4: str
+
+
+@dataclass
+class IpcUpsInfo:
+    """UPS status from MDP module type 0x001E."""
+
+    battery_pct: int
+    power_ok: bool
+    battery_ok: bool
+    power_fail_count: int
+
+
+@dataclass
+class IpcHardware:
+    """Full IPC hardware snapshot — all discovered MDP modules."""
+
+    twincat_version: str | None
+    cpu: IpcCpuInfo | None
+    memory: IpcMemoryInfo | None
+    fans: list[IpcFanInfo]
+    nics: list[IpcNicInfo]
+    ups: IpcUpsInfo | None

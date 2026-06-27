@@ -1218,6 +1218,37 @@ def list_ethercat_masters(target_ams_id: str = "") -> str:
         return _err(str(exc))
 
 
+def get_ipc_hardware(target_ams_id: str = "") -> str:
+    """Read IPC hardware diagnostics from a running TwinCAT system.
+
+    Reads all MDP modules discovered on the target IPC via AMS port 10000
+    (SystemService).  No XAE required; TwinCAT runtime must be running.
+
+    Returns a snapshot of:
+      - ``twincat_version``  — e.g. ``"3.1.4026"``
+      - ``cpu``              — ``temperature_c`` (null if BIOS API absent),
+                               ``usage_pct``, ``frequency_mhz``
+      - ``memory``           — ``total_mb``, ``free_mb``, ``used_mb``
+      - ``fans``             — list of ``{rpm}`` entries, one per fan
+      - ``nics``             — list of ``{mac, ipv4}`` entries
+      - ``ups``              — ``battery_pct``, ``power_ok``, ``battery_ok``,
+                               ``power_fail_count``; null if no UPS found
+
+    Modules not present on the hardware are null or empty lists.
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        hw = _cfg.hardware_inspector().get_ipc_hardware(target_ams_id)
+        return _ok(asdict(hw))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def get_ethercat_status(
     target_ams_id: str = "",
     master_net_id: str = "",
@@ -1463,6 +1494,7 @@ _TOOLS = (
     read_symbols,
     list_ethercat_masters,
     get_ethercat_status,
+    get_ipc_hardware,
     run_tests,
     get_test_results,
     find_fb,

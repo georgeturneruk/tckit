@@ -32,6 +32,8 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     "/active-solution": 30.0,
     # ADS read to EtherCAT master — fast on a reachable target.
     "/ethercat-status": 30.0,
+    # MDP module enumeration + per-module reads — allow for many modules.
+    "/ipc-hardware": 30.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {

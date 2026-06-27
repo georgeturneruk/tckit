@@ -10,6 +10,12 @@ from tckit.ports.types import (
     EtherCatMasterState,
     EtherCatSlaveInfo,
     EtherCatStatus,
+    IpcCpuInfo,
+    IpcFanInfo,
+    IpcHardware,
+    IpcMemoryInfo,
+    IpcNicInfo,
+    IpcUpsInfo,
 )
 from tckit.utils.bridge_client import BridgeClient, BridgeError
 
@@ -44,6 +50,16 @@ class BridgeHardwareAdapter(HardwareInspector):
         if not resp.get("success"):
             raise RuntimeError(resp.get("error") or "Bridge returned failure for /ethercat-status")
         return [_to_master_info(m) for m in (resp.get("masters") or [])]
+
+    def get_ipc_hardware(self, target_ams_id: str) -> IpcHardware:
+        payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
+        try:
+            resp = self._client.post("/ipc-hardware", payload)
+        except BridgeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if not resp.get("success"):
+            raise RuntimeError(resp.get("error") or "Bridge returned failure for /ipc-hardware")
+        return _to_ipc_hardware(resp)
 
     def get_ethercat_status(
         self,
@@ -110,4 +126,55 @@ def _to_ethercat_status(resp: dict[str, Any]) -> EtherCatStatus:
     return EtherCatStatus(
         master=_to_master_state(master_raw),
         slaves=[_to_slave_info(s) for s in slaves_raw],
+    )
+
+
+def _to_ipc_hardware(resp: dict[str, Any]) -> IpcHardware:
+    cpu_raw = resp.get("cpu")
+    mem_raw = resp.get("memory")
+    ups_raw = resp.get("ups")
+    return IpcHardware(
+        twincat_version=resp.get("twincat_version") or None,
+        cpu=_to_cpu_info(cpu_raw) if cpu_raw else None,
+        memory=_to_memory_info(mem_raw) if mem_raw else None,
+        fans=[_to_fan_info(i, f) for i, f in enumerate(resp.get("fans") or [])],
+        nics=[_to_nic_info(i, n) for i, n in enumerate(resp.get("nics") or [])],
+        ups=_to_ups_info(ups_raw) if ups_raw else None,
+    )
+
+
+def _to_cpu_info(raw: dict[str, Any]) -> IpcCpuInfo:
+    temp = raw.get("temperature_c")
+    return IpcCpuInfo(
+        temperature_c=int(temp) if temp is not None else None,
+        usage_pct=int(raw.get("usage_pct", 0)),
+        frequency_mhz=int(raw.get("frequency_mhz", 0)),
+    )
+
+
+def _to_memory_info(raw: dict[str, Any]) -> IpcMemoryInfo:
+    return IpcMemoryInfo(
+        total_mb=int(raw.get("total_mb", 0)),
+        free_mb=int(raw.get("free_mb", 0)),
+    )
+
+
+def _to_fan_info(index: int, raw: dict[str, Any]) -> IpcFanInfo:
+    return IpcFanInfo(index=index, rpm=int(raw.get("rpm", 0)))
+
+
+def _to_nic_info(index: int, raw: dict[str, Any]) -> IpcNicInfo:
+    return IpcNicInfo(
+        index=index,
+        mac=str(raw.get("mac", "")),
+        ipv4=str(raw.get("ipv4", "")),
+    )
+
+
+def _to_ups_info(raw: dict[str, Any]) -> IpcUpsInfo:
+    return IpcUpsInfo(
+        battery_pct=int(raw.get("battery_pct", 0)),
+        power_ok=bool(raw.get("power_ok", True)),
+        battery_ok=bool(raw.get("battery_ok", True)),
+        power_fail_count=int(raw.get("power_fail_count", 0)),
     )

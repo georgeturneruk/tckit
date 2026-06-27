@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from tckit.ports.types import EtherCatMasterInfo, EtherCatStatus
+from tckit.ports.types import EtherCatMasterInfo, EtherCatStatus, IpcHardware
 
 
 class HardwareInspector(ABC):
@@ -45,5 +45,23 @@ class HardwareInspector(ABC):
             defaults to ``target_ams_id`` (the typical single-master layout
             where the master lives on the same AMS node as the system).
         :returns: :class:`EtherCatStatus` with master state and slave list.
+        """
+        ...
+
+    @abstractmethod
+    def get_ipc_hardware(self, target_ams_id: str) -> IpcHardware:
+        """Read IPC hardware diagnostics from a running TwinCAT system.
+
+        Reads all discovered MDP modules via AMS port 10000 (SystemService):
+        CPU (temperature, utilisation, frequency), memory (total/free),
+        fans (RPM per fan), network adapters (MAC, IPv4), UPS (battery,
+        power status), and the TwinCAT runtime version.
+
+        Modules not present on the system are returned as ``None`` or empty
+        lists. Individual property reads that fail (e.g. CPU temperature
+        requires BIOS API support) return ``None`` for that field.
+
+        :param target_ams_id: AMS Net ID of the target system.
+        :returns: :class:`IpcHardware` snapshot of all found MDP modules.
         """
         ...
