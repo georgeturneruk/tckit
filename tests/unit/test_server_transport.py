@@ -113,6 +113,7 @@ def test_tool_tuple_contains_all_known_tools() -> None:
         "get_ethercat_status",
         "get_ipc_hardware",
         "scan_hardware",
+        "scaffold_hardware_code",
         "list_axes",
         "get_axis_state",
         "run_tests",

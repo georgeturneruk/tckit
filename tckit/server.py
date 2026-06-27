@@ -1218,6 +1218,86 @@ def list_ethercat_masters(target_ams_id: str = "") -> str:
         return _err(str(exc))
 
 
+def scaffold_hardware_code(
+    gvl_name: str = "HardwareIO",
+    plc_name: str = "",
+    parent_folder: str = "",
+) -> str:
+    """Scaffold I/O variable declarations from the connected hardware topology.
+
+    Calls :func:`scan_hardware` to read the current EtherCAT topology from
+    the open project, then generates a GVL with ``VAR_GLOBAL`` declarations
+    for every terminal whose order number is in the bundled device catalogue.
+
+    Variables are named ``Slot{N}_{OrderNumber}_{ChannelName}`` — e.g.
+    ``Slot1_EL1008_Input_3 : BOOL;``.  Terminals not in the catalogue get
+    a comment placeholder so you can fill in channels manually.
+
+    Run :func:`scan_hardware` first to preview the topology before
+    scaffolding.  Requires XAE to be open with a solution loaded.
+
+    :param gvl_name: Name for the new GVL (default ``HardwareIO``).
+    :param plc_name: PLC project to add the GVL to. Follows the standard
+        ``PLC_PROJECT_NAME`` env default when empty.
+    :param parent_folder: Folder path inside the PLC project (optional).
+    :returns: JSON envelope confirming the GVL was created and reporting
+        how many terminals were scaffolded vs. unknown.
+    """
+    from tckit.utils.hardware_catalogue import lookup as catalogue_lookup
+
+    try:
+        topology = _cfg.hardware_inspector().scan_hardware()
+    except Exception as exc:
+        return _err(f"scan_hardware failed: {exc}")
+
+    lines: list[str] = ["{attribute 'qualified_only'}", "VAR_GLOBAL"]
+    scaffolded = 0
+    unknown: list[str] = []
+
+    for seg in topology.segments:
+        lines.append(f"\t// ── {seg.master_name} ──────────────────────────────")
+        for term in seg.terminals:
+            channels = catalogue_lookup(term.order_number)
+            if channels is None:
+                lines.append(f"\t// {term.name} — unknown terminal; add variables manually")
+                if term.order_number:
+                    unknown.append(term.order_number)
+                continue
+            if not channels:
+                lines.append(f"\t// {term.name} — no process I/O")
+                continue
+            lines.append(f"\t// {term.name}")
+            prefix = f"Slot{term.slot}_{term.order_number.replace('-', '_')}"
+            for ch_name, ch_type, _direction in channels:
+                var_name = f"{prefix}_{ch_name}"
+                lines.append(f"\t{var_name} : {ch_type};")
+            scaffolded += 1
+
+    lines.append("END_VAR")
+    code = "\n".join(lines)
+
+    try:
+        _cfg.writer().add_gvl(
+            gvl_name,
+            code,
+            parent_folder=parent_folder,
+            plc_name=_plc(plc_name),
+        )
+    except Exception as exc:
+        return _err(f"add_gvl failed: {exc}")
+
+    return _ok({
+        "success": True,
+        "gvl_name": gvl_name,
+        "terminals_scaffolded": scaffolded,
+        "unknown_terminals": unknown,
+        "message": (
+            f"Created GVL '{gvl_name}' with {scaffolded} terminal(s) scaffolded. "
+            + (f"Unknown terminals (add manually): {', '.join(unknown)}" if unknown else "")
+        ),
+    })
+
+
 def scan_hardware() -> str:
     """Read the hardware topology from the open TwinCAT project.
 
@@ -1569,6 +1649,7 @@ _TOOLS = (
     get_ethercat_status,
     get_ipc_hardware,
     scan_hardware,
+    scaffold_hardware_code,
     list_axes,
     get_axis_state,
     run_tests,
