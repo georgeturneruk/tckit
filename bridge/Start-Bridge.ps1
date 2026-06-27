@@ -32,6 +32,7 @@
       POST /method-body-patch     -> harness\Update-TcMethodBodyPatch.ps1
       POST /add-variable          -> harness\Add-TcVariable.ps1
       POST /symbols               -> harness\Read-TcSymbol.ps1
+      POST /ethercat-status       -> harness\Get-EtherCatStatus.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
       POST /tcunit-xml-resolve    -> harness\Resolve-TcUnitXmlPath.ps1
       POST /set-placeholder-parameters -> harness\Set-TcLibraryPlaceholderParameters.ps1
@@ -375,6 +376,11 @@ try {
                 'POST /symbols' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Read-TcSymbol.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /ethercat-status' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Get-EtherCatStatus.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /method' {

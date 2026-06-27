@@ -385,3 +385,54 @@ class DocPage:
     title: str
     content: str
     cached: bool = False
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EtherCatMasterInfo:
+    """Basic identity of an EtherCAT master on the target system."""
+
+    net_id: str
+    name: str
+    port: int = 65535  # 0xFFFF — the standard EtherCAT master AMS port
+
+
+@dataclass
+class EtherCatSlaveInfo:
+    """Per-slave identity, state, and CRC error counts."""
+
+    address: int
+    name: str
+    vendor_id: int
+    product_code: int
+    revision: int
+    serial: int
+    state: str  # "INIT" | "PREOP" | "BOOTSTRAP" | "SAFEOP" | "OP" | "ERROR" | "UNKNOWN"
+    link_ok: bool
+    crc_errors_a: int
+    crc_errors_b: int
+    crc_errors_c: int
+    crc_errors_d: int
+
+
+@dataclass
+class EtherCatMasterState:
+    """Master-level diagnostic flags decoded from IG 0x45."""
+
+    state_flags: int
+    link_error: bool
+    io_locked: bool
+    watchdog_triggered: bool
+    dc_out_of_sync: bool
+
+
+@dataclass
+class EtherCatStatus:
+    """Full EtherCAT status snapshot: master state + slave table."""
+
+    master: EtherCatMasterState
+    slaves: list[EtherCatSlaveInfo]

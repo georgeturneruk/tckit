@@ -30,6 +30,8 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     # Attaching to XAE and enumerating PLC projects; quick on a warm
     # instance, but allow headroom for a cold attach.
     "/active-solution": 30.0,
+    # ADS read to EtherCAT master — fast on a reachable target.
+    "/ethercat-status": 30.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {

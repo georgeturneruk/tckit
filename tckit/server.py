@@ -1189,6 +1189,81 @@ def read_symbols(target_ams_id: str, paths: list[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# HardwareInspector tools
+# ---------------------------------------------------------------------------
+
+
+def list_ethercat_masters(target_ams_id: str = "") -> str:
+    """List every EtherCAT master found on a running TwinCAT system.
+
+    Probes AMS port 65535 (0xFFFF) on the target. Most TwinCAT 3 systems
+    have exactly one master; the list will have one entry in that case.
+
+    The target must be reachable via ADS (TwinCAT runtime running and an
+    AMS route configured). No XAE session is needed.
+
+    :param target_ams_id: AMS Net ID of the target system
+        (e.g. ``192.168.1.100.1.1``). If empty, falls back to the
+        ``TARGET_AMS_ID`` env var or ``~/.tckit/config.toml``.
+    :returns: JSON envelope; ``masters`` is a list of
+        ``{net_id, name, port}`` objects, empty when no master is found.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        masters = _cfg.hardware_inspector().list_ethercat_masters(target_ams_id)
+        return _ok({"success": True, "masters": [asdict(m) for m in masters]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def get_ethercat_status(
+    target_ams_id: str = "",
+    master_net_id: str = "",
+) -> str:
+    """Read the full EtherCAT status snapshot for a master.
+
+    Returns master-level diagnostic flags and the complete slave table with
+    state-machine states, identity (vendor/product/revision/serial), link
+    health, and per-port CRC error counters.
+
+    Use this to answer "which slave is faulted and why" without needing
+    to open TwinCAT XAE.  The target must be in Run or Config mode.
+
+    Master state flags (``master.link_error``, ``master.watchdog_triggered``,
+    ``master.dc_out_of_sync``) indicate bus-level faults.  Per-slave
+    ``state`` values:
+      - ``"OP"``         — nominal
+      - ``"SAFEOP"``     — safe outputs only (common after a fault)
+      - ``"PREOP"``      — not yet operational
+      - ``"INIT"``       — just powered on
+      - ``"SAFEOP+ERROR"`` / ``"OP+ERROR"`` — state with error flag set
+
+    Non-zero ``crc_errors_a/b/c/d`` on a slave indicate cabling or EMC
+    issues on the corresponding EtherCAT port.
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    :param master_net_id: AMS Net ID of the EtherCAT master.
+        Defaults to ``target_ams_id`` (the common single-master layout).
+    :returns: JSON envelope; ``master`` carries state flags, ``slaves``
+        carries the per-slave table.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        status = _cfg.hardware_inspector().get_ethercat_status(
+            target_ams_id,
+            master_net_id=master_net_id,
+        )
+        return _ok(asdict(status))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+# ---------------------------------------------------------------------------
 # TestRunner tools
 # ---------------------------------------------------------------------------
 
@@ -1386,6 +1461,8 @@ _TOOLS = (
     deploy,
     start_runtime,
     read_symbols,
+    list_ethercat_masters,
+    get_ethercat_status,
     run_tests,
     get_test_results,
     find_fb,
