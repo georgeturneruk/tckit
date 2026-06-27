@@ -9,14 +9,17 @@ from tckit.ports.types import (
     AxisState,
     EtherCatMasterInfo,
     EtherCatMasterState,
+    EtherCatSegment,
     EtherCatSlaveInfo,
     EtherCatStatus,
+    HardwareTopology,
     IpcCpuInfo,
     IpcFanInfo,
     IpcHardware,
     IpcMemoryInfo,
     IpcNicInfo,
     IpcUpsInfo,
+    TerminalInfo,
 )
 from tckit.utils.bridge_client import BridgeClient, BridgeError
 
@@ -51,6 +54,15 @@ class BridgeHardwareAdapter(HardwareInspector):
         if not resp.get("success"):
             raise RuntimeError(resp.get("error") or "Bridge returned failure for /ethercat-status")
         return [_to_master_info(m) for m in (resp.get("masters") or [])]
+
+    def scan_hardware(self) -> HardwareTopology:
+        try:
+            resp = self._client.post("/hardware-scan", {})
+        except BridgeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if not resp.get("success"):
+            raise RuntimeError(resp.get("error") or "Bridge returned failure for /hardware-scan")
+        return _to_hardware_topology(resp)
 
     def list_axes(self, target_ams_id: str) -> list[AxisState]:
         payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
@@ -201,6 +213,27 @@ def _to_ups_info(raw: dict[str, Any]) -> IpcUpsInfo:
         power_ok=bool(raw.get("power_ok", True)),
         battery_ok=bool(raw.get("battery_ok", True)),
         power_fail_count=int(raw.get("power_fail_count", 0)),
+    )
+
+
+def _to_hardware_topology(resp: dict[str, Any]) -> HardwareTopology:
+    segments = [
+        EtherCatSegment(
+            master_name=str(seg.get("master_name", "")),
+            terminals=[
+                TerminalInfo(
+                    slot=int(t.get("slot", 0)),
+                    name=str(t.get("name", "")),
+                    order_number=str(t.get("order_number", "")),
+                )
+                for t in (seg.get("terminals") or [])
+            ],
+        )
+        for seg in (resp.get("segments") or [])
+    ]
+    return HardwareTopology(
+        segments=segments,
+        scan_timestamp=str(resp.get("scan_timestamp", "")),
     )
 
 

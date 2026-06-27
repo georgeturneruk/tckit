@@ -2,7 +2,13 @@
 
 from abc import ABC, abstractmethod
 
-from tckit.ports.types import AxisState, EtherCatMasterInfo, EtherCatStatus, IpcHardware
+from tckit.ports.types import (
+    AxisState,
+    EtherCatMasterInfo,
+    EtherCatStatus,
+    HardwareTopology,
+    IpcHardware,
+)
 
 
 class HardwareInspector(ABC):
@@ -87,5 +93,22 @@ class HardwareInspector(ABC):
         :param axis_id: Axis ID as returned by :meth:`list_axes`.
         :returns: :class:`AxisState` for the requested axis.
         :raises RuntimeError: If the axis ID does not exist.
+        """
+        ...
+
+    @abstractmethod
+    def scan_hardware(self) -> HardwareTopology:
+        """Read the hardware topology from the open TwinCAT project.
+
+        Navigates the TIID (I/O Devices) tree in the XAE System Manager,
+        enumerates EtherCAT masters, and lists every terminal/coupler
+        under each master with its slot number and order number.
+
+        Requires XAE to be open with a solution loaded (same constraint
+        as all writer-port operations). Does not trigger a physical bus
+        scan; returns the currently configured topology.
+
+        :returns: :class:`HardwareTopology` with one
+            :class:`EtherCatSegment` per EtherCAT master.
         """
         ...

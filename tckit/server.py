@@ -1218,6 +1218,29 @@ def list_ethercat_masters(target_ams_id: str = "") -> str:
         return _err(str(exc))
 
 
+def scan_hardware() -> str:
+    """Read the hardware topology from the open TwinCAT project.
+
+    Navigates the TIID (I/O Devices) tree in the XAE System Manager and
+    returns every EtherCAT master with its connected terminals.
+
+    Requires XAE to be open with a solution loaded — same constraint as
+    all project-writer tools. Does NOT trigger a physical bus scan; it
+    reads the currently configured topology from the open project without
+    generating bus traffic.
+
+    :returns: JSON envelope; ``segments`` is a list of EtherCAT masters,
+        each with a ``terminals`` list.  Each terminal has ``slot``,
+        ``name`` (full tree name, e.g. ``"Box 1 (EL1008)"``), and
+        ``order_number`` (e.g. ``"EL1008"``).
+    """
+    try:
+        topology = _cfg.hardware_inspector().scan_hardware()
+        return _ok(asdict(topology))
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def list_axes(target_ams_id: str = "") -> str:
     """List all configured NC axes and their live state.
 
@@ -1545,6 +1568,7 @@ _TOOLS = (
     list_ethercat_masters,
     get_ethercat_status,
     get_ipc_hardware,
+    scan_hardware,
     list_axes,
     get_axis_state,
     run_tests,

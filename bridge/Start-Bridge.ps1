@@ -35,6 +35,7 @@
       POST /ethercat-status       -> harness\Get-EtherCatStatus.ps1
       POST /ipc-hardware          -> harness\Get-IpcHardware.ps1
       POST /nc-axes               -> harness\Get-NcAxes.ps1
+      POST /hardware-scan         -> harness\Invoke-HardwareScan.ps1
       POST /results               -> harness\Get-TcUnitResults.ps1
       POST /tcunit-xml-resolve    -> harness\Resolve-TcUnitXmlPath.ps1
       POST /set-placeholder-parameters -> harness\Set-TcLibraryPlaceholderParameters.ps1
@@ -393,6 +394,11 @@ try {
                 'POST /nc-axes' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Get-NcAxes.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /hardware-scan' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Invoke-HardwareScan.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /method' {

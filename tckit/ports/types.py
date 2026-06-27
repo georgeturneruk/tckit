@@ -520,3 +520,33 @@ class AxisState:
     velocity: float
     lag_error: float
     state_name: str  # "Standstill" | "Moving" | "Error" | "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — hardware topology (COM/XAE)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TerminalInfo:
+    """One EtherCAT terminal or coupler in the bus topology."""
+
+    slot: int
+    name: str          # full tree name, e.g., "Box 1 (EL1008)"
+    order_number: str  # extracted order number, e.g., "EL1008"
+
+
+@dataclass
+class EtherCatSegment:
+    """One EtherCAT master and its connected terminals."""
+
+    master_name: str
+    terminals: list[TerminalInfo]
+
+
+@dataclass
+class HardwareTopology:
+    """Hardware topology of the open TwinCAT project (via COM/XAE)."""
+
+    segments: list[EtherCatSegment]
+    scan_timestamp: str
