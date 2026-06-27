@@ -6,6 +6,7 @@ from typing import Any
 
 from tckit.ports.hardware_inspector import HardwareInspector
 from tckit.ports.types import (
+    AxisState,
     EtherCatMasterInfo,
     EtherCatMasterState,
     EtherCatSlaveInfo,
@@ -50,6 +51,29 @@ class BridgeHardwareAdapter(HardwareInspector):
         if not resp.get("success"):
             raise RuntimeError(resp.get("error") or "Bridge returned failure for /ethercat-status")
         return [_to_master_info(m) for m in (resp.get("masters") or [])]
+
+    def list_axes(self, target_ams_id: str) -> list[AxisState]:
+        payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
+        try:
+            resp = self._client.post("/nc-axes", payload)
+        except BridgeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if not resp.get("success"):
+            raise RuntimeError(resp.get("error") or "Bridge returned failure for /nc-axes")
+        return [_to_axis_state(a) for a in (resp.get("axes") or [])]
+
+    def get_axis_state(self, target_ams_id: str, axis_id: int) -> AxisState:
+        payload: dict[str, Any] = {"TargetAmsId": target_ams_id, "AxisId": axis_id}
+        try:
+            resp = self._client.post("/nc-axes", payload)
+        except BridgeError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if not resp.get("success"):
+            raise RuntimeError(resp.get("error") or "Bridge returned failure for /nc-axes")
+        axes = resp.get("axes") or []
+        if not axes:
+            raise RuntimeError(f"Axis {axis_id} not found")
+        return _to_axis_state(axes[0])
 
     def get_ipc_hardware(self, target_ams_id: str) -> IpcHardware:
         payload: dict[str, Any] = {"TargetAmsId": target_ams_id}
@@ -177,4 +201,17 @@ def _to_ups_info(raw: dict[str, Any]) -> IpcUpsInfo:
         power_ok=bool(raw.get("power_ok", True)),
         battery_ok=bool(raw.get("battery_ok", True)),
         power_fail_count=int(raw.get("power_fail_count", 0)),
+    )
+
+
+def _to_axis_state(raw: dict[str, Any]) -> AxisState:
+    return AxisState(
+        id=int(raw.get("id", 0)),
+        name=str(raw.get("name", "")),
+        error_code=int(raw.get("error_code", 0)),
+        delayed_error_code=int(raw.get("delayed_error_code", 0)),
+        position=float(raw.get("position", 0.0)),
+        velocity=float(raw.get("velocity", 0.0)),
+        lag_error=float(raw.get("lag_error", 0.0)),
+        state_name=str(raw.get("state_name", "Unknown")),
     )

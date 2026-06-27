@@ -1218,6 +1218,56 @@ def list_ethercat_masters(target_ams_id: str = "") -> str:
         return _err(str(exc))
 
 
+def list_axes(target_ams_id: str = "") -> str:
+    """List all configured NC axes and their live state.
+
+    Reads axis IDs from the NC Ring0 manager (AMS port 500) then returns
+    name, error code, position, velocity, and lag error for every axis.
+    No XAE required; TwinCAT runtime must be in Run mode.
+
+    ``state_name`` is one of:
+      - ``"Standstill"`` — axis idle, no error
+      - ``"Moving"``     — axis currently in motion
+      - ``"Error"``      — non-zero error code
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    :returns: JSON envelope; ``axes`` is a list of axis state objects.
+        Empty list when no NC axes are configured.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        axes = _cfg.hardware_inspector().list_axes(target_ams_id)
+        return _ok({"success": True, "axes": [asdict(a) for a in axes]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def get_axis_state(target_ams_id: str = "", axis_id: int = 0) -> str:
+    """Read the live state of a single NC axis.
+
+    Returns the same fields as :func:`list_axes` but for one axis only.
+    Use this for a quick focused drill-down on a specific axis after
+    identifying it via :func:`list_axes`.
+
+    :param target_ams_id: AMS Net ID of the target system.
+    :param axis_id: Axis ID as returned by :func:`list_axes`.
+    :returns: JSON envelope; ``axes`` contains exactly one entry.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    if not axis_id:
+        return _err("axis_id is required.")
+    try:
+        state = _cfg.hardware_inspector().get_axis_state(target_ams_id, axis_id)
+        return _ok({"success": True, "axes": [asdict(state)]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
 def get_ipc_hardware(target_ams_id: str = "") -> str:
     """Read IPC hardware diagnostics from a running TwinCAT system.
 
@@ -1495,6 +1545,8 @@ _TOOLS = (
     list_ethercat_masters,
     get_ethercat_status,
     get_ipc_hardware,
+    list_axes,
+    get_axis_state,
     run_tests,
     get_test_results,
     find_fb,

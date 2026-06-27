@@ -112,6 +112,8 @@ def test_tool_tuple_contains_all_known_tools() -> None:
         "list_ethercat_masters",
         "get_ethercat_status",
         "get_ipc_hardware",
+        "list_axes",
+        "get_axis_state",
         "run_tests",
         "get_test_results",
         "find_fb",

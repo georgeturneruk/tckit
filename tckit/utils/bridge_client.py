@@ -34,6 +34,8 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     "/ethercat-status": 30.0,
     # MDP module enumeration + per-module reads — allow for many modules.
     "/ipc-hardware": 30.0,
+    # NC axis enumeration + per-axis state reads.
+    "/nc-axes": 30.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {

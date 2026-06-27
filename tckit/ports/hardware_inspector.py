@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from tckit.ports.types import EtherCatMasterInfo, EtherCatStatus, IpcHardware
+from tckit.ports.types import AxisState, EtherCatMasterInfo, EtherCatStatus, IpcHardware
 
 
 class HardwareInspector(ABC):
@@ -63,5 +63,29 @@ class HardwareInspector(ABC):
 
         :param target_ams_id: AMS Net ID of the target system.
         :returns: :class:`IpcHardware` snapshot of all found MDP modules.
+        """
+        ...
+
+    @abstractmethod
+    def list_axes(self, target_ams_id: str) -> list[AxisState]:
+        """Enumerate all configured NC axes and return their live state.
+
+        Reads axis IDs from the NC Ring0 manager (AMS port 500, IG 0x1100),
+        then reads name, error code, position, velocity, and lag error per
+        axis.  Returns an empty list when no NC axes are configured.
+
+        :param target_ams_id: AMS Net ID of the target system.
+        :returns: One :class:`AxisState` per configured axis.
+        """
+        ...
+
+    @abstractmethod
+    def get_axis_state(self, target_ams_id: str, axis_id: int) -> AxisState:
+        """Read the live state of a single NC axis.
+
+        :param target_ams_id: AMS Net ID of the target system.
+        :param axis_id: Axis ID as returned by :meth:`list_axes`.
+        :returns: :class:`AxisState` for the requested axis.
+        :raises RuntimeError: If the axis ID does not exist.
         """
         ...

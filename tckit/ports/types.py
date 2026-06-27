@@ -501,3 +501,22 @@ class IpcHardware:
     fans: list[IpcFanInfo]
     nics: list[IpcNicInfo]
     ups: IpcUpsInfo | None
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — NC / motion
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AxisState:
+    """Live state of one TwinCAT NC axis (read from AMS port 500)."""
+
+    id: int
+    name: str
+    error_code: int
+    delayed_error_code: int
+    position: float
+    velocity: float
+    lag_error: float
+    state_name: str  # "Standstill" | "Moving" | "Error" | "Unknown"
