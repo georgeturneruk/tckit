@@ -30,10 +30,21 @@ layers. Never `.Result` / `.Wait()` (deadlocks against STA COM).
 ## COM interop discipline
 
 - All COM lives behind adapters; `TcKit.Core` is COM-free.
-- COM calls run on an STA thread, guarded by an `IOleMessageFilter` (lifted from
-  TcUnit-Runner).
-- Deterministic release: every RCW released in a `finally` / `using` via a
-  `ComScope` helper. Never rely on the GC.
+- COM calls run on a dedicated STA thread (`StaExecutor`); each verb is marshalled
+  onto it as a unit. Busy-rejections (RPC_E_CALL_REJECTED / RETRYLATER) are retried
+  via `ComRetry`.
+- Deterministic release via `ComScope` where we own the RCW. The live DTE attached
+  by `GetActiveObject` is the user's running instance and is deliberately not freed.
+
+## Automation seam (testability)
+
+The Automation Interface is reached through a seam (`ITcSession` / `ITcSysManager`
+/ `ITcTreeItem`) so the authoring logic (`ProjectAuthor`) can be exercised against
+an in-memory fake in CI, with no TwinCAT or COM. Late binding (`dynamic`) is used
+for the live implementation (`ComTc*`) rather than a typed `TCatSysManagerLib`
+interop, so the solution still builds on a machine without TwinCAT installed. The
+fake is the executable spec of AI behaviour: when we learn a quirk on live XAE,
+pin it as a fake-backed test so it cannot regress.
 
 ## MCP contract
 

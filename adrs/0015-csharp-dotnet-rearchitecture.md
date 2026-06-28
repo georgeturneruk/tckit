@@ -41,8 +41,13 @@ suite.
 - ADS symbol value read end-to-end (proven to link and route from net8; blocked
   only on a PLC runtime in Run on the target).
 - SSE working for the separate-machines case.
-- Typed `TCatSysManagerLib` interop (the spike used late-bound `dynamic`; the
-  port moves to typed interop).
+- ~~Typed `TCatSysManagerLib` interop~~ — resolved: the writer uses late-bound
+  `dynamic` behind an automation seam (`ITcSession`/`ITcSysManager`/`ITcTreeItem`)
+  with COM and in-memory-fake implementations. This keeps the solution building
+  without TwinCAT (no interop assembly) and makes the authoring logic CI-testable
+  against the fake. Typed interop is no longer pursued.
+- Live on-XAE smoke of the COM wrapper (the authoring *logic* is CI-tested via the
+  fake; the `ComTc*` layer still needs a self-cleaning add_pou probe on real 4026).
 
 ## Context
 
@@ -198,3 +203,11 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   (`GetStructure`, `GetPouInterface`, ...) and camelCase parameters; output JSON
   keys stay snake_case as the data contract. 20 xUnit tests pass; oracle green
   across all readers on the sample, multi-PLC, and T3 fixtures.
+- 2026-06-28: Writer lane started behind an automation seam
+  (`ITcSession`/`ITcSysManager`/`ITcTreeItem`): `ProjectAuthor` holds the COM-free
+  authoring logic, `ComTc*` the live late-bound implementation, and an in-memory
+  fake encodes AI behaviour for CI. Create family done (OpenProject, AddPou,
+  AddFolder, AddGvl, AddDut, AddMethod, AddProperty), logic CI-tested against the
+  fake (46 tests total). Resolves the typed-interop open question (dynamic + seam,
+  not typed); the live COM wrapper still needs an on-XAE smoke against a
+  throwaway/demo solution. update / delete / library verbs next.

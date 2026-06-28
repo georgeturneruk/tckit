@@ -58,19 +58,27 @@ adapter lane; until then call get_structure first in a session.
 
 ## Authoring (Automation Interface; port last)
 
-COM foundation in place (`TcKit.Adapters.Automation`): `GetActiveObject` P/Invoke
-attach, STA executor, `ComRetry`, `DteSession` tree navigation, `StCode` splitter,
-`TcKind` map. The create family below is implemented (build + unit-tested on the
-pure logic); the COM path itself is **pending live-XAE validation** (self-cleaning
-add_pou probe once delete_* lands), so these stay unchecked until validated.
+COM foundation in place (`TcKit.Adapters.Automation`), built around an **automation
+seam** (`ITcSession` / `ITcSysManager` / `ITcTreeItem`) so the authoring logic is
+testable without TwinCAT:
 
-- [~] add_pou — built; pending live validation
-- [~] add_gvl — built; pending live validation
-- [~] add_dut — built; pending live validation
-- [~] add_method — built; pending live validation
-- [~] add_property — built; pending live validation
+- `ProjectAuthor` — all navigation + verb logic against the seam (COM-free).
+- `ComTcSession` / `ComTcSysManager` / `ComTcTreeItem` — the live COM implementation
+  (late-bound `dynamic`, `ComRetry`, `GetActiveObject` P/Invoke attach, STA executor).
+- A fake seam in the tests encodes the AI behaviour (CreateChild kinds, declaration-only
+  GVL/DUT, `^`-path resolution); `StCode` splitter and `TcKind` map are unit-tested too.
+
+The create family below is implemented and **CI-tested against the fake**; the live
+COM wrapper still needs an on-XAE smoke (self-cleaning add_pou probe once delete_*
+lands), so these stay unchecked until that confirms.
+
+- [~] add_pou — logic CI-tested (fake); pending live COM smoke
+- [~] add_gvl — logic CI-tested (fake); pending live COM smoke
+- [~] add_dut — logic CI-tested (fake); pending live COM smoke
+- [~] add_method — logic CI-tested (fake); pending live COM smoke
+- [~] add_property — logic CI-tested (fake); pending live COM smoke
 - [ ] add_variable
-- [~] add_folder — built; pending live validation
+- [~] add_folder — logic CI-tested (fake); pending live COM smoke
 - [ ] add_plc_project
 - [ ] add_library_reference
 - [ ] add_library_placeholder
