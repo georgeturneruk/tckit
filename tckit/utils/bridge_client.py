@@ -30,6 +30,12 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     # Attaching to XAE and enumerating PLC projects; quick on a warm
     # instance, but allow headroom for a cold attach.
     "/active-solution": 30.0,
+    # ADS symbol write: one TcSession open/close plus one Write-TcValue
+    # per symbol; a batch of reasonable size should complete well inside 30s.
+    "/write-symbols": 30.0,
+    # RPC method invocation: method execution time is PLC-dependent but
+    # should be fast; allow headroom for cold TcAdsClient connect.
+    "/invoke-rpc": 30.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {

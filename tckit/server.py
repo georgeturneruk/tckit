@@ -1161,7 +1161,7 @@ def start_runtime(target_ams_id: str = "", confirmed: bool = False) -> str:
     if gate is not None:
         return gate
     try:
-        result = _cfg.builder().start_runtime(target_ams_id)
+        result = _cfg.runtime().start_runtime(target_ams_id)
         return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
@@ -1182,8 +1182,114 @@ def read_symbols(target_ams_id: str, paths: list[str]) -> str:
         ``None`` for any path that couldn't be resolved (not an error).
     """
     try:
-        values = _cfg.builder().read_symbols(target_ams_id, list(paths or []))
+        values = _cfg.runtime().read_symbols(target_ams_id, list(paths or []))
         return _ok({"success": True, "values": values})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def write_symbols(
+    target_ams_id: str = "",
+    writes: dict[str, Any] | None = None,
+    confirmed: bool = False,
+) -> str:
+    """Write PLC symbols by instance path on a running runtime.
+
+    ⚠️  This operation modifies live PLC state. By default it requires
+    ``confirmed=True`` to prevent accidental writes to the wrong target.
+
+    Best-effort: per-symbol failures are reported in ``details.errors``
+    without aborting remaining writes. ``success`` is ``True`` only when
+    every write succeeded.
+
+    TcXaeMgmt resolves each symbol's declared PLC type from ADS and
+    coerces the supplied value — no type annotation required for
+    primitives. Pass values compatible with the declared type:
+    Python ``int`` for INT/DINT, ``float`` for REAL/LREAL, ``bool``
+    for BOOL, ``str`` for STRING, a list for ARRAY symbols, and a dict
+    for STRUCT symbols (PLC struct must carry
+    ``{attribute 'pack_mode' := '1'}``).
+
+    Safety behaviour (configurable in docker\\.env):
+      - ``SAFETY_CONFIRMATIONS=true``  (default) — confirmed=True required
+      - ``SAFETY_CONFIRMATIONS=false`` — no confirmation gate
+      - ``BLOCKED_NETIDS=<id>,...``    — these targets are permanently rejected
+
+    :param target_ams_id: AMS Net ID of the target. Falls back to
+        ``TARGET_AMS_ID`` env var or ``~/.tckit/config.toml``.
+    :param writes: Mapping of symbol instance path -> value to write
+        (e.g. ``{"MAIN.nSetpoint": 42, "GVL.bEnable": true}``).
+    :param confirmed: Set to True after verifying the target and values
+        are correct.
+    :returns: JSON with ``details.written`` (succeeded paths) and
+        ``details.errors`` (failed paths with error messages).
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    if not writes:
+        return _err("writes must be a non-empty mapping of symbol path -> value.")
+    gate = _safety_check("write_symbols", target_ams_id, confirmed)
+    if gate is not None:
+        return gate
+    try:
+        result = _cfg.runtime().write_symbols(target_ams_id, writes)
+        return _ok(asdict(result))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def invoke_rpc(
+    target_ams_id: str = "",
+    symbol_path: str = "",
+    method_name: str = "",
+    params: list[Any] | None = None,
+    confirmed: bool = False,
+) -> str:
+    """Invoke a PLC method decorated with ``{attribute 'TcRpcEnable'}`` via ADS.
+
+    ⚠️  This operation executes code on a live PLC. By default it requires
+    ``confirmed=True``.
+
+    The method must be on a FB instance path. Parameters are positional
+    and must match the method's ``VAR_INPUT`` declaration order.
+
+    Safety behaviour (configurable in docker\\.env):
+      - ``SAFETY_CONFIRMATIONS=true``  (default) — confirmed=True required
+      - ``SAFETY_CONFIRMATIONS=false`` — no confirmation gate
+      - ``BLOCKED_NETIDS=<id>,...``    — these targets are permanently rejected
+
+    :param target_ams_id: AMS Net ID of the target. Falls back to
+        ``TARGET_AMS_ID`` env var or ``~/.tckit/config.toml``.
+    :param symbol_path: Instance path of the FB owning the method
+        (e.g. ``"MAIN.fbPid"``; use ``"MAIN"`` for methods directly on
+        the MAIN program).
+    :param method_name: Method name as declared in the PLC
+        (e.g. ``"M_Reset"``).
+    :param params: Positional parameters matching the method's
+        ``VAR_INPUT`` order. ``None`` is treated as an empty list.
+    :param confirmed: Set to True after verifying the target and method
+        are correct.
+    :returns: JSON with ``details.return_value`` and
+        ``details.return_type`` when the method returns a value.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    if not symbol_path:
+        return _err(
+            "symbol_path is required (e.g. 'MAIN.fbPid' or 'MAIN' for top-level methods)."
+        )
+    if not method_name:
+        return _err("method_name is required (e.g. 'M_Reset').")
+    gate = _safety_check("invoke_rpc", target_ams_id, confirmed)
+    if gate is not None:
+        return gate
+    try:
+        result = _cfg.runtime().invoke_rpc(
+            target_ams_id, symbol_path, method_name, params or []
+        )
+        return _ok(asdict(result))
     except Exception as exc:
         return _err(str(exc))
 
@@ -1386,6 +1492,8 @@ _TOOLS = (
     deploy,
     start_runtime,
     read_symbols,
+    write_symbols,
+    invoke_rpc,
     run_tests,
     get_test_results,
     find_fb,

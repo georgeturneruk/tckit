@@ -26,6 +26,7 @@ from tckit.ports.builder import BuildRunner
 from tckit.ports.doc_generator import DocGenerator
 from tckit.ports.docs_searcher import DocsSearcher
 from tckit.ports.reader import ProjectReader
+from tckit.ports.runtime import RuntimeAdapter
 from tckit.ports.test_runner import TestRunner
 from tckit.ports.writer import ProjectWriter
 from tckit.utils.bridge_client import BridgeClient
@@ -63,6 +64,7 @@ _load_dotenv_layered()
 _READER_REGISTRY: dict[str, type[ProjectReader]] = {}
 _WRITER_REGISTRY: dict[str, type[ProjectWriter]] = {}
 _BUILDER_REGISTRY: dict[str, type[BuildRunner]] = {}
+_RUNTIME_REGISTRY: dict[str, type[RuntimeAdapter]] = {}
 _TEST_RUNNER_REGISTRY: dict[str, type[TestRunner]] = {}
 _DOC_GENERATOR_REGISTRY: dict[str, type[DocGenerator]] = {}
 _DOCS_SEARCHER_REGISTRY: dict[str, type[DocsSearcher]] = {}
@@ -75,12 +77,14 @@ def _load_registries() -> None:
     from tckit.adapters.doc_generators.markdown_generator import MarkdownGenerator
     from tckit.adapters.docs_searchers.beckhoff_infosys_searcher import BeckhoffInfosysSearcher
     from tckit.adapters.readers.xml_reader import XmlReader
+    from tckit.adapters.runtime.xae_com_runtime import XaeComRuntime
     from tckit.adapters.test_runners.tcunit_runner import TcUnitRunner
     from tckit.adapters.writers.automation_writer import AutomationWriter
 
     _READER_REGISTRY["xml"] = XmlReader
     _WRITER_REGISTRY["automation_interface"] = AutomationWriter
     _BUILDER_REGISTRY["xae_com"] = XaeComBuilder
+    _RUNTIME_REGISTRY["xae_com"] = XaeComRuntime
     _TEST_RUNNER_REGISTRY["tcunit"] = TcUnitRunner
     _DOC_GENERATOR_REGISTRY["html"] = HtmlGenerator
     _DOC_GENERATOR_REGISTRY["markdown"] = MarkdownGenerator
@@ -232,6 +236,14 @@ class TcKitConfig:
             raise ValueError(f"Unknown builder adapter: {name!r}")
         return cls(client=self.bridge_client())  # type: ignore[call-arg]
 
+    def runtime(self) -> RuntimeAdapter:
+        _ensure_registries()
+        name = self.get("runtime_adapter", "xae_com")
+        cls = _RUNTIME_REGISTRY.get(name)
+        if cls is None:
+            raise ValueError(f"Unknown runtime adapter: {name!r}")
+        return cls(client=self.bridge_client())  # type: ignore[call-arg]
+
     def test_runner(self) -> TestRunner:
         _ensure_registries()
         name = self.get("test_runner", "tcunit")
@@ -272,6 +284,7 @@ def _normalise_keys(raw: dict[str, Any]) -> dict[str, Any]:
         "reader",
         "writer",
         "builder",
+        "runtime_adapter",
         "test_runner",
         "doc_generator",
         "docs_searcher",
