@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using TcKit.Adapters.Automation;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Ports;
 
@@ -14,6 +15,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
 
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
+builder.Services.AddSingleton<IProjectWriter, AutomationProjectWriter>();
 
 builder.Services
     .AddMcpServer()

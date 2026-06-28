@@ -53,18 +53,24 @@ adapter lane; until then call get_structure first in a session.
 
 ## Project / config
 
-- [ ] open_project
+- [~] open_project — built; pending live validation
 - [ ] create_project
 
 ## Authoring (Automation Interface; port last)
 
-- [ ] add_pou
-- [ ] add_gvl
-- [ ] add_dut
-- [ ] add_method
-- [ ] add_property
+COM foundation in place (`TcKit.Adapters.Automation`): `GetActiveObject` P/Invoke
+attach, STA executor, `ComRetry`, `DteSession` tree navigation, `StCode` splitter,
+`TcKind` map. The create family below is implemented (build + unit-tested on the
+pure logic); the COM path itself is **pending live-XAE validation** (self-cleaning
+add_pou probe once delete_* lands), so these stay unchecked until validated.
+
+- [~] add_pou — built; pending live validation
+- [~] add_gvl — built; pending live validation
+- [~] add_dut — built; pending live validation
+- [~] add_method — built; pending live validation
+- [~] add_property — built; pending live validation
 - [ ] add_variable
-- [ ] add_folder
+- [~] add_folder — built; pending live validation
 - [ ] add_plc_project
 - [ ] add_library_reference
 - [ ] add_library_placeholder
