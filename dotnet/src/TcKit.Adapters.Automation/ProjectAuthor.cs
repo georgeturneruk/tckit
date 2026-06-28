@@ -188,6 +188,26 @@ internal static partial class ProjectAuthor
         return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc), ("replacements", 1));
     }
 
+    public static Result AddVariable(
+        ITcSession session, string pouName, string scope, string declaration, string? itemName, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateDeclItem(sm, plc, pouName, itemName);
+        item.DeclarationText = VarBlock.AddVariable(item.DeclarationText, scope, declaration);
+        session.Save();
+        return Ok(("pou_name", pouName), ("item", itemName), ("plc_name", plc), ("scope", scope.Trim().ToUpperInvariant()));
+    }
+
+    public static Result DeleteVariable(
+        ITcSession session, string pouName, string variableName, string? itemName, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateDeclItem(sm, plc, pouName, itemName);
+        item.DeclarationText = VarBlock.RemoveVariable(item.DeclarationText, variableName);
+        session.Save();
+        return Ok(("pou_name", pouName), ("variable", variableName), ("item", itemName), ("plc_name", plc));
+    }
+
     // --- delete --------------------------------------------------------------
 
     private static readonly int[] s_pouKinds = [TcKind.Program, TcKind.Function, TcKind.FunctionBlock, TcKind.Interface];
@@ -415,6 +435,19 @@ internal static partial class ProjectAuthor
     private static ITcTreeItem LocateItem(ITcSysManager sm, string plc, string pouName, string itemName)
     {
         var pou = LocatePouUnderProject(sm, plc, pouName);
+        return FindChild(pou, itemName)
+            ?? throw new InvalidOperationException($"Item '{itemName}' not found on POU '{pouName}'.");
+    }
+
+    /// <summary>The POU's declaration-bearing item: the POU itself, or a named method/action under it.</summary>
+    private static ITcTreeItem LocateDeclItem(ITcSysManager sm, string plc, string pouName, string? itemName)
+    {
+        var pou = LocatePouUnderProject(sm, plc, pouName);
+        if (string.IsNullOrEmpty(itemName) || itemName == pouName)
+        {
+            return pou;
+        }
+
         return FindChild(pou, itemName)
             ?? throw new InvalidOperationException($"Item '{itemName}' not found on POU '{pouName}'.");
     }

@@ -95,6 +95,15 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
         string name, string parentPath, bool recursive, string? plcName, CancellationToken cancellationToken)
         => RunAsync(cancellationToken, session => ProjectAuthor.DeleteFolder(session, name, parentPath, recursive, plcName));
 
+    public Task<Result> AddVariableAsync(
+        string pouName, string scope, string declaration, string? itemName, string? plcName,
+        CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.AddVariable(session, pouName, scope, declaration, itemName, plcName));
+
+    public Task<Result> DeleteVariableAsync(
+        string pouName, string variableName, string? itemName, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteVariable(session, pouName, variableName, itemName, plcName));
+
     private Task<Result> RunAsync(CancellationToken cancellationToken, Func<ITcSession, Result> author)
     {
         cancellationToken.ThrowIfCancellationRequested();

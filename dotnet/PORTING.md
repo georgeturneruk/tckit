@@ -82,7 +82,7 @@ live-validated only once individually smoked.
 - [~] add_dut — logic CI-tested (fake); COM layer live-proven
 - [~] add_method — logic CI-tested (fake); COM layer live-proven
 - [~] add_property — logic CI-tested (fake); COM layer live-proven
-- [ ] add_variable
+- [~] add_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
 - [~] add_folder — logic CI-tested (fake); COM layer live-proven
 - [ ] add_plc_project
 - [ ] add_library_reference
@@ -100,7 +100,7 @@ live-validated only once individually smoked.
 - [~] delete_dut — logic CI-tested (fake); pending live COM smoke
 - [~] delete_method — logic CI-tested (fake); pending live COM smoke
 - [~] delete_property — logic CI-tested (fake); pending live COM smoke
-- [ ] delete_variable
+- [~] delete_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
 - [~] delete_folder — logic CI-tested (fake); pending live COM smoke
 - [ ] delete_library_reference
 - [ ] delete_placeholder

@@ -88,4 +88,16 @@ public interface IProjectWriter
     /// <summary>Delete a folder; refuses a non-empty folder unless recursive.</summary>
     Task<Result> DeleteFolderAsync(
         string name, string parentPath, bool recursive, string? plcName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Add one variable declaration to a named scope block (creating the block if absent). Targets
+    /// the FB-level declaration, or a method's local VARs when itemName is given.
+    /// </summary>
+    Task<Result> AddVariableAsync(
+        string pouName, string scope, string declaration, string? itemName, string? plcName,
+        CancellationToken cancellationToken);
+
+    /// <summary>Remove one variable declaration (refuses multi-name lists and line-continued decls).</summary>
+    Task<Result> DeleteVariableAsync(
+        string pouName, string variableName, string? itemName, string? plcName, CancellationToken cancellationToken);
 }

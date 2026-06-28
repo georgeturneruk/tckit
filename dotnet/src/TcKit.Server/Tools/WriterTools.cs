@@ -146,6 +146,23 @@ public sealed class WriterTools(IProjectWriter writer)
         string name, string parentPath = "", bool recursive = false, string plcName = "", CancellationToken cancellationToken = default)
         => Run(() => writer.DeleteFolderAsync(name, parentPath, recursive, Optional(plcName), cancellationToken));
 
+    [McpServerTool(Name = "AddVariable")]
+    [Description("Add one variable declaration to a named scope block. scope is one of VAR_INPUT, "
+        + "VAR_OUTPUT, VAR_IN_OUT, VAR, VAR_PERSISTENT, VAR_TEMP, or 'VAR CONSTANT'. declaration is a "
+        + "single line e.g. 'bEnable : BOOL;'. itemName targets a method's local VARs (else FB-level).")]
+    public Task<string> AddVariable(
+        string pouName, string scope, string declaration,
+        string itemName = "", string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.AddVariableAsync(pouName, scope, declaration, Optional(itemName), Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteVariable")]
+    [Description("Remove one variable declaration from a POU or method. Refuses multi-name lists "
+        + "(use UpdatePouDeclarationPatch for those). itemName targets a method's local VARs.")]
+    public Task<string> DeleteVariable(
+        string pouName, string variableName,
+        string itemName = "", string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteVariableAsync(pouName, variableName, Optional(itemName), Optional(plcName), cancellationToken));
+
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
 
     private static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch
