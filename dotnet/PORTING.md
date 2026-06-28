@@ -54,7 +54,7 @@ adapter lane; until then call get_structure first in a session.
 ## Project / config
 
 - [x] open_project — CI-tested + live-validated (XAE)
-- [~] create_project — logic CI-tested (fake); pending live COM smoke
+- [x] create_project — CI-tested (fake) + live-validated (writer smoke)
 
 ## Authoring (Automation Interface; port last)
 
@@ -68,44 +68,42 @@ testable without TwinCAT:
 - A fake seam in the tests encodes the AI behaviour (CreateChild kinds, declaration-only
   GVL/DUT, `^`-path resolution); `StCode` splitter and `TcKind` map are unit-tested too.
 
-The COM foundation is now **live-proven** against a real 4026: a self-cleaning
-OpenProject -> AddPou -> DeletePou cycle worked against TcXaeShell (a .TcPOU was
-authored to disk and removed). Two fixes came out of that smoke: an
-`IOleMessageFilter` on the STA thread (resolves RPC_E_CALL_REJECTED busy
-rejections) and capturing tree-item path/kind before navigating (TwinCAT AI
-invalidates a handle once you navigate away). The remaining verbs are logic
-CI-tested against the fake and ride the same proven COM layer; each is marked
-live-validated only once individually smoked.
+The COM foundation is **live-proven** against a real 4026. Two fixes came out of
+the first smoke: an `IOleMessageFilter` on the STA thread (resolves
+RPC_E_CALL_REJECTED busy rejections) and capturing tree-item path/kind before
+navigating (TwinCAT AI invalidates a handle once you navigate away).
 
-The whole lane (create / update / delete / library / scaffolding) is now exposed
-as `TcKit.Cli` write verbs, and [`oracle/smoke-writer.ps1`](oracle/smoke-writer.ps1)
+The whole lane (create / update / delete / library / scaffolding) is exposed as
+`TcKit.Cli` write verbs, and [`oracle/smoke-writer.ps1`](oracle/smoke-writer.ps1)
 drives every verb in dependency order against a self-cleaning scratch solution on
-a live 4026. That run is the gate that flips each `[~]` to `[x]`.
+a live 4026. A full 28-verb sweep (scaffold two PLCs, author, update/patch,
+save-as-library + reference + placeholder + parameters, delete in reverse) passes
+green; every verb below is now live-validated through that harness.
 
 - [x] add_pou — CI-tested + live-validated (XAE)
-- [~] add_gvl — logic CI-tested (fake); COM layer live-proven
-- [~] add_dut — logic CI-tested (fake); COM layer live-proven
-- [~] add_method — logic CI-tested (fake); COM layer live-proven
-- [~] add_property — logic CI-tested (fake); COM layer live-proven
-- [~] add_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
-- [~] add_folder — logic CI-tested (fake); COM layer live-proven
-- [~] add_plc_project — logic CI-tested (fake); pending live COM smoke
-- [~] add_library_reference — logic CI-tested (fake); pending live COM smoke
-- [~] add_library_placeholder — logic CI-tested (fake); pending live COM smoke
-- [~] set_placeholder_parameters — .plcproj XML splice + logic CI-tested (fake); pending live COM smoke
-- [~] save_plc_as_library — metadata round-trip + cold-start retry CI-tested (fake); pending live COM smoke
-- [~] update_pou_declaration — logic CI-tested (fake); pending live COM smoke
-- [~] update_pou_implementation — logic CI-tested (fake); pending live COM smoke
-- [~] update_method_body — logic CI-tested (fake); pending live COM smoke
-- [~] update_pou_declaration_patch — logic CI-tested (fake); pending live COM smoke
-- [~] update_pou_implementation_patch — logic CI-tested (fake); pending live COM smoke
-- [~] update_method_body_patch — logic CI-tested (fake); pending live COM smoke
+- [x] add_gvl — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_dut — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_method — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_property — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_variable — VAR-block editor + CI-tested (fake) + live-validated (writer smoke)
+- [x] add_folder — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_plc_project — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_library_reference — CI-tested (fake) + live-validated (writer smoke)
+- [x] add_library_placeholder — CI-tested (fake) + live-validated (writer smoke)
+- [x] set_placeholder_parameters — .plcproj XML splice + CI-tested (fake) + live-validated (writer smoke)
+- [x] save_plc_as_library — metadata round-trip + cold-start retry + CI-tested (fake) + live-validated (writer smoke)
+- [x] update_pou_declaration — CI-tested (fake) + live-validated (writer smoke)
+- [x] update_pou_implementation — CI-tested (fake) + live-validated (writer smoke)
+- [x] update_method_body — CI-tested (fake) + live-validated (writer smoke)
+- [x] update_pou_declaration_patch — CI-tested (fake) + live-validated (writer smoke)
+- [x] update_pou_implementation_patch — CI-tested (fake) + live-validated (writer smoke)
+- [x] update_method_body_patch — CI-tested (fake) + live-validated (writer smoke)
 - [x] delete_pou — CI-tested (incl. task-binding scan) + live-validated (XAE)
-- [~] delete_gvl — logic CI-tested (fake); pending live COM smoke
-- [~] delete_dut — logic CI-tested (fake); pending live COM smoke
-- [~] delete_method — logic CI-tested (fake); pending live COM smoke
-- [~] delete_property — logic CI-tested (fake); pending live COM smoke
-- [~] delete_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
-- [~] delete_folder — logic CI-tested (fake); pending live COM smoke
-- [~] delete_library_reference — wildcard-version resolution + logic CI-tested (fake); pending live COM smoke
-- [~] delete_placeholder — logic CI-tested (fake); pending live COM smoke
+- [x] delete_gvl — CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_dut — CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_method — CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_property — CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_variable — VAR-block editor + CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_folder — CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_library_reference — wildcard-version resolution + CI-tested (fake) + live-validated (writer smoke)
+- [x] delete_placeholder — CI-tested (fake) + live-validated (writer smoke)

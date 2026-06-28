@@ -59,11 +59,15 @@ function Invoke-Verb {
     )
 
     $raw = (& $dotnet 'run' '--project' $cliProject '--no-build' '--' @VerbArgs 2>&1) | Out-String
-    $line = ($raw.Trim() -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
+    # The CLI prints one pretty-printed JSON Result; parse from the first '{' so any
+    # leading host/build noise on stdout doesn't break the parse.
     $res = $null
-    try { $res = $line | ConvertFrom-Json } catch { }
+    $start = $raw.IndexOf('{')
+    if ($start -ge 0) {
+        try { $res = $raw.Substring($start) | ConvertFrom-Json } catch { }
+    }
 
-    $success = ($null -ne $res) -and $res.PSObject.Properties.Name -contains 'success' -and $res.success
+    $success = ($null -ne $res) -and ($res.PSObject.Properties.Name -contains 'success') -and $res.success
     $wanted = if ($ExpectFail) { -not $success } else { $success }
 
     if ($wanted) {
@@ -72,8 +76,9 @@ function Invoke-Verb {
     } else {
         $script:fail++
         $script:failedVerbs += $Label
+        $detail = if ($null -ne $res -and $res.PSObject.Properties.Name -contains 'error') { $res.error } else { $raw.Trim() }
         Write-Host ("FAIL  {0}" -f $Label) -ForegroundColor Red
-        Write-Host ("      {0}" -f $line) -ForegroundColor DarkGray
+        Write-Host ("      {0}" -f $detail) -ForegroundColor DarkGray
     }
 }
 
@@ -93,17 +98,17 @@ $dutCode     = New-Code 'dut.st'       "TYPE ST_Smoke :`nSTRUCT`n    a : INT;`n 
 $methodCode  = New-Code 'method.st'    "METHOD Step : BOOL`nVAR_INPUT`n    dt : LREAL;`nEND_VAR`nStep := TRUE;"
 $getCode     = New-Code 'get.st'       "Value := nCount;"
 $setCode     = New-Code 'set.st'       "nCount := Value;"
-$newDecl     = New-Code 'decl.st'      "FUNCTION_BLOCK FB_Smoke`nVAR`n    nCount : INT;`n    bDone : BOOL;`nEND_VAR"
+# The replacement declaration keeps bEnable (added below) so delete-variable can still find it.
+$newDecl     = New-Code 'decl.st'      "FUNCTION_BLOCK FB_Smoke`nVAR_INPUT`n    bEnable : BOOL;`nEND_VAR`nVAR`n    nCount : INT;`n    bDone : BOOL;`nEND_VAR"
 $newImpl     = New-Code 'impl.st'      "nCount := nCount + 2;`nbDone := nCount > 10;"
 $newMethod   = New-Code 'method2.st'   "METHOD Step : BOOL`nVAR_INPUT`n    dt : LREAL;`nEND_VAR`nStep := dt > 0.0;"
-$patchOld    = New-Code 'patchold.st'  "nCount := nCount + 2;"
-$patchNew    = New-Code 'patchnew.st'  "nCount := nCount + 3;"
 
 $slnPath = Join-Path $Root 'Smoke.sln'
 $libPath = Join-Path $Root 'Smoke_Plc.library'
 $plc1 = 'Smoke_Plc'
 $plc2 = 'Smoke2'
-$paramsJson = '{"GVL_Param_Tc3_Module":{"bExample":"TRUE"}}'
+# Passed as a file (@path) so PowerShell native-arg quoting can't mangle the JSON.
+$paramsFile = New-Code 'params.json' '{"GVL_Param_Tc3_Module":{"bExample":"TRUE"}}'
 
 Write-Host "`n=== Scaffolding ===" -ForegroundColor Cyan
 Invoke-Verb 'create-project'            @('create-project', 'Smoke', $Root)
@@ -122,13 +127,15 @@ Write-Host "`n=== Updates / patches ===" -ForegroundColor Cyan
 Invoke-Verb 'update-pou-declaration'    @('update-pou-declaration', 'FB_Smoke', "@$newDecl", '--plc', $plc1)
 Invoke-Verb 'update-pou-implementation' @('update-pou-implementation', 'FB_Smoke', "@$newImpl", '--plc', $plc1)
 Invoke-Verb 'update-method-body'        @('update-method-body', 'FB_Smoke', 'Step', "@$newMethod", '--plc', $plc1)
-Invoke-Verb 'update-pou-implementation-patch' @('update-pou-implementation-patch', 'FB_Smoke', "@$patchOld", "@$patchNew", '--plc', $plc1)
+Invoke-Verb 'update-pou-declaration-patch'    @('update-pou-declaration-patch', 'FB_Smoke', 'bDone : BOOL;', 'bDone : BOOL; // done', '--plc', $plc1)
+Invoke-Verb 'update-pou-implementation-patch' @('update-pou-implementation-patch', 'FB_Smoke', '+ 2;', '+ 3;', '--plc', $plc1)
+Invoke-Verb 'update-method-body-patch'        @('update-method-body-patch', 'FB_Smoke', 'Step', 'dt > 0.0', 'dt >= 0.0', '--plc', $plc1)
 
 Write-Host "`n=== Library lane ===" -ForegroundColor Cyan
 Invoke-Verb 'save-plc-as-library'       @('save-plc-as-library', $libPath, '--overwrite', '--plc', $plc1)
 Invoke-Verb 'add-library-reference'     @('add-library-reference', $plc1, '--version', '*', '--distributor', 'Tc3 Project', '--plc', $plc2)
 Invoke-Verb 'add-library-placeholder'   @('add-library-placeholder', 'Tc3_Module', 'Tc3_Module', '--distributor', 'Beckhoff Automation GmbH', '--plc', $plc2)
-Invoke-Verb 'set-placeholder-parameters' @('set-placeholder-parameters', 'Tc3_Module', $paramsJson, '--plc', $plc2)
+Invoke-Verb 'set-placeholder-parameters' @('set-placeholder-parameters', 'Tc3_Module', "@$paramsFile", '--plc', $plc2)
 
 Write-Host "`n=== Teardown (reverse) ===" -ForegroundColor Cyan
 Invoke-Verb 'delete-placeholder'        @('delete-placeholder', 'Tc3_Module', '--plc', $plc2)
