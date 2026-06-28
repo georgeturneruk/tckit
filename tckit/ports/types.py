@@ -385,3 +385,168 @@ class DocPage:
     title: str
     content: str
     cached: bool = False
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EtherCatMasterInfo:
+    """Basic identity of an EtherCAT master on the target system."""
+
+    net_id: str
+    name: str
+    port: int = 65535  # 0xFFFF — the standard EtherCAT master AMS port
+
+
+@dataclass
+class EtherCatSlaveInfo:
+    """Per-slave identity, state, and CRC error counts."""
+
+    address: int
+    name: str
+    vendor_id: int
+    product_code: int
+    revision: int
+    serial: int
+    state: str  # "INIT" | "PREOP" | "BOOTSTRAP" | "SAFEOP" | "OP" | "ERROR" | "UNKNOWN"
+    link_ok: bool
+    crc_errors_a: int
+    crc_errors_b: int
+    crc_errors_c: int
+    crc_errors_d: int
+
+
+@dataclass
+class EtherCatMasterState:
+    """Master-level diagnostic flags decoded from IG 0x45."""
+
+    state_flags: int
+    link_error: bool
+    io_locked: bool
+    watchdog_triggered: bool
+    dc_out_of_sync: bool
+
+
+@dataclass
+class EtherCatStatus:
+    """Full EtherCAT status snapshot: master state + slave table."""
+
+    master: EtherCatMasterState
+    slaves: list[EtherCatSlaveInfo]
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — IPC hardware
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class IpcCpuInfo:
+    """CPU diagnostic data from MDP module type 0x000B."""
+
+    temperature_c: int | None
+    usage_pct: int
+    frequency_mhz: int
+
+
+@dataclass
+class IpcMemoryInfo:
+    """System memory from MDP module type 0x000C (values in MB)."""
+
+    total_mb: int
+    free_mb: int
+
+    @property
+    def used_mb(self) -> int:
+        return self.total_mb - self.free_mb
+
+
+@dataclass
+class IpcFanInfo:
+    """Fan speed from MDP module type 0x001B."""
+
+    index: int
+    rpm: int
+
+
+@dataclass
+class IpcNicInfo:
+    """Network adapter info from MDP module type 0x0002."""
+
+    index: int
+    mac: str
+    ipv4: str
+
+
+@dataclass
+class IpcUpsInfo:
+    """UPS status from MDP module type 0x001E."""
+
+    battery_pct: int
+    power_ok: bool
+    battery_ok: bool
+    power_fail_count: int
+
+
+@dataclass
+class IpcHardware:
+    """Full IPC hardware snapshot — all discovered MDP modules."""
+
+    twincat_version: str | None
+    cpu: IpcCpuInfo | None
+    memory: IpcMemoryInfo | None
+    fans: list[IpcFanInfo]
+    nics: list[IpcNicInfo]
+    ups: IpcUpsInfo | None
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — NC / motion
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AxisState:
+    """Live state of one TwinCAT NC axis (read from AMS port 500)."""
+
+    id: int
+    name: str
+    error_code: int
+    delayed_error_code: int
+    position: float
+    velocity: float
+    lag_error: float
+    state_name: str  # "Standstill" | "Moving" | "Error" | "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# HardwareInspector types — hardware topology (COM/XAE)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TerminalInfo:
+    """One EtherCAT terminal or coupler in the bus topology."""
+
+    slot: int
+    name: str          # full tree name, e.g., "Box 1 (EL1008)"
+    order_number: str  # extracted order number, e.g., "EL1008"
+
+
+@dataclass
+class EtherCatSegment:
+    """One EtherCAT master and its connected terminals."""
+
+    master_name: str
+    terminals: list[TerminalInfo]
+
+
+@dataclass
+class HardwareTopology:
+    """Hardware topology of the open TwinCAT project (via COM/XAE)."""
+
+    segments: list[EtherCatSegment]
+    scan_timestamp: str

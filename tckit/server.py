@@ -1295,6 +1295,265 @@ def invoke_rpc(
 
 
 # ---------------------------------------------------------------------------
+# HardwareInspector tools
+# ---------------------------------------------------------------------------
+
+
+def list_ethercat_masters(target_ams_id: str = "") -> str:
+    """List every EtherCAT master found on a running TwinCAT system.
+
+    Probes AMS port 65535 (0xFFFF) on the target. Most TwinCAT 3 systems
+    have exactly one master; the list will have one entry in that case.
+
+    The target must be reachable via ADS (TwinCAT runtime running and an
+    AMS route configured). No XAE session is needed.
+
+    :param target_ams_id: AMS Net ID of the target system
+        (e.g. ``192.168.1.100.1.1``). If empty, falls back to the
+        ``TARGET_AMS_ID`` env var or ``~/.tckit/config.toml``.
+    :returns: JSON envelope; ``masters`` is a list of
+        ``{net_id, name, port}`` objects, empty when no master is found.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        masters = _cfg.hardware_inspector().list_ethercat_masters(target_ams_id)
+        return _ok({"success": True, "masters": [asdict(m) for m in masters]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def scaffold_hardware_code(
+    gvl_name: str = "HardwareIO",
+    plc_name: str = "",
+    parent_folder: str = "",
+) -> str:
+    """Scaffold I/O variable declarations from the connected hardware topology.
+
+    Calls :func:`scan_hardware` to read the current EtherCAT topology from
+    the open project, then generates a GVL with ``VAR_GLOBAL`` declarations
+    for every terminal whose order number is in the bundled device catalogue.
+
+    Variables are named ``Slot{N}_{OrderNumber}_{ChannelName}`` — e.g.
+    ``Slot1_EL1008_Input_3 : BOOL;``.  Terminals not in the catalogue get
+    a comment placeholder so you can fill in channels manually.
+
+    Run :func:`scan_hardware` first to preview the topology before
+    scaffolding.  Requires XAE to be open with a solution loaded.
+
+    :param gvl_name: Name for the new GVL (default ``HardwareIO``).
+    :param plc_name: PLC project to add the GVL to. Follows the standard
+        ``PLC_PROJECT_NAME`` env default when empty.
+    :param parent_folder: Folder path inside the PLC project (optional).
+    :returns: JSON envelope confirming the GVL was created and reporting
+        how many terminals were scaffolded vs. unknown.
+    """
+    from tckit.utils.hardware_catalogue import lookup as catalogue_lookup
+
+    try:
+        topology = _cfg.hardware_inspector().scan_hardware()
+    except Exception as exc:
+        return _err(f"scan_hardware failed: {exc}")
+
+    lines: list[str] = ["{attribute 'qualified_only'}", "VAR_GLOBAL"]
+    scaffolded = 0
+    unknown: list[str] = []
+
+    for seg in topology.segments:
+        lines.append(f"\t// ── {seg.master_name} ──────────────────────────────")
+        for term in seg.terminals:
+            channels = catalogue_lookup(term.order_number)
+            if channels is None:
+                lines.append(f"\t// {term.name} — unknown terminal; add variables manually")
+                if term.order_number:
+                    unknown.append(term.order_number)
+                continue
+            if not channels:
+                lines.append(f"\t// {term.name} — no process I/O")
+                continue
+            lines.append(f"\t// {term.name}")
+            prefix = f"Slot{term.slot}_{term.order_number.replace('-', '_')}"
+            for ch_name, ch_type, _direction in channels:
+                var_name = f"{prefix}_{ch_name}"
+                lines.append(f"\t{var_name} : {ch_type};")
+            scaffolded += 1
+
+    lines.append("END_VAR")
+    code = "\n".join(lines)
+
+    try:
+        _cfg.writer().add_gvl(
+            gvl_name,
+            code,
+            parent_folder=parent_folder,
+            plc_name=_plc(plc_name),
+        )
+    except Exception as exc:
+        return _err(f"add_gvl failed: {exc}")
+
+    return _ok({
+        "success": True,
+        "gvl_name": gvl_name,
+        "terminals_scaffolded": scaffolded,
+        "unknown_terminals": unknown,
+        "message": (
+            f"Created GVL '{gvl_name}' with {scaffolded} terminal(s) scaffolded. "
+            + (f"Unknown terminals (add manually): {', '.join(unknown)}" if unknown else "")
+        ),
+    })
+
+
+def scan_hardware() -> str:
+    """Read the hardware topology from the open TwinCAT project.
+
+    Navigates the TIID (I/O Devices) tree in the XAE System Manager and
+    returns every EtherCAT master with its connected terminals.
+
+    Requires XAE to be open with a solution loaded — same constraint as
+    all project-writer tools. Does NOT trigger a physical bus scan; it
+    reads the currently configured topology from the open project without
+    generating bus traffic.
+
+    :returns: JSON envelope; ``segments`` is a list of EtherCAT masters,
+        each with a ``terminals`` list.  Each terminal has ``slot``,
+        ``name`` (full tree name, e.g. ``"Box 1 (EL1008)"``), and
+        ``order_number`` (e.g. ``"EL1008"``).
+    """
+    try:
+        topology = _cfg.hardware_inspector().scan_hardware()
+        return _ok(asdict(topology))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def list_axes(target_ams_id: str = "") -> str:
+    """List all configured NC axes and their live state.
+
+    Reads axis IDs from the NC Ring0 manager (AMS port 500) then returns
+    name, error code, position, velocity, and lag error for every axis.
+    No XAE required; TwinCAT runtime must be in Run mode.
+
+    ``state_name`` is one of:
+      - ``"Standstill"`` — axis idle, no error
+      - ``"Moving"``     — axis currently in motion
+      - ``"Error"``      — non-zero error code
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    :returns: JSON envelope; ``axes`` is a list of axis state objects.
+        Empty list when no NC axes are configured.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        axes = _cfg.hardware_inspector().list_axes(target_ams_id)
+        return _ok({"success": True, "axes": [asdict(a) for a in axes]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def get_axis_state(target_ams_id: str = "", axis_id: int = 0) -> str:
+    """Read the live state of a single NC axis.
+
+    Returns the same fields as :func:`list_axes` but for one axis only.
+    Use this for a quick focused drill-down on a specific axis after
+    identifying it via :func:`list_axes`.
+
+    :param target_ams_id: AMS Net ID of the target system.
+    :param axis_id: Axis ID as returned by :func:`list_axes`.
+    :returns: JSON envelope; ``axes`` contains exactly one entry.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    if not axis_id:
+        return _err("axis_id is required.")
+    try:
+        state = _cfg.hardware_inspector().get_axis_state(target_ams_id, axis_id)
+        return _ok({"success": True, "axes": [asdict(state)]})
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def get_ipc_hardware(target_ams_id: str = "") -> str:
+    """Read IPC hardware diagnostics from a running TwinCAT system.
+
+    Reads all MDP modules discovered on the target IPC via AMS port 10000
+    (SystemService).  No XAE required; TwinCAT runtime must be running.
+
+    Returns a snapshot of:
+      - ``twincat_version``  — e.g. ``"3.1.4026"``
+      - ``cpu``              — ``temperature_c`` (null if BIOS API absent),
+                               ``usage_pct``, ``frequency_mhz``
+      - ``memory``           — ``total_mb``, ``free_mb``, ``used_mb``
+      - ``fans``             — list of ``{rpm}`` entries, one per fan
+      - ``nics``             — list of ``{mac, ipv4}`` entries
+      - ``ups``              — ``battery_pct``, ``power_ok``, ``battery_ok``,
+                               ``power_fail_count``; null if no UPS found
+
+    Modules not present on the hardware are null or empty lists.
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        hw = _cfg.hardware_inspector().get_ipc_hardware(target_ams_id)
+        return _ok(asdict(hw))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+def get_ethercat_status(
+    target_ams_id: str = "",
+    master_net_id: str = "",
+) -> str:
+    """Read the full EtherCAT status snapshot for a master.
+
+    Returns master-level diagnostic flags and the complete slave table with
+    state-machine states, identity (vendor/product/revision/serial), link
+    health, and per-port CRC error counters.
+
+    Use this to answer "which slave is faulted and why" without needing
+    to open TwinCAT XAE.  The target must be in Run or Config mode.
+
+    Master state flags (``master.link_error``, ``master.watchdog_triggered``,
+    ``master.dc_out_of_sync``) indicate bus-level faults.  Per-slave
+    ``state`` values:
+      - ``"OP"``         — nominal
+      - ``"SAFEOP"``     — safe outputs only (common after a fault)
+      - ``"PREOP"``      — not yet operational
+      - ``"INIT"``       — just powered on
+      - ``"SAFEOP+ERROR"`` / ``"OP+ERROR"`` — state with error flag set
+
+    Non-zero ``crc_errors_a/b/c/d`` on a slave indicate cabling or EMC
+    issues on the corresponding EtherCAT port.
+
+    :param target_ams_id: AMS Net ID of the target system.
+        If empty, falls back to ``TARGET_AMS_ID`` env / config.
+    :param master_net_id: AMS Net ID of the EtherCAT master.
+        Defaults to ``target_ams_id`` (the common single-master layout).
+    :returns: JSON envelope; ``master`` carries state flags, ``slaves``
+        carries the per-slave table.
+    """
+    target_ams_id = _resolve_target_ams_id(target_ams_id)
+    if not target_ams_id:
+        return _err(_TARGET_AMS_ID_REQUIRED_HINT)
+    try:
+        status = _cfg.hardware_inspector().get_ethercat_status(
+            target_ams_id,
+            master_net_id=master_net_id,
+        )
+        return _ok(asdict(status))
+    except Exception as exc:
+        return _err(str(exc))
+
+
+# ---------------------------------------------------------------------------
 # TestRunner tools
 # ---------------------------------------------------------------------------
 
@@ -1494,6 +1753,13 @@ _TOOLS = (
     read_symbols,
     write_symbols,
     invoke_rpc,
+    list_ethercat_masters,
+    get_ethercat_status,
+    get_ipc_hardware,
+    scan_hardware,
+    scaffold_hardware_code,
+    list_axes,
+    get_axis_state,
     run_tests,
     get_test_results,
     find_fb,
