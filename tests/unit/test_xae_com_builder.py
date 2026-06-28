@@ -165,22 +165,6 @@ def test_deploy_passes_boot_autostart_false() -> None:
     assert payload["BootAutostart"] is False
 
 
-def test_start_runtime_posts_to_runtime_endpoint() -> None:
-    client = FakeBridgeClient({"success": True})
-    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
-
-    builder.start_runtime("1.2.3.4.1.1")
-
-    path, payload, _ = client.calls[0]
-    assert path == "/runtime"
-    assert payload == {
-        "TargetAmsId": "1.2.3.4.1.1",
-        "Mode": "Run",
-        "Wait": True,
-    }
-    assert "ProjectPath" not in payload
-
-
 def test_get_status_starts_idle() -> None:
     builder = XaeComBuilder(client=FakeBridgeClient())  # type: ignore[arg-type]
     assert builder.get_status() == BuildStatus.IDLE
@@ -194,65 +178,9 @@ def test_deploy_failure_translated() -> None:
     assert result.error == "no route to host"
 
 
-def test_read_symbols_returns_values_dict() -> None:
-    client = FakeBridgeClient(
-        {
-            "success": True,
-            "values": {
-                "MAIN.suite.Tests[1].TestIsFailed": "FALSE",
-                "MAIN.suite.Tests[2].TestIsFailed": "TRUE",
-            },
-        }
-    )
-    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
-
-    result = builder.read_symbols(
-        "1.2.3.4.1.1",
-        ["MAIN.suite.Tests[1].TestIsFailed", "MAIN.suite.Tests[2].TestIsFailed"],
-    )
-
-    assert result == {
-        "MAIN.suite.Tests[1].TestIsFailed": "FALSE",
-        "MAIN.suite.Tests[2].TestIsFailed": "TRUE",
-    }
-    path, payload, _ = client.calls[0]
-    assert path == "/symbols"
-    assert payload["TargetAmsId"] == "1.2.3.4.1.1"
-    # Newline-separated, not a JSON array — bridge convention.
-    assert payload["Paths"].startswith("MAIN.suite.Tests[1].TestIsFailed")
 
 
-def test_read_symbols_empty_paths_short_circuits() -> None:
-    client = FakeBridgeClient({"success": True})
-    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
 
-    result = builder.read_symbols("1.2.3.4.1.1", [])
-
-    assert result == {}
-    assert client.calls == []  # no bridge round-trip needed
-
-
-def test_read_symbols_unreadable_path_returns_none() -> None:
-    client = FakeBridgeClient(
-        {
-            "success": True,
-            "values": {"MAIN.has": "OK"},  # MAIN.missing absent
-        }
-    )
-    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
-
-    result = builder.read_symbols("1.2.3.4.1.1", ["MAIN.has", "MAIN.missing"])
-
-    assert result == {"MAIN.has": "OK", "MAIN.missing": None}
-
-
-def test_read_symbols_bridge_unavailable_returns_all_none() -> None:
-    client = FakeBridgeClient(raise_exc=BridgeUnavailableError("nope"))
-    builder = XaeComBuilder(client=client)  # type: ignore[arg-type]
-
-    result = builder.read_symbols("1.2.3.4.1.1", ["MAIN.foo", "MAIN.bar"])
-
-    assert result == {"MAIN.foo": None, "MAIN.bar": None}
 
 
 # ---------------------------------------------------------------------------

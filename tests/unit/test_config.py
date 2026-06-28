@@ -7,6 +7,7 @@ from tckit.ports.builder import BuildRunner
 from tckit.ports.doc_generator import DocGenerator
 from tckit.ports.docs_searcher import DocsSearcher
 from tckit.ports.reader import ProjectReader
+from tckit.ports.runtime import RuntimeAdapter
 from tckit.ports.test_runner import TestRunner
 from tckit.ports.writer import ProjectWriter
 
@@ -46,6 +47,15 @@ def test_writer_returns_project_writer() -> None:
 
 def test_builder_returns_build_runner() -> None:
     assert isinstance(_cfg().builder(), BuildRunner)
+
+
+def test_runtime_returns_runtime_adapter() -> None:
+    assert isinstance(_cfg().runtime(), RuntimeAdapter)
+
+
+def test_unknown_runtime_adapter_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown runtime adapter"):
+        _cfg({"runtime_adapter": "nonexistent"}).runtime()
 
 
 def test_test_runner_returns_test_runner() -> None:

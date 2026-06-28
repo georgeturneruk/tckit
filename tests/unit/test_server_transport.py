@@ -109,6 +109,8 @@ def test_tool_tuple_contains_all_known_tools() -> None:
         "deploy",
         "start_runtime",
         "read_symbols",
+        "write_symbols",
+        "invoke_rpc",
         "list_ethercat_masters",
         "get_ethercat_status",
         "get_ipc_hardware",

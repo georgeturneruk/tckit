@@ -32,6 +32,8 @@
       POST /method-body-patch     -> harness\Update-TcMethodBodyPatch.ps1
       POST /add-variable          -> harness\Add-TcVariable.ps1
       POST /symbols               -> harness\Read-TcSymbol.ps1
+      POST /write-symbols         -> harness\Write-TcSymbol.ps1
+      POST /invoke-rpc            -> harness\Invoke-TcRpcMethod.ps1
       POST /ethercat-status       -> harness\Get-EtherCatStatus.ps1
       POST /ipc-hardware          -> harness\Get-IpcHardware.ps1
       POST /nc-axes               -> harness\Get-NcAxes.ps1
@@ -379,6 +381,16 @@ try {
                 'POST /symbols' {
                     $body   = Read-RequestBody -Request $req
                     $result = Invoke-Harness -Script 'Read-TcSymbol.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /write-symbols' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Write-TcSymbol.ps1' -Params $body
+                    Send-JsonResponse -Response $res -Body $result
+                }
+                'POST /invoke-rpc' {
+                    $body   = Read-RequestBody -Request $req
+                    $result = Invoke-Harness -Script 'Invoke-TcRpcMethod.ps1' -Params $body
                     Send-JsonResponse -Response $res -Body $result
                 }
                 'POST /ethercat-status' {

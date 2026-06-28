@@ -7,6 +7,9 @@ Multi-project sln support (ADR-0005): ``build`` and ``deploy`` accept an
 optional ``plc_name``; the value flows through to the bridge as ``PlcName``
 in the POST body. The bridge harness's ``Resolve-TcPlcName`` enforces the
 same auto-resolve / disambiguate policy on the Windows side.
+
+Runtime control and ADS symbol I/O (start_runtime, read_symbols, write_symbols,
+invoke_rpc) moved to XaeComRuntime (tckit/adapters/runtime/xae_com_runtime.py).
 """
 
 from __future__ import annotations
@@ -31,10 +34,10 @@ class XaeComBuilder(BuildRunner):
         project_path: str | None = None,
     ) -> None:
         self._client = client or BridgeClient()
-        # Explicit solution path for deploy / start_runtime on the
-        # programmatic / headless path. The MCP server leaves this None so
-        # those operations target the solution open in the attached XAE.
-        # ``build`` takes its path as an explicit argument and ignores this.
+        # Explicit solution path for deploy on the programmatic / headless
+        # path. The MCP server leaves this None so deploy targets the
+        # solution open in the attached XAE. ``build`` takes its path as an
+        # explicit argument and ignores this.
         self._project_path = project_path or None
         self._last_status: BuildStatus = BuildStatus.IDLE
 
@@ -85,46 +88,6 @@ class XaeComBuilder(BuildRunner):
         except BridgeError as exc:
             return Result(success=False, error=str(exc))
         return _to_result(resp)
-
-    def start_runtime(self, target_ams_id: str) -> Result:
-        payload: dict[str, Any] = {
-            "TargetAmsId": target_ams_id,
-            "Mode": "Run",
-            "Wait": True,
-        }
-        if self._project_path:
-            payload["ProjectPath"] = self._project_path
-        try:
-            resp = self._client.post("/runtime", payload)
-        except BridgeError as exc:
-            return Result(success=False, error=str(exc))
-        return _to_result(resp)
-
-    def read_symbols(
-        self, target_ams_id: str, paths: list[str]
-    ) -> dict[str, str | None]:
-        if not paths:
-            return {}
-        payload = {
-            "TargetAmsId": target_ams_id,
-            # Newline-separated rather than a JSON array because the
-            # bridge's request decoder collapses nested string arrays
-            # unhelpfully on PowerShell 5.1; same shape /tcunit-run uses
-            # for its ReadSymbols convenience parameter.
-            "Paths": "\n".join(paths),
-        }
-        try:
-            resp = self._client.post("/symbols", payload)
-        except BridgeError:
-            return {p: None for p in paths}
-        values = resp.get("values") if isinstance(resp, dict) else None
-        if not isinstance(values, dict):
-            return {p: None for p in paths}
-        out: dict[str, str | None] = {}
-        for path in paths:
-            raw = values.get(path)
-            out[path] = str(raw) if raw is not None else None
-        return out
 
     def get_status(self) -> BuildStatus:
         return self._last_status
