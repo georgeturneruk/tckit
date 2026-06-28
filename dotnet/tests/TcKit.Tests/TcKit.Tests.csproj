@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TcKit.Core\TcKit.Core.csproj" />
+    <ProjectReference Include="..\..\src\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
   </ItemGroup>
 
 </Project>

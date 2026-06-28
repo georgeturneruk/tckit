@@ -37,16 +37,25 @@ layers. Never `.Result` / `.Wait()` (deadlocks against STA COM).
 
 ## MCP contract
 
-Preserved as-is during the port (tool names, parameter names, response shapes
-stay what they are today) so the Python parity oracle can diff byte-for-byte.
-Map idiomatic C# methods to the existing names via the SDK attributes. Reshaping
-the surface is a deliberate later pass, not part of the port.
+Byte-for-byte parity with the Python tools is **not** a goal; the port is free to
+make deliberate, reviewed improvements to the surface. The Python stack is a
+behavioural reference and the oracle a semantic cross-check (see `oracle/`), not
+a strict diff. The per-tool verification gate is the xUnit suite.
 
-## Errors
+The MCP surface follows our C# identifier conventions rather than the snake_case
+ecosystem default: **PascalCase tool names** (set explicitly via
+`[McpServerTool(Name = "...")]`, since the SDK would otherwise camelCase the
+method name) and **camelCase parameters** (the C# parameter convention; the SDK
+uses the parameter name verbatim). Output JSON keys are a separate data contract
+and stay snake_case via the shared `TckitJson` options.
 
-Domain code throws; the MCP tool layer catches and translates to the existing
-structured `{ success, error }` result shape. Never leak a raw `COMException` to
-the model.
+## Errors and result shape
+
+Domain code throws; the MCP tool layer catches and translates. The unified
+convention across tools: **success returns the tool's data object** (serialised
+via the shared `TckitJson` options: snake_case names, string enums, nulls
+emitted); **failure returns `{ "error": "<message>" }`**. Never leak a raw
+`COMException` to the model.
 
 ## Comments and docs
 

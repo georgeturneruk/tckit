@@ -25,7 +25,17 @@ Python stack kept as a parity oracle until every tool matches.
 on-machine feasibility now retired against a live 4026 (see
 [finding](../bench/findings/2026-06-28-csharp-rewrite-feasibility.md)): net8 DTE
 attach + tree read + self-cleaning `add_pou` authoring, the dependency stack, and
-a real MCP stdio handshake all work. The per-tool port is the remaining work.
+a real MCP stdio handshake all work. The reader lane is complete: all six readers
+(`get_structure`, `get_pou_interface`, `get_pou_declaration`, `get_pou_item`,
+`get_gvl`, `get_dut`) are ported (offline XML, `TcKit.Adapters.Reader`, sharing a
+stateful per-PLC symbol index with .plcproj mtime staleness) with xUnit coverage
+and the oracle green across the bench fixtures.
+
+**Parity stance:** byte-for-byte parity is *not* a goal. The rewrite makes
+deliberate, reviewed improvements to the MCP surface where they help (e.g. a
+unified result shape); Python is a behavioural reference and the oracle a
+semantic cross-check, not a strict diff. The verification gate is the xUnit
+suite.
 
 **Open questions:** Narrowed after the on-machine spike. Remaining:
 - ADS symbol value read end-to-end (proven to link and route from net8; blocked
@@ -95,11 +105,15 @@ gets cleaner in C#, not harder.
   TcUnit-Runner's COM bring-up to attach `TcXaeShell.DTE.17.0`; two proof
   tools working against real 4026: `add_pou` (authoring, riskiest) and
   `read_symbols` (ADS, easiest). One week retires all three unknowns at once.
-- *Golden-master oracle.* Keep the Python stack runnable and diff C# tool
-  outputs against it on the same project, tool by tool. Do not delete Python
-  until every tool passes the diff. This is available only because we are
-  porting, not greenfielding, and it is worth more than any new unit test for
-  catching translation drift.
+- *Parity oracle (behavioural, not byte-for-byte).* Keep the Python stack
+  runnable and cross-check C# tool outputs against it on the same project, tool
+  by tool. The rewrite is free to make deliberate, reviewed improvements to the
+  surface where they make sense; the oracle surfaces *semantic* differences so
+  intended changes read as expected and genuine translation drift (a missing
+  POU, a mis-detected type) stands out. The per-tool verification gate is the C#
+  xUnit suite; the oracle is a supplementary review aid, available only because
+  we are porting, not greenfielding. Do not delete Python until every tool has
+  reached behavioural parity (or a documented, intended divergence).
 - *Order.* Readers and ADS/hardware first (most dependency coverage), the COM
   authoring lane last (hardest, most behaviour to preserve).
 
@@ -167,3 +181,20 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   work against the open solution; ADS links and routes from net8; the MCP server
   completes a real stdio handshake. The highest-risk lane (COM authoring) is
   proven; scaffold committed on `feat/csharp-rewrite`.
+- 2026-06-28: Dropped byte-for-byte parity as a goal. The rewrite may make
+  deliberate, reviewed breaking improvements to the MCP surface; Python is a
+  behavioural reference and the oracle a semantic cross-check (not a strict diff),
+  with the xUnit suite as the per-tool gate. First reader `get_structure` ported
+  on `feat/csharp-readers-get-structure` (offline XML in `TcKit.Adapters.Reader`,
+  shared snake_case JSON contract, unified `{ "error": msg }` failure shape);
+  oracle green on the sample, multi-PLC, and nested-folder bench fixtures.
+- 2026-06-28: Reader lane completed on the same branch: `get_pou_interface`,
+  `get_pou_declaration`, `get_pou_item` (methods/actions/property `.Get`/`.Set`),
+  `get_gvl`, `get_dut` (kind + alias base_type). They share a stateful symbol index
+  built by `get_structure` (per-PLC name -> path, .plcproj mtime staleness, ADR-0005);
+  index hydration from the open-XAE solution is deferred to the COM lane. Exercising
+  the breaking-changes latitude, the MCP surface now follows C# identifier
+  conventions instead of the snake_case ecosystem default: PascalCase tool names
+  (`GetStructure`, `GetPouInterface`, ...) and camelCase parameters; output JSON
+  keys stay snake_case as the data contract. 20 xUnit tests pass; oracle green
+  across all readers on the sample, multi-PLC, and T3 fixtures.

@@ -10,12 +10,17 @@ work goes public.
 
 ## Readers (port first)
 
-- [ ] get_structure
-- [ ] get_pou_interface
-- [ ] get_pou_declaration
-- [ ] get_pou_item
-- [ ] get_gvl
-- [ ] get_dut
+- [x] get_structure — `TcKit.Adapters.Reader`; xUnit + oracle green (sample, multi-PLC, T3)
+- [x] get_pou_interface — xUnit + oracle green
+- [x] get_pou_declaration — xUnit + oracle green
+- [x] get_pou_item — methods, actions, property accessors (`Name.Get`/`.Set`); xUnit + oracle green
+- [x] get_gvl — xUnit + oracle green
+- [x] get_dut — struct/enum/union/alias + base_type; xUnit + oracle green
+
+The readers share a stateful symbol index built by get_structure (per-PLC name ->
+path, with .plcproj mtime staleness, ADR-0005). Hydrating the index from the
+solution open in XAE (the Python `active_solution` path) is deferred to the COM
+adapter lane; until then call get_structure first in a session.
 
 ## ADS / hardware (port early; TwinSharp + Beckhoff.TwinCAT.Ads)
 

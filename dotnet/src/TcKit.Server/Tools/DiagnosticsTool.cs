@@ -8,7 +8,8 @@ namespace TcKit.Server.Tools;
 public static class DiagnosticsTool
 {
     /// <summary>Returns "ok"; confirms the server is alive over the transport.</summary>
-    [McpServerTool]
+    // Explicit PascalCase name: the SDK would otherwise camelCase the method name to "ping".
+    [McpServerTool(Name = "Ping")]
     [Description("Health check: returns ok if the TcKit MCP server is alive.")]
     public static string Ping() => "ok";
 }
