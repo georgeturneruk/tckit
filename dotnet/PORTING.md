@@ -37,11 +37,18 @@ adapter lane; until then call get_structure first in a session.
 
 ## Build / test / deploy
 
-- [ ] build
-- [ ] deploy
-- [ ] start_runtime
-- [ ] run_tests
-- [ ] get_test_results
+The COM half (build, deploy) rides the same automation seam + STA layer as the
+authoring lane; the ADS half (start_runtime, run_tests, get_test_results) is
+native Beckhoff.TwinCAT.Ads behind an `IAdsFactory` seam, so the orchestration
+(state transitions, the suites-finished poll, XML parsing) is CI-tested against a
+fake without a live runtime. All five are exposed as `TcKit.Cli` verbs; live COM
++ ADS smoke against a bench TcUnit fixture flips them to `[x]`.
+
+- [~] build — CheckAllObjects + Error List mapping CI-tested (fake); pending live COM smoke
+- [~] deploy — config-resolve + autostart + activate CI-tested (fake); pending live COM smoke
+- [~] start_runtime — WriteControl Run/Config CI-tested (fake); pending live ADS smoke
+- [~] run_tests — Run-mode + finished-poll + XML inline CI-tested (fake); pending live ADS smoke
+- [~] get_test_results — JUnit XML parser CI-tested (fixtures); pending live ADS smoke
 
 ## Docs (Beckhoff infosys)
 

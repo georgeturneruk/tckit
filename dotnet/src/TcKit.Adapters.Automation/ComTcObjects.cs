@@ -57,7 +57,16 @@ internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
     public void SaveAsLibrary(string outputPath, bool install)
         => ComRetry.Invoke(() => { _item.SaveAsLibrary(outputPath, install); });
 
-    public void CheckAllObjects() => ComRetry.Invoke(() => { _item.CheckAllObjects(); });
+    public bool CheckAllObjects() => ComRetry.Invoke(() => (bool)_item.CheckAllObjects());
+
+    public bool BootProjectAutostart
+    {
+        get => ComRetry.Invoke(() => (bool)_item.BootProjectAutostart);
+        set => ComRetry.Invoke(() => { _item.BootProjectAutostart = value; });
+    }
+
+    public void GenerateBootProject(bool activate)
+        => ComRetry.Invoke(() => { _item.GenerateBootProject(activate); });
 }
 
 /// <summary>COM-backed <see cref="ITcSysManager"/> over a late-bound ITcSysManager.</summary>
@@ -67,6 +76,10 @@ internal sealed class ComTcSysManager(dynamic sysManager) : ITcSysManager
 
     public ITcTreeItem LookupTreeItem(string path)
         => new ComTcTreeItem(ComRetry.Invoke<object>(() => _sm.LookupTreeItem(path)));
+
+    public void SetTargetNetId(string amsNetId) => ComRetry.Invoke(() => { _sm.SetTargetNetId(amsNetId); });
+
+    public void ActivateConfiguration() => ComRetry.Invoke(() => { _sm.ActivateConfiguration(); });
 }
 
 /// <summary>
@@ -156,6 +169,150 @@ internal sealed class ComTcSession : ITcSession
     }
 
     public void CloseSolution() => ComRetry.Invoke(() => _dte.Solution.Close(false));
+
+    public string ResolveSolutionConfiguration(string prefer)
+    {
+        dynamic sb = ComRetry.Invoke<object>(() => _dte.Solution.SolutionBuild);
+
+        var activeName = TryGetActiveConfigName(sb);
+        if (activeName is not null)
+        {
+            return activeName;
+        }
+
+        var configs = new List<dynamic>();
+        dynamic all = sb.SolutionConfigurations;
+        var count = (int)all.Count;
+        for (var i = 1; i <= count; i++)
+        {
+            configs.Add(all.Item(i));
+        }
+
+        if (configs.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No solution configuration is available to activate. Add a build configuration in XAE (Build > Configuration Manager).");
+        }
+
+        dynamic? chosen = null;
+        if (configs.Count == 1)
+        {
+            chosen = configs[0];
+        }
+        else
+        {
+            foreach (var c in configs)
+            {
+                if (((string)c.Name).StartsWith(prefer, StringComparison.Ordinal))
+                {
+                    chosen = c;
+                    break;
+                }
+            }
+        }
+
+        if (chosen is null)
+        {
+            var names = new List<string>();
+            foreach (var c in configs)
+            {
+                names.Add((string)c.Name);
+            }
+
+            throw new InvalidOperationException(
+                $"No active solution configuration is selected and none matches '{prefer}' "
+                + $"(available: {string.Join(", ", names)}). Select one in XAE (Build > Configuration Manager).");
+        }
+
+        dynamic resolved = chosen;
+        ComRetry.Invoke(() => { resolved.Activate(); });
+        return (string)resolved.Name;
+    }
+
+    public IReadOnlyList<ComErrorItem>? ReadErrorList()
+    {
+        dynamic? errorList = TryGet(() => _dte.ToolWindows.ErrorList);
+        if (errorList is null)
+        {
+            return null;
+        }
+
+        dynamic? items = TryGet(() => errorList.ErrorItems);
+        if (items is null)
+        {
+            return [];
+        }
+
+        var count = TryGetInt(() => (int)items.Count);
+        var rows = new List<ComErrorItem>();
+        for (var i = 1; i <= count; i++)
+        {
+            var captured = i;
+            dynamic? it = TryGet(() => items.Item(captured));
+            if (it is null)
+            {
+                continue;
+            }
+
+            rows.Add(new ComErrorItem(
+                TryGetStr(() => (string)it.FileName),
+                TryGetInt(() => (int)it.Line),
+                TryGetStr(() => (string)it.Description),
+                TryGetInt(() => (int)it.ErrorLevel, 1),
+                TryGetStr(() => (string)it.Project)));
+        }
+
+        return rows;
+    }
+
+    private static string? TryGetActiveConfigName(dynamic solutionBuild)
+    {
+        var active = TryGet(() => solutionBuild.ActiveConfiguration);
+        if (active is null)
+        {
+            return null;
+        }
+
+        return TryGetStr(() => (string)active.Name);
+    }
+
+#pragma warning disable CA1031 // Best-effort late-bound COM reads: a missing member maps to a default, never throws.
+    private static dynamic? TryGet(Func<dynamic?> get)
+    {
+        try
+        {
+            return get();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static string TryGetStr(Func<string> get, string fallback = "")
+    {
+        try
+        {
+            return get() ?? fallback;
+        }
+        catch (Exception)
+        {
+            return fallback;
+        }
+    }
+
+    private static int TryGetInt(Func<int> get, int fallback = 0)
+    {
+        try
+        {
+            return get();
+        }
+        catch (Exception)
+        {
+            return fallback;
+        }
+    }
+#pragma warning restore CA1031
 
     public void Dispose()
     {

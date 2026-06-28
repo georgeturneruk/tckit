@@ -7,6 +7,7 @@
 // Read verbs are self-contained: they prime the symbol index with get_structure,
 // then read. Write verbs target the solution open in the attached TcXaeShell;
 // code-bearing args accept either a literal string or '@<path>' to read a file.
+using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Models;
@@ -55,7 +56,7 @@ try
             return Emit(await reader.GetDutAsync(pos[1], Opt("plc"), ct).ConfigureAwait(false));
 
         default:
-            return await RunWriteVerb().ConfigureAwait(false);
+            return await RunBuildTestVerb().ConfigureAwait(false);
     }
 }
 #pragma warning disable CA1031 // The CLI boundary mirrors the tool: any failure becomes the error contract.
@@ -65,6 +66,52 @@ catch (Exception exc)
     return 1;
 }
 #pragma warning restore CA1031
+
+async Task<int> RunBuildTestVerb()
+{
+    switch (args[0])
+    {
+        case "build":
+        {
+            using var runner = new AutomationBuildRunner();
+            var result = await runner.BuildAsync(Opt("plc"), Flag("force-log"), ct).ConfigureAwait(false);
+            return EmitObj(result, result.Success);
+        }
+
+        case "deploy" when pos.Length >= 1:
+        {
+            using var runner = new AutomationBuildRunner();
+            var result = await runner.DeployAsync(pos[0], Opt("plc"), !Flag("no-autostart"), ct).ConfigureAwait(false);
+            return EmitResult(result);
+        }
+
+        case "start-runtime" when pos.Length >= 1:
+        {
+            var result = await new AdsRuntimeControl().StartRuntimeAsync(pos[0], ct).ConfigureAwait(false);
+            return EmitResult(result);
+        }
+
+        case "run-tests" when pos.Length >= 1:
+        {
+            var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
+            var result = await new TcUnitTestRunner()
+                .RunTestsAsync(pos[0], Opt("plc"), !Flag("no-wait"), timeout, ct)
+                .ConfigureAwait(false);
+            return EmitObj(result, result.Success);
+        }
+
+        case "get-test-results" when pos.Length >= 1:
+        {
+            var result = await new TcUnitTestRunner()
+                .GetResultsAsync(pos[0], Opt("plc"), Opt("xml"), ct)
+                .ConfigureAwait(false);
+            return EmitObj(result, result.Success);
+        }
+
+        default:
+            return await RunWriteVerb().ConfigureAwait(false);
+    }
+}
 
 async Task<int> RunWriteVerb()
 {
@@ -204,6 +251,12 @@ static int EmitResult(Result result)
     return result.Success ? 0 : 1;
 }
 
+static int EmitObj<T>(T value, bool success)
+{
+    Console.WriteLine(TckitJson.Serialize(value));
+    return success ? 0 : 1;
+}
+
 static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(string[] args)
 {
     var positionals = new List<string>();
@@ -293,4 +346,10 @@ static void PrintUsage()
     Console.WriteLine("  set-placeholder-parameters <name> <paramsJson> [--plc <name>]");
     Console.WriteLine("  delete-placeholder <name> [--plc <name>]");
     Console.WriteLine("  save-plc-as-library <output> [--no-install] [--repo System] [--overwrite] [--plc <name>]");
+    Console.WriteLine("build / test / deploy verbs:");
+    Console.WriteLine("  build [--plc <name>] [--force-log]");
+    Console.WriteLine("  deploy <targetAmsId> [--plc <name>] [--no-autostart]");
+    Console.WriteLine("  start-runtime <targetAmsId>");
+    Console.WriteLine("  run-tests <targetAmsId> [--plc <name>] [--no-wait] [--timeout 120]");
+    Console.WriteLine("  get-test-results <targetAmsId> [--plc <name>] [--xml <path>]");
 }

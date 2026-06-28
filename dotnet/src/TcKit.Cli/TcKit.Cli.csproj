@@ -4,6 +4,7 @@
     <ProjectReference Include="..\TcKit.Core\TcKit.Core.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
+    <ProjectReference Include="..\TcKit.Adapters.Ads\TcKit.Adapters.Ads.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

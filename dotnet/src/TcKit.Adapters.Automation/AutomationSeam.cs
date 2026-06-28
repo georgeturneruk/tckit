@@ -58,8 +58,14 @@ internal interface ITcTreeItem
     /// <summary>Save the PLC project as a .library, optionally installing it. PLC project node only.</summary>
     void SaveAsLibrary(string outputPath, bool install);
 
-    /// <summary>Run an in-process compile (forces placeholder resolution). PLC project node only.</summary>
-    void CheckAllObjects();
+    /// <summary>Run an in-process compile (forces placeholder resolution); true on a clean compile. PLC project node only.</summary>
+    bool CheckAllObjects();
+
+    /// <summary>Autostart the boot project on the system-level PLC node (TIPC^plc). ITcPlcProject only.</summary>
+    bool BootProjectAutostart { get; set; }
+
+    /// <summary>Regenerate the boot project (true = activate). System-level PLC node only.</summary>
+    void GenerateBootProject(bool activate);
 }
 
 /// <summary>One TwinCAT project's system manager: resolves tree items by '^'-delimited path.</summary>
@@ -67,7 +73,16 @@ internal interface ITcSysManager
 {
     /// <summary>Resolve a tree item by path (e.g. "TIPC^Plc^Plc Project^POUs"); throws if absent.</summary>
     ITcTreeItem LookupTreeItem(string path);
+
+    /// <summary>Set the deploy target's AMS Net ID before ActivateConfiguration.</summary>
+    void SetTargetNetId(string amsNetId);
+
+    /// <summary>Activate the configuration on the set target (puts TwinCAT into Run, downloads the bootapp).</summary>
+    void ActivateConfiguration();
 }
+
+/// <summary>One IDE Error List diagnostic row (raw; severity/code decoding happens in the builder).</summary>
+internal sealed record ComErrorItem(string File, int Line, string Description, int Level, string Project);
 
 /// <summary>A connection to the IDE: the open solution and its system managers.</summary>
 internal interface ITcSession : IDisposable
@@ -95,4 +110,17 @@ internal interface ITcSession : IDisposable
 
     /// <summary>Close the open solution without saving (Solution.Close(false)).</summary>
     void CloseSolution();
+
+    /// <summary>
+    /// Ensure a solution configuration is active before ActivateConfiguration (else it throws an
+    /// opaque E_UNEXPECTED). Returns the resolved name; activates the sole config, or the first
+    /// matching <paramref name="prefer"/> when several exist.
+    /// </summary>
+    string ResolveSolutionConfiguration(string prefer);
+
+    /// <summary>
+    /// Read the IDE Error List (PLC compile diagnostics). Returns null when the tool window is not
+    /// exposed (e.g. TcXaeShell Express), so the caller can fall back.
+    /// </summary>
+    IReadOnlyList<ComErrorItem>? ReadErrorList();
 }

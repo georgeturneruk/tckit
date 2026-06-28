@@ -157,7 +157,17 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
         SavedLibraryInstall = install;
     }
 
-    public void CheckAllObjects() => CheckAllObjectsCount++;
+    public bool CheckAllObjectsResult { get; set; } = true;
+    public bool BootProjectAutostart { get; set; }
+    public bool BootProjectGenerated { get; private set; }
+
+    public bool CheckAllObjects()
+    {
+        CheckAllObjectsCount++;
+        return CheckAllObjectsResult;
+    }
+
+    public void GenerateBootProject(bool activate) => BootProjectGenerated = activate;
 
     public FakeTreeItem Add(FakeTreeItem child)
     {
@@ -172,6 +182,13 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
 internal sealed class FakeSysManager(FakeTreeItem tipc) : ITcSysManager
 {
     public FakeTreeItem Tipc { get; } = tipc;
+
+    public string? TargetNetId { get; private set; }
+    public bool Activated { get; private set; }
+
+    public void SetTargetNetId(string amsNetId) => TargetNetId = amsNetId;
+
+    public void ActivateConfiguration() => Activated = true;
 
     public ITcTreeItem LookupTreeItem(string path)
     {
@@ -236,6 +253,15 @@ internal sealed class FakeSession(params ITcSysManager[] sysManagers) : ITcSessi
     }
 
     public void CloseSolution() => Closed = true;
+
+    public string SolutionConfiguration { get; set; } = "Release";
+
+    /// <summary>When null, ReadErrorList returns null (the "tool window not exposed" case).</summary>
+    public List<ComErrorItem>? ErrorListItems { get; set; } = [];
+
+    public string ResolveSolutionConfiguration(string prefer) => SolutionConfiguration;
+
+    public IReadOnlyList<ComErrorItem>? ReadErrorList() => ErrorListItems;
 
     public void Dispose()
     {
