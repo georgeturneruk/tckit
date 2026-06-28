@@ -53,7 +53,7 @@ adapter lane; until then call get_structure first in a session.
 
 ## Project / config
 
-- [~] open_project — built; pending live validation
+- [x] open_project — CI-tested + live-validated (XAE)
 - [ ] create_project
 
 ## Authoring (Automation Interface; port last)
@@ -68,17 +68,22 @@ testable without TwinCAT:
 - A fake seam in the tests encodes the AI behaviour (CreateChild kinds, declaration-only
   GVL/DUT, `^`-path resolution); `StCode` splitter and `TcKind` map are unit-tested too.
 
-The create family below is implemented and **CI-tested against the fake**; the live
-COM wrapper still needs an on-XAE smoke (self-cleaning add_pou probe once delete_*
-lands), so these stay unchecked until that confirms.
+The COM foundation is now **live-proven** against a real 4026: a self-cleaning
+OpenProject -> AddPou -> DeletePou cycle worked against TcXaeShell (a .TcPOU was
+authored to disk and removed). Two fixes came out of that smoke: an
+`IOleMessageFilter` on the STA thread (resolves RPC_E_CALL_REJECTED busy
+rejections) and capturing tree-item path/kind before navigating (TwinCAT AI
+invalidates a handle once you navigate away). The remaining verbs are logic
+CI-tested against the fake and ride the same proven COM layer; each is marked
+live-validated only once individually smoked.
 
-- [~] add_pou — logic CI-tested (fake); pending live COM smoke
-- [~] add_gvl — logic CI-tested (fake); pending live COM smoke
-- [~] add_dut — logic CI-tested (fake); pending live COM smoke
-- [~] add_method — logic CI-tested (fake); pending live COM smoke
-- [~] add_property — logic CI-tested (fake); pending live COM smoke
+- [x] add_pou — CI-tested + live-validated (XAE)
+- [~] add_gvl — logic CI-tested (fake); COM layer live-proven
+- [~] add_dut — logic CI-tested (fake); COM layer live-proven
+- [~] add_method — logic CI-tested (fake); COM layer live-proven
+- [~] add_property — logic CI-tested (fake); COM layer live-proven
 - [ ] add_variable
-- [~] add_folder — logic CI-tested (fake); pending live COM smoke
+- [~] add_folder — logic CI-tested (fake); COM layer live-proven
 - [ ] add_plc_project
 - [ ] add_library_reference
 - [ ] add_library_placeholder
@@ -90,7 +95,7 @@ lands), so these stay unchecked until that confirms.
 - [~] update_pou_declaration_patch — logic CI-tested (fake); pending live COM smoke
 - [~] update_pou_implementation_patch — logic CI-tested (fake); pending live COM smoke
 - [~] update_method_body_patch — logic CI-tested (fake); pending live COM smoke
-- [~] delete_pou — logic + task-binding scan CI-tested (fake); pending live COM smoke
+- [x] delete_pou — CI-tested (incl. task-binding scan) + live-validated (XAE)
 - [~] delete_gvl — logic CI-tested (fake); pending live COM smoke
 - [~] delete_dut — logic CI-tested (fake); pending live COM smoke
 - [~] delete_method — logic CI-tested (fake); pending live COM smoke

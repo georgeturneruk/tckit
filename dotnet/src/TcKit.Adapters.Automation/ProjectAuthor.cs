@@ -196,15 +196,16 @@ internal static partial class ProjectAuthor
     public static Result DeletePou(ITcSession session, string name, string? plcName)
     {
         var (plc, sm) = Open(session, plcName);
-        var pous = PousFolder(sm, plc);
-        var item = LocateUnderFolder(pous, name, "POU", plc);
-        if (!s_pouKinds.Contains(item.ItemType))
+        var item = LocateUnderFolder(PousFolder(sm, plc), name, "POU", plc);
+        // Capture from the fresh handle before any further tree navigation invalidates it.
+        var (kind, pathName) = (item.ItemType, item.PathName);
+        if (!s_pouKinds.Contains(kind))
         {
             throw new InvalidOperationException(
-                $"'{name}' is not a POU (kind={item.ItemType}). Use delete_folder / delete_gvl / delete_dut.");
+                $"'{name}' is not a POU (kind={kind}). Use delete_folder / delete_gvl / delete_dut.");
         }
 
-        if (item.ItemType == TcKind.Program)
+        if (kind == TcKind.Program)
         {
             var solutionDir = Path.GetDirectoryName(session.SolutionPath);
             if (!string.IsNullOrEmpty(solutionDir) && TaskBinding.Find(solutionDir, name) is { } binding)
@@ -214,22 +215,24 @@ internal static partial class ProjectAuthor
             }
         }
 
-        var parentPath = Remove(sm, item);
+        var parentPath = Remove(sm, pathName);
         session.Save();
-        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", kind));
     }
 
     public static Result DeleteMethod(ITcSession session, string pouName, string methodName, string? plcName)
     {
         var (plc, sm) = Open(session, plcName);
         var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
+        var pouPath = pou.PathName;
         var method = FindChild(pou, methodName);
-        if (method is null || method.Name == pou.Name)
+        if (method is null || method.PathName == pouPath)
         {
             throw new InvalidOperationException($"Method '{methodName}' not found under POU '{pouName}'.");
         }
 
-        pou.DeleteChild(methodName);
+        // Re-resolve the POU fresh: FindChild navigated its subtree, which can stale the handle.
+        sm.LookupTreeItem(pouPath).DeleteChild(methodName);
         session.Save();
         return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc));
     }
@@ -238,13 +241,14 @@ internal static partial class ProjectAuthor
     {
         var (plc, sm) = Open(session, plcName);
         var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
+        var pouPath = pou.PathName;
         var property = FindChild(pou, propertyName);
-        if (property is null || property.Name == pou.Name)
+        if (property is null || property.PathName == pouPath)
         {
             throw new InvalidOperationException($"Property '{propertyName}' not found under POU '{pouName}'.");
         }
 
-        var removed = RemovePropertyNode(pou, property, propertyName);
+        var removed = RemovePropertyNode(sm, pouPath, property.PathName, propertyName);
         session.Save();
         return Ok(("pou_name", pouName), ("property_name", propertyName), ("plc_name", plc), ("removed_accessors", removed));
     }
@@ -253,30 +257,32 @@ internal static partial class ProjectAuthor
     {
         var (plc, sm) = Open(session, plcName);
         var item = LocateUnderFolder(PousFolder(sm, plc), name, "GVL", plc);
-        if (item.ItemType != TcKind.Gvl)
+        var (kind, pathName) = (item.ItemType, item.PathName);
+        if (kind != TcKind.Gvl)
         {
             throw new InvalidOperationException(
-                $"'{name}' is not a GVL (kind={item.ItemType}, expected {TcKind.Gvl}). Use delete_pou / delete_folder / delete_dut.");
+                $"'{name}' is not a GVL (kind={kind}, expected {TcKind.Gvl}). Use delete_pou / delete_folder / delete_dut.");
         }
 
-        var parentPath = Remove(sm, item);
+        var parentPath = Remove(sm, pathName);
         session.Save();
-        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", kind));
     }
 
     public static Result DeleteDut(ITcSession session, string name, string? plcName)
     {
         var (plc, sm) = Open(session, plcName);
         var item = LocateUnderFolder(DutsFolder(sm, plc), name, "DUT", plc);
-        if (!s_dutKinds.Contains(item.ItemType))
+        var (kind, pathName) = (item.ItemType, item.PathName);
+        if (!s_dutKinds.Contains(kind))
         {
             throw new InvalidOperationException(
-                $"'{name}' is not a DUT (kind={item.ItemType}). Use delete_pou / delete_gvl / delete_folder.");
+                $"'{name}' is not a DUT (kind={kind}). Use delete_pou / delete_gvl / delete_folder.");
         }
 
-        var parentPath = Remove(sm, item);
+        var parentPath = Remove(sm, pathName);
         session.Save();
-        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", kind));
     }
 
     public static Result DeleteFolder(
@@ -312,10 +318,11 @@ internal static partial class ProjectAuthor
             throw new InvalidOperationException($"Folder '{name}' not found under PLC project '{plc}'.");
         }
 
-        if (folder.ItemType != TcKind.Folder)
+        var (folderKind, folderPath) = (folder.ItemType, folder.PathName);
+        if (folderKind != TcKind.Folder)
         {
             throw new InvalidOperationException(
-                $"'{name}' is not a folder (kind={folder.ItemType}, expected {TcKind.Folder}). Use delete_pou / delete_gvl / delete_dut.");
+                $"'{name}' is not a folder (kind={folderKind}, expected {TcKind.Folder}). Use delete_pou / delete_gvl / delete_dut.");
         }
 
         if (folder.ChildCount > 0 && !recursive)
@@ -330,7 +337,7 @@ internal static partial class ProjectAuthor
             folder.DeleteChild(folder.Child(1).Name);
         }
 
-        var reported = Remove(sm, folder);
+        var reported = Remove(sm, folderPath);
         session.Save();
         return Ok(("name", name), ("plc_name", plc), ("parent_path", reported));
     }
@@ -424,24 +431,35 @@ internal static partial class ProjectAuthor
         return item;
     }
 
-    /// <summary>Delete a tree item by resolving its parent from its PathName and calling DeleteChild.</summary>
-    private static string Remove(ITcSysManager sm, ITcTreeItem item)
+    /// <summary>
+    /// Delete a tree item by resolving its parent from a captured PathName and calling DeleteChild.
+    /// Takes the path as a string (captured before any navigation) rather than a live item handle:
+    /// TwinCAT AI invalidates a tree-item handle once you navigate elsewhere (e.g. the parent
+    /// LookupTreeItem), so reading Name off the original handle afterwards throws "deleted or
+    /// invalidated by an earlier operation".
+    /// </summary>
+    private static string Remove(ITcSysManager sm, string pathName)
     {
-        var segments = item.PathName.Split('^');
+        var segments = pathName.Split('^');
         if (segments.Length < 2)
         {
-            throw new InvalidOperationException($"Cannot resolve parent of '{item.Name}' (PathName={item.PathName}).");
+            throw new InvalidOperationException($"Cannot resolve parent of '{pathName}'.");
         }
 
         var parentPath = string.Join('^', segments[..^1]);
-        sm.LookupTreeItem(parentPath).DeleteChild(item.Name);
+        sm.LookupTreeItem(parentPath).DeleteChild(segments[^1]);
         return parentPath;
     }
 
-    /// <summary>Delete a property's Get/Set accessors (best-effort) then the property body.</summary>
-    private static IReadOnlyList<string> RemovePropertyNode(ITcTreeItem pou, ITcTreeItem property, string propertyName)
+    /// <summary>
+    /// Delete a property's Get/Set accessors (best-effort) then the property body, re-resolving
+    /// handles by path so no stale handle is reused across tree navigation.
+    /// </summary>
+    private static IReadOnlyList<string> RemovePropertyNode(
+        ITcSysManager sm, string pouPath, string propertyPath, string propertyName)
     {
         var removed = new List<string>();
+        var property = sm.LookupTreeItem(propertyPath);
         foreach (var accessor in new[] { "Get", "Set" })
         {
             if (DirectChild(property, accessor) is null)
@@ -461,7 +479,7 @@ internal static partial class ProjectAuthor
 #pragma warning restore CA1031
         }
 
-        pou.DeleteChild(propertyName);
+        sm.LookupTreeItem(pouPath).DeleteChild(propertyName);
         return removed;
     }
 

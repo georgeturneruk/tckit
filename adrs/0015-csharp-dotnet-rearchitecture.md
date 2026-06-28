@@ -46,8 +46,10 @@ suite.
   with COM and in-memory-fake implementations. This keeps the solution building
   without TwinCAT (no interop assembly) and makes the authoring logic CI-testable
   against the fake. Typed interop is no longer pursued.
-- Live on-XAE smoke of the COM wrapper (the authoring *logic* is CI-tested via the
-  fake; the `ComTc*` layer still needs a self-cleaning add_pou probe on real 4026).
+- ~~Live on-XAE smoke of the COM wrapper~~ — done: a self-cleaning
+  OpenProject -> AddPou -> DeletePou cycle ran against a live TcXaeShell (POU
+  authored to disk and removed, both reporting success). The `ComTc*` layer is
+  proven. Per-verb live coverage beyond open/add/delete is still incremental.
 
 ## Context
 
@@ -218,3 +220,11 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   (recursive + kind validation). 61 tests pass against the fake. Remaining writer
   verbs: add_variable / delete_variable, library refs/placeholders, add_plc_project,
   save_plc_as_library, create_project; then the live COM smoke.
+- 2026-06-28: Live COM smoke passed against a real 4026 (throwaway temp solution):
+  OpenProject -> AddPou (authored FB_TcKitSmoke.TcPOU to disk) -> DeletePou (removed
+  it), both success. Two fixes the smoke surfaced and that are now in: an
+  `IOleMessageFilter` registered on the STA thread (resolves RPC_E_CALL_REJECTED
+  when XAE is busy, the canonical VS-automation fix) and capturing tree-item
+  path/kind before navigating (TwinCAT AI invalidates a handle once you navigate
+  away, which had made DeletePou report a spurious "invalidated" error). 61 fake
+  tests green; the ComTc* layer is now live-proven.

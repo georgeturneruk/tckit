@@ -60,6 +60,9 @@ internal sealed class StaExecutor : IDisposable
 
     private void Loop()
     {
+        // Register the COM busy-call retry filter on this STA thread before any COM work runs.
+        MessageFilter.Register();
+
         foreach (var work in _queue.GetConsumingEnumerable())
         {
             work();
