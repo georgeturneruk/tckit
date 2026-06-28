@@ -30,6 +30,14 @@ ROUTE_TIMEOUT_DEFAULTS: dict[str, float] = {
     # Attaching to XAE and enumerating PLC projects; quick on a warm
     # instance, but allow headroom for a cold attach.
     "/active-solution": 30.0,
+    # ADS read to EtherCAT master — fast on a reachable target.
+    "/ethercat-status": 30.0,
+    # MDP module enumeration + per-module reads — allow for many modules.
+    "/ipc-hardware": 30.0,
+    # NC axis enumeration + per-axis state reads.
+    "/nc-axes": 30.0,
+    # XAE COM tree navigation for I/O topology — allow for cold XAE attach.
+    "/hardware-scan": 120.0,
 }
 
 ROUTE_TIMEOUT_ENV: dict[str, str] = {
