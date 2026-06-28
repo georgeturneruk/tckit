@@ -27,4 +27,23 @@ pwsh dotnet/oracle/compare.ps1 -Fixture C:\tckit\tests\fixtures\sample_project
 pwsh dotnet/oracle/compare.ps1 -Fixture <multi-PLC .sln> -Plc <PlcName>
 ```
 
+## Writer smoke (live COM)
+
+The authoring lane cannot be cross-checked against a fixture on disk: the verbs
+mutate the solution open in TcXaeShell over COM. [`smoke-writer.ps1`](smoke-writer.ps1)
+is the live gate instead, run on the bench box with XAE attached. It scaffolds a
+throwaway solution + two PLCs, drives every authoring verb in dependency order
+(author -> update/patch -> save-as-library -> reference/placeholder -> delete in
+reverse), asserts each `Result.success`, and tears the scratch project down. A
+verb is only promoted from `[~]` to `[x]` in [../PORTING.md](../PORTING.md) once
+it passes here. Destructive to the current XAE solution state; run it knowingly.
+
+```powershell
+pwsh dotnet/oracle/smoke-writer.ps1
+pwsh dotnet/oracle/smoke-writer.ps1 -Root C:\tmp\tckit-smoke -KeepScratch
+```
+
+Both harnesses drive the C# verbs through the `TcKit.Cli` write/read verb
+surface, so neither has to script the MCP stdio handshake.
+
 Progress is tracked in [../PORTING.md](../PORTING.md).

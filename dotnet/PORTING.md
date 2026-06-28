@@ -54,7 +54,7 @@ adapter lane; until then call get_structure first in a session.
 ## Project / config
 
 - [x] open_project — CI-tested + live-validated (XAE)
-- [ ] create_project
+- [~] create_project — logic CI-tested (fake); pending live COM smoke
 
 ## Authoring (Automation Interface; port last)
 
@@ -77,6 +77,11 @@ invalidates a handle once you navigate away). The remaining verbs are logic
 CI-tested against the fake and ride the same proven COM layer; each is marked
 live-validated only once individually smoked.
 
+The whole lane (create / update / delete / library / scaffolding) is now exposed
+as `TcKit.Cli` write verbs, and [`oracle/smoke-writer.ps1`](oracle/smoke-writer.ps1)
+drives every verb in dependency order against a self-cleaning scratch solution on
+a live 4026. That run is the gate that flips each `[~]` to `[x]`.
+
 - [x] add_pou — CI-tested + live-validated (XAE)
 - [~] add_gvl — logic CI-tested (fake); COM layer live-proven
 - [~] add_dut — logic CI-tested (fake); COM layer live-proven
@@ -84,11 +89,11 @@ live-validated only once individually smoked.
 - [~] add_property — logic CI-tested (fake); COM layer live-proven
 - [~] add_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
 - [~] add_folder — logic CI-tested (fake); COM layer live-proven
-- [ ] add_plc_project
-- [ ] add_library_reference
-- [ ] add_library_placeholder
-- [ ] set_placeholder_parameters
-- [ ] save_plc_as_library
+- [~] add_plc_project — logic CI-tested (fake); pending live COM smoke
+- [~] add_library_reference — logic CI-tested (fake); pending live COM smoke
+- [~] add_library_placeholder — logic CI-tested (fake); pending live COM smoke
+- [~] set_placeholder_parameters — .plcproj XML splice + logic CI-tested (fake); pending live COM smoke
+- [~] save_plc_as_library — metadata round-trip + cold-start retry CI-tested (fake); pending live COM smoke
 - [~] update_pou_declaration — logic CI-tested (fake); pending live COM smoke
 - [~] update_pou_implementation — logic CI-tested (fake); pending live COM smoke
 - [~] update_method_body — logic CI-tested (fake); pending live COM smoke
@@ -102,5 +107,5 @@ live-validated only once individually smoked.
 - [~] delete_property — logic CI-tested (fake); pending live COM smoke
 - [~] delete_variable — VAR-block editor + logic CI-tested (fake); COM layer live-proven
 - [~] delete_folder — logic CI-tested (fake); pending live COM smoke
-- [ ] delete_library_reference
-- [ ] delete_placeholder
+- [~] delete_library_reference — wildcard-version resolution + logic CI-tested (fake); pending live COM smoke
+- [~] delete_placeholder — logic CI-tested (fake); pending live COM smoke
