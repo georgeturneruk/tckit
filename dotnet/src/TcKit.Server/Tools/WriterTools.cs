@@ -163,7 +163,93 @@ public sealed class WriterTools(IProjectWriter writer)
         string itemName = "", string plcName = "", CancellationToken cancellationToken = default)
         => Run(() => writer.DeleteVariableAsync(pouName, variableName, Optional(itemName), Optional(plcName), cancellationToken));
 
+    [McpServerTool(Name = "CreateProject")]
+    [Description("Create a new TwinCAT solution and a standard PLC project from the install template. "
+        + "name is the solution name (the PLC is named '<name>_Plc'); path is the directory to create it in.")]
+    public Task<string> CreateProject(string name, string path, CancellationToken cancellationToken = default)
+        => Run(() => writer.CreateProjectAsync(name, path, cancellationToken));
+
+    [McpServerTool(Name = "AddPlcProject")]
+    [Description("Add a second TwinCAT project + PLC to an existing solution. solutionPath is the .sln "
+        + "(empty targets the open solution). plcName must be unique across all PLC projects. "
+        + "projectType is 'standard' (only value supported).")]
+    public Task<string> AddPlcProject(
+        string plcName, string solutionPath = "", string projectType = "standard",
+        CancellationToken cancellationToken = default)
+        => Run(() => writer.AddPlcProjectAsync(solutionPath, plcName, projectType, cancellationToken));
+
+    [McpServerTool(Name = "AddLibraryReference")]
+    [Description("Add a library reference to a consumer PLC project. The library must already be "
+        + "installed (use SavePlcAsLibrary with install=true for an in-solution library first). "
+        + "version '*' means latest; distributor defaults to 'Tc3 Project'.")]
+    public Task<string> AddLibraryReference(
+        string libraryName, string version = "*", string distributor = "Tc3 Project",
+        string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.AddLibraryReferenceAsync(Optional(plcName), libraryName, version, distributor, cancellationToken));
+
+    [McpServerTool(Name = "DeleteLibraryReference")]
+    [Description("Remove a library reference from a consumer PLC project. version '*' resolves to the "
+        + "effective version before removal; distributor defaults to 'Tc3 Project'.")]
+    public Task<string> DeleteLibraryReference(
+        string libraryName, string version = "*", string distributor = "Tc3 Project",
+        string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteLibraryReferenceAsync(Optional(plcName), libraryName, version, distributor, cancellationToken));
+
+    [McpServerTool(Name = "AddLibraryPlaceholder")]
+    [Description("Add a library placeholder to a consumer PLC project. defaultLibrary is the resolved "
+        + "library; version '*' means latest; distributor is the library's company (empty for the API "
+        + "default). parametersJson optionally sets library parameter overrides as a JSON object "
+        + "{ \"GVL_Param_List\": { \"Key\": \"Value\" } } (TwinCAT booleans need 'TRUE'/'FALSE').")]
+    public Task<string> AddLibraryPlaceholder(
+        string placeholderName, string defaultLibrary, string version = "*", string distributor = "",
+        string parametersJson = "", string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.AddLibraryPlaceholderAsync(
+            Optional(plcName), placeholderName, defaultLibrary, version, distributor,
+            ParseParameters(parametersJson), cancellationToken));
+
+    [McpServerTool(Name = "SetPlaceholderParameters")]
+    [Description("Set library parameter overrides on an existing placeholder. parametersJson is a JSON "
+        + "object { \"GVL_Param_List\": { \"Key\": \"Value\" } }; list names and keys are uppercased on "
+        + "disk, values written verbatim (TwinCAT booleans need 'TRUE'/'FALSE').")]
+    public Task<string> SetPlaceholderParameters(
+        string placeholderName, string parametersJson, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.SetPlaceholderParametersAsync(
+            Optional(plcName), placeholderName,
+            ParseParameters(parametersJson) ?? throw new ArgumentException("parametersJson required."),
+            cancellationToken));
+
+    [McpServerTool(Name = "DeletePlaceholder")]
+    [Description("Remove a library placeholder from a consumer PLC project.")]
+    public Task<string> DeletePlaceholder(
+        string placeholderName, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeletePlaceholderAsync(Optional(plcName), placeholderName, cancellationToken));
+
+    [McpServerTool(Name = "SavePlcAsLibrary")]
+    [Description("Save a PLC project as a .library file, optionally installing it. outputPath is the "
+        + "absolute .library path. install registers it into the repository (only 'System' supported). "
+        + "overwrite removes an existing artefact first (SaveAsLibrary otherwise refuses to overwrite).")]
+    public Task<string> SavePlcAsLibrary(
+        string outputPath, bool install = true, string repository = "System", bool overwrite = false,
+        string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.SavePlcAsLibraryAsync(Optional(plcName), outputPath, install, repository, overwrite, cancellationToken));
+
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+    /// <summary>Parse the placeholder-parameters JSON object into the nested-dictionary contract.</summary>
+    private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? ParseParameters(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(json)
+            ?? throw new ArgumentException("parametersJson must be a JSON object of { list: { key: value } }.");
+        return parsed.ToDictionary(
+            list => list.Key,
+            list => (IReadOnlyDictionary<string, string>)list.Value,
+            StringComparer.Ordinal);
+    }
 
     private static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch
     {

@@ -37,6 +37,27 @@ internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
         => new ComTcTreeItem(ComRetry.Invoke<object>(() => _item.CreateChild(name, kind, before, vInfo)));
 
     public void DeleteChild(string name) => ComRetry.Invoke(() => { _item.DeleteChild(name); });
+
+    public string ProduceXml(int flags) => ComRetry.Invoke(() => (string)_item.ProduceXml(flags));
+
+    public void ConsumeXml(string xml) => ComRetry.Invoke(() => { _item.ConsumeXml(xml); });
+
+    public void AddLibrary(string name, string version, string distributor)
+        => ComRetry.Invoke(() => { _item.AddLibrary(name, version, distributor); });
+
+    public void AddPlaceholder(string name, string defaultLibrary, string version, string distributor)
+        => ComRetry.Invoke(() => { _item.AddPlaceholder(name, defaultLibrary, version, distributor); });
+
+    public void RemoveReference(string name)
+        => ComRetry.Invoke(() => { _item.RemoveReference(name); });
+
+    public void RemoveReference(string name, string version, string distributor)
+        => ComRetry.Invoke(() => { _item.RemoveReference(name, version, distributor); });
+
+    public void SaveAsLibrary(string outputPath, bool install)
+        => ComRetry.Invoke(() => { _item.SaveAsLibrary(outputPath, install); });
+
+    public void CheckAllObjects() => ComRetry.Invoke(() => { _item.CheckAllObjects(); });
 }
 
 /// <summary>COM-backed <see cref="ITcSysManager"/> over a late-bound ITcSysManager.</summary>
@@ -98,6 +119,43 @@ internal sealed class ComTcSession : ITcSession
             // Best-effort: a rejected SaveAll (e.g. during a build) must not fail the write.
         }
     }
+
+    public void CreateSolution(string directory, string name)
+    {
+        // On a pre-loaded XAE, Solution.Create throws because something is already
+        // open; close any loaded solution and retry once (mirrors New-TcProject.ps1).
+        try
+        {
+            ComRetry.Invoke(() => _dte.Solution.Create(directory, name));
+        }
+        catch (COMException)
+        {
+            try
+            {
+                ComRetry.Invoke(() => _dte.Solution.Close(false));
+            }
+            catch (COMException)
+            {
+                // No solution to close; fall through to the retry.
+            }
+
+            ComRetry.Invoke(() => _dte.Solution.Create(directory, name));
+        }
+    }
+
+    public void AddProjectFromTemplate(string templatePath, string destinationDir, string name)
+        => ComRetry.Invoke(() => _dte.Solution.AddFromTemplate(templatePath, destinationDir, name, false));
+
+    public void SaveSolutionAs(string path)
+    {
+        // SaveAs alone does not flush the full <System>/<Plc>/<Instance> structure to
+        // the .tsproj; File.SaveAll does (the wizard does this under the hood). Without
+        // it XAE segfaults in IVsParentProject.OpenChildren on reload. See New-TcProject.ps1.
+        ComRetry.Invoke(() => _dte.Solution.SaveAs(path));
+        Save();
+    }
+
+    public void CloseSolution() => ComRetry.Invoke(() => _dte.Solution.Close(false));
 
     public void Dispose()
     {

@@ -20,6 +20,20 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
     public FakeTreeItem? Parent { get; private set; }
     public IReadOnlyList<FakeTreeItem> Children => _children;
 
+    // --- library/IEC-project modelling --------------------------------------
+    // A reference child stamped by AddLibrary/AddPlaceholder; ProduceXml emits the
+    // <Library> shape DeleteLibraryReference parses. The PLC project node (no Ref)
+    // emits a <ProjectInfo> block round-tripped by SaveAsLibrary.
+
+    private (string Version, string Distributor, string Effective, bool IsPlaceholder)? _reference;
+    public string ProjectTitle { get; private set; } = "";
+    public string ProjectCompany { get; private set; } = "";
+    public string ProjectVersion { get; private set; } = "";
+    public string? SavedLibraryPath { get; private set; }
+    public bool SavedLibraryInstall { get; private set; }
+    public int CheckAllObjectsCount { get; private set; }
+    public bool IsPlaceholder => _reference is { IsPlaceholder: true };
+
     public string PathName => Parent is null ? Name : $"{Parent.PathName}^{Name}";
     public int ItemType => Kind;
     public int ChildCount => _children.Count;
@@ -67,6 +81,84 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
 
     public void DeleteChild(string name) => _children.RemoveAll(c => c.Name == name);
 
+    public string ProduceXml(int flags)
+    {
+        if (_reference is { } reference)
+        {
+            return "<TreeItem><Library>"
+                + $"<Name>{Name}</Name>"
+                + $"<Distributor>{reference.Distributor}</Distributor>"
+                + $"<EffectiveVersion>{reference.Effective}</EffectiveVersion>"
+                + "</Library></TreeItem>";
+        }
+
+        return "<TreeItem><ProjectInfo>"
+            + $"<Title>{ProjectTitle}</Title>"
+            + $"<Company>{ProjectCompany}</Company>"
+            + $"<Version>{ProjectVersion}</Version>"
+            + "</ProjectInfo></TreeItem>";
+    }
+
+    public void ConsumeXml(string xml)
+    {
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xml);
+        ProjectTitle = doc.SelectSingleNode("//Title")?.InnerText ?? ProjectTitle;
+        ProjectCompany = doc.SelectSingleNode("//Company")?.InnerText ?? ProjectCompany;
+        ProjectVersion = doc.SelectSingleNode("//Version")?.InnerText ?? ProjectVersion;
+    }
+
+    public void AddLibrary(string name, string version, string distributor)
+    {
+        if (FindDirect(name) is not null)
+        {
+            throw new InvalidOperationException($"Library '{name}' already contained!");
+        }
+
+        var effective = version is "*" or "" ? "1.0.0.0" : version;
+        var child = new FakeTreeItem(name) { Parent = this, _reference = (version, distributor, effective, false) };
+        _children.Add(child);
+    }
+
+    public void AddPlaceholder(string name, string defaultLibrary, string version, string distributor)
+    {
+        if (FindDirect(name) is not null)
+        {
+            throw new InvalidOperationException($"Placeholder '{name}' already contained!");
+        }
+
+        var effective = version is "*" or "" ? "1.0.0.0" : version;
+        var child = new FakeTreeItem(name) { Parent = this, _reference = (version, distributor, effective, true) };
+        _children.Add(child);
+    }
+
+    public void RemoveReference(string name)
+    {
+        if (_children.RemoveAll(c => c.Name == name) == 0)
+        {
+            throw new InvalidOperationException($"Reference '{name}' not found.");
+        }
+    }
+
+    public void RemoveReference(string name, string version, string distributor)
+    {
+        var removed = _children.RemoveAll(c =>
+            c.Name == name && c._reference is { } r && r.Distributor == distributor
+            && (version == r.Effective || version == r.Version));
+        if (removed == 0)
+        {
+            throw new InvalidOperationException($"Reference '{name}' v{version} ({distributor}) not found.");
+        }
+    }
+
+    public void SaveAsLibrary(string outputPath, bool install)
+    {
+        SavedLibraryPath = outputPath;
+        SavedLibraryInstall = install;
+    }
+
+    public void CheckAllObjects() => CheckAllObjectsCount++;
+
     public FakeTreeItem Add(FakeTreeItem child)
     {
         child.Parent = this;
@@ -102,11 +194,17 @@ internal sealed class FakeSysManager(FakeTreeItem tipc) : ITcSysManager
 
 internal sealed class FakeSession(params ITcSysManager[] sysManagers) : ITcSession
 {
-    private readonly IReadOnlyList<ITcSysManager> _sysManagers = sysManagers;
+    private readonly List<ITcSysManager> _sysManagers = [.. sysManagers];
 
-    public string SolutionPath { get; init; } = "";
+    public string SolutionPath { get; set; } = "";
 
     public int SaveCount { get; private set; }
+
+    public string? CreatedSolutionDir { get; private set; }
+    public string? CreatedSolutionName { get; private set; }
+    public string? SavedAsPath { get; private set; }
+    public bool Closed { get; private set; }
+    public List<string> AddedTemplates { get; } = [];
 
     public void UseSolution(string path)
     {
@@ -116,6 +214,28 @@ internal sealed class FakeSession(params ITcSysManager[] sysManagers) : ITcSessi
     public IReadOnlyList<ITcSysManager> GetSysManagers() => _sysManagers;
 
     public void Save() => SaveCount++;
+
+    public void CreateSolution(string directory, string name)
+    {
+        CreatedSolutionDir = directory;
+        CreatedSolutionName = name;
+        _sysManagers.Clear();
+    }
+
+    public void AddProjectFromTemplate(string templatePath, string destinationDir, string name)
+    {
+        AddedTemplates.Add(name);
+        // A freshly-added TwinCAT project starts with an empty TIPC (no PLC yet).
+        _sysManagers.Add(new FakeSysManager(new FakeTreeItem("TIPC")));
+    }
+
+    public void SaveSolutionAs(string path)
+    {
+        SavedAsPath = path;
+        SaveCount++;
+    }
+
+    public void CloseSolution() => Closed = true;
 
     public void Dispose()
     {
@@ -129,17 +249,28 @@ internal static class FakeProject
     public static (FakeSession Session, IReadOnlyDictionary<string, FakeTreeItem> Pous,
         IReadOnlyDictionary<string, FakeTreeItem> Duts) Build(params string[] plcNames)
     {
+        var (session, pous, duts, _) = BuildWithReferences(plcNames);
+        return (session, pous, duts);
+    }
+
+    /// <summary>Like <see cref="Build"/> but also exposes the per-PLC References node.</summary>
+    public static (FakeSession Session, IReadOnlyDictionary<string, FakeTreeItem> Pous,
+        IReadOnlyDictionary<string, FakeTreeItem> Duts, IReadOnlyDictionary<string, FakeTreeItem> References)
+        BuildWithReferences(params string[] plcNames)
+    {
         var tipc = new FakeTreeItem("TIPC");
         var pous = new Dictionary<string, FakeTreeItem>(StringComparer.Ordinal);
         var duts = new Dictionary<string, FakeTreeItem>(StringComparer.Ordinal);
+        var references = new Dictionary<string, FakeTreeItem>(StringComparer.Ordinal);
 
         foreach (var plc in plcNames)
         {
             var project = tipc.Add(new FakeTreeItem(plc)).Add(new FakeTreeItem($"{plc} Project"));
             pous[plc] = project.Add(new FakeTreeItem("POUs"));
             duts[plc] = project.Add(new FakeTreeItem("DUTs"));
+            references[plc] = project.Add(new FakeTreeItem("References"));
         }
 
-        return (new FakeSession(new FakeSysManager(tipc)), pous, duts);
+        return (new FakeSession(new FakeSysManager(tipc)), pous, duts, references);
     }
 }

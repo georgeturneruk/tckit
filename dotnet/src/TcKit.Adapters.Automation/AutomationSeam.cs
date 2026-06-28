@@ -30,6 +30,36 @@ internal interface ITcTreeItem
     ITcTreeItem CreateChild(string name, int kind, object? before, object? vInfo);
 
     void DeleteChild(string name);
+
+    // --- library manager + IEC project surface ------------------------------
+    // These are dispatched (late-bound over COM) on specific nodes: AddLibrary /
+    // AddPlaceholder / RemoveReference on the References node (ITcPlcLibraryManager),
+    // and ProduceXml / ConsumeXml / SaveAsLibrary / CheckAllObjects on the PLC
+    // project node (ITcPlcIECProject). Nodes that don't model an operation throw.
+
+    /// <summary>Serialise this item to its TwinCAT XML form (flags 0 == non-recursive).</summary>
+    string ProduceXml(int flags);
+
+    /// <summary>Apply a TwinCAT XML fragment to this item (the documented metadata round-trip).</summary>
+    void ConsumeXml(string xml);
+
+    /// <summary>Add a library reference (ITcPlcLibraryManager.AddLibrary). References node only.</summary>
+    void AddLibrary(string name, string version, string distributor);
+
+    /// <summary>Add a library placeholder (ITcPlcLibraryManager.AddPlaceholder). References node only.</summary>
+    void AddPlaceholder(string name, string defaultLibrary, string version, string distributor);
+
+    /// <summary>Remove a placeholder by name (single-arg RemoveReference). References node only.</summary>
+    void RemoveReference(string name);
+
+    /// <summary>Remove a library reference by identity (3-arg RemoveReference). References node only.</summary>
+    void RemoveReference(string name, string version, string distributor);
+
+    /// <summary>Save the PLC project as a .library, optionally installing it. PLC project node only.</summary>
+    void SaveAsLibrary(string outputPath, bool install);
+
+    /// <summary>Run an in-process compile (forces placeholder resolution). PLC project node only.</summary>
+    void CheckAllObjects();
 }
 
 /// <summary>One TwinCAT project's system manager: resolves tree items by '^'-delimited path.</summary>
@@ -53,4 +83,16 @@ internal interface ITcSession : IDisposable
 
     /// <summary>Flush the solution to disk (File.SaveAll).</summary>
     void Save();
+
+    /// <summary>Create an empty solution shell (Solution.Create) at <paramref name="directory"/>.</summary>
+    void CreateSolution(string directory, string name);
+
+    /// <summary>Add a TwinCAT project from a .tsproj template into its own subdirectory.</summary>
+    void AddProjectFromTemplate(string templatePath, string destinationDir, string name);
+
+    /// <summary>Persist the solution to <paramref name="path"/> (Solution.SaveAs + File.SaveAll).</summary>
+    void SaveSolutionAs(string path);
+
+    /// <summary>Close the open solution without saving (Solution.Close(false)).</summary>
+    void CloseSolution();
 }

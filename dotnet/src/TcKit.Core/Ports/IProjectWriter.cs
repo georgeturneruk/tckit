@@ -6,9 +6,8 @@ namespace TcKit.Core.Ports;
 /// Structural writes to a TwinCAT project through the Automation Interface (COM). Every write
 /// targets the solution currently open in the attached XAE; <see cref="OpenProjectAsync"/> sets it.
 /// PLC-scoped methods take an optional plcName (null = PLC_PROJECT_NAME env, then sole-PLC
-/// auto-resolution). Never manipulate .TcPOU / .plcproj XML directly. See ADR-0005.
-///
-/// This is the "create" family of the authoring lane; update / delete / library verbs land next.
+/// auto-resolution). Never manipulate .TcPOU / .plcproj XML directly (the lone exception is library
+/// placeholder *parameters*, which the Automation Interface does not expose). See ADR-0005.
 /// </summary>
 public interface IProjectWriter
 {
@@ -100,4 +99,45 @@ public interface IProjectWriter
     /// <summary>Remove one variable declaration (refuses multi-name lists and line-continued decls).</summary>
     Task<Result> DeleteVariableAsync(
         string pouName, string variableName, string? itemName, string? plcName, CancellationToken cancellationToken);
+
+    // --- project scaffolding -------------------------------------------------
+
+    /// <summary>Create a new TwinCAT solution + a standard PLC project from the install template.</summary>
+    Task<Result> CreateProjectAsync(string name, string path, CancellationToken cancellationToken);
+
+    /// <summary>Add a second TwinCAT project + PLC to an existing solution (its own .tsproj subdir).</summary>
+    Task<Result> AddPlcProjectAsync(
+        string solutionPath, string plcName, string projectType, CancellationToken cancellationToken);
+
+    // --- library references / placeholders -----------------------------------
+
+    /// <summary>Add a library reference to a consumer PLC project (the library must be installed).</summary>
+    Task<Result> AddLibraryReferenceAsync(
+        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken);
+
+    /// <summary>Remove a library reference; resolves a "*" version to the effective one first.</summary>
+    Task<Result> DeleteLibraryReferenceAsync(
+        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Add a library placeholder to a consumer PLC project. Optional parameters (grouped by list
+    /// name) are spliced into the consumer .plcproj's PlaceholderReference (the one documented
+    /// exception to the never-edit-XML rule).
+    /// </summary>
+    Task<Result> AddLibraryPlaceholderAsync(
+        string? plcName, string placeholderName, string defaultLibrary, string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters, CancellationToken cancellationToken);
+
+    /// <summary>Set library parameter overrides on an existing placeholder (edits the .plcproj XML).</summary>
+    Task<Result> SetPlaceholderParametersAsync(
+        string? plcName, string placeholderName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> parameters, CancellationToken cancellationToken);
+
+    /// <summary>Remove a library placeholder from a consumer PLC project.</summary>
+    Task<Result> DeletePlaceholderAsync(string? plcName, string placeholderName, CancellationToken cancellationToken);
+
+    /// <summary>Save a PLC project as a .library, optionally installing it into the System repository.</summary>
+    Task<Result> SavePlcAsLibraryAsync(
+        string? plcName, string outputPath, bool install, string repository, bool overwrite,
+        CancellationToken cancellationToken);
 }

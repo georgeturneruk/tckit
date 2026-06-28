@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Automation;
@@ -360,6 +361,433 @@ internal static partial class ProjectAuthor
         var reported = Remove(sm, folderPath);
         session.Save();
         return Ok(("name", name), ("plc_name", plc), ("parent_path", reported));
+    }
+
+    // --- library references / placeholders -----------------------------------
+
+    public static Result AddLibraryReference(
+        ITcSession session, string? plcName, string libraryName, string version, string distributor)
+    {
+        if (string.IsNullOrEmpty(libraryName))
+        {
+            throw new ArgumentException("LibraryName required.");
+        }
+
+        var (plc, sm) = Open(session, plcName);
+        ReferencesNode(sm, plc).AddLibrary(libraryName, version, distributor);
+        // AddLibrary mutates only in-memory state; Save persists the .plcproj.
+        session.Save();
+        return Ok(
+            ("consumer_plc", plc), ("library", libraryName), ("version", version), ("distributor", distributor));
+    }
+
+    public static Result DeleteLibraryReference(
+        ITcSession session, string? plcName, string libraryName, string version, string distributor)
+    {
+        if (string.IsNullOrEmpty(libraryName))
+        {
+            throw new ArgumentException("LibraryName required.");
+        }
+
+        var (plc, sm) = Open(session, plcName);
+        var refsPath = ReferencesNode(sm, plc).PathName;
+
+        // AddLibrary with "*" keeps "*" as the declared Version, but the 3-arg RemoveReference only
+        // matches against the resolved EffectiveVersion. When the caller passes "*", enumerate the
+        // References children and read EffectiveVersion off the matching entry's ProduceXml.
+        var resolvedVersion = version;
+        if (string.IsNullOrEmpty(version) || version == "*")
+        {
+            resolvedVersion = ResolveEffectiveVersion(sm.LookupTreeItem(refsPath), libraryName, distributor)
+                ?? throw new InvalidOperationException(
+                    $"No library reference matching name='{libraryName}' distributor='{distributor}' "
+                    + $"(with a resolved EffectiveVersion) found on '{plc}'.");
+        }
+
+        sm.LookupTreeItem(refsPath).RemoveReference(libraryName, resolvedVersion, distributor);
+        session.Save();
+        return Ok(
+            ("consumer_plc", plc), ("library", libraryName), ("version", resolvedVersion), ("distributor", distributor));
+    }
+
+    public static Result AddLibraryPlaceholder(
+        ITcSession session, string? plcName, string placeholderName, string defaultLibrary,
+        string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters)
+    {
+        if (string.IsNullOrEmpty(placeholderName))
+        {
+            throw new ArgumentException("PlaceholderName required.");
+        }
+
+        if (string.IsNullOrEmpty(defaultLibrary))
+        {
+            throw new ArgumentException("DefaultLibrary required.");
+        }
+
+        var (plc, sm) = Open(session, plcName);
+        var solutionPath = session.SolutionPath;
+
+        // Idempotency probe: AddPlaceholder throws "already contained!" on a duplicate, so check the
+        // on-disk .plcproj first and fall straight through to the parameter splice on a hit.
+        string? plcProjPath = TryFindPlcProj(solutionPath, plc);
+        var alreadyPresent = plcProjPath is not null && PlcProjXml.HasPlaceholder(plcProjPath, placeholderName);
+
+        if (!alreadyPresent)
+        {
+            ReferencesNode(sm, plc).AddPlaceholder(placeholderName, defaultLibrary, version, distributor);
+            session.Save();
+        }
+
+        if (parameters is { Count: > 0 })
+        {
+            plcProjPath ??= PlcProjXml.Find(Path.GetDirectoryName(solutionPath), plc);
+            // Close before the file edit so the next File.SaveAll can't regenerate the .plcproj from
+            // an in-memory tree that doesn't know about the injected overrides; reopen re-hydrates it.
+            session.CloseSolution();
+            PlcProjXml.SetPlaceholderParameters(plcProjPath, placeholderName, parameters);
+            session.UseSolution(solutionPath);
+        }
+
+        return Ok(
+            ("consumer_plc", plc), ("placeholder", placeholderName), ("default_library", defaultLibrary),
+            ("version", version), ("distributor", distributor), ("already_present", alreadyPresent));
+    }
+
+    public static Result SetPlaceholderParameters(
+        ITcSession session, string? plcName, string placeholderName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> parameters)
+    {
+        if (string.IsNullOrEmpty(placeholderName))
+        {
+            throw new ArgumentException("PlaceholderName required.");
+        }
+
+        if (parameters is null || parameters.Count == 0)
+        {
+            throw new ArgumentException("Parameters required.");
+        }
+
+        var (plc, _) = Open(session, plcName);
+        var solutionPath = session.SolutionPath;
+        var plcProjPath = PlcProjXml.Find(Path.GetDirectoryName(solutionPath), plc);
+
+        session.CloseSolution();
+        PlcProjXml.SetPlaceholderParameters(plcProjPath, placeholderName, parameters);
+        session.UseSolution(solutionPath);
+
+        return Ok(("consumer_plc", plc), ("placeholder", placeholderName));
+    }
+
+    public static Result DeletePlaceholder(ITcSession session, string? plcName, string placeholderName)
+    {
+        if (string.IsNullOrEmpty(placeholderName))
+        {
+            throw new ArgumentException("PlaceholderName required.");
+        }
+
+        var (plc, sm) = Open(session, plcName);
+        // Single-arg RemoveReference targets placeholders specifically.
+        ReferencesNode(sm, plc).RemoveReference(placeholderName);
+        session.Save();
+        return Ok(("consumer_plc", plc), ("placeholder", placeholderName));
+    }
+
+    public static Result SavePlcAsLibrary(
+        ITcSession session, string? plcName, string outputPath, bool install, string repository, bool overwrite)
+    {
+        if (string.IsNullOrEmpty(outputPath))
+        {
+            throw new ArgumentException("OutputPath required.");
+        }
+
+        if (install && repository != "System")
+        {
+            throw new InvalidOperationException(
+                $"Repository '{repository}' not yet supported; v1 supports only 'System'. "
+                + "Pass install=false to skip install.");
+        }
+
+        var (plc, sm) = Open(session, plcName);
+
+        var outDir = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
+        {
+            Directory.CreateDirectory(outDir);
+        }
+
+        // SaveAsLibrary refuses to overwrite; honour overwrite by removing first.
+        if (overwrite && File.Exists(outputPath))
+        {
+            File.Delete(outputPath);
+        }
+
+        var projectPath = ProjectNode(sm, plc).PathName;
+        var title = plc;
+        const string company = "Tc3 Project";
+        const string version = "1.0.0.0";
+
+        // SaveAsLibrary refuses a managed library with an empty ProjectInfo/Title (the Standard
+        // template leaves it blank), so set Title/Company/Version via the ProduceXml/ConsumeXml
+        // round-trip before SaveAsLibrary.
+        void MetadataAndSave()
+        {
+            var node = sm.LookupTreeItem(projectPath);
+            node.ConsumeXml(WithProjectInfo(node.ProduceXml(0), title, company, version));
+            sm.LookupTreeItem(projectPath).SaveAsLibrary(outputPath, install);
+        }
+
+        // Cold-start recovery: on a fresh XAE the placeholder resolver hasn't run, so ProduceXml
+        // chokes with an XmlAutomationException naming PlaceholderReference/EffectiveResolution.
+        // CheckAllObjects (an in-process compile) runs the resolver as a side effect; retry once.
+        var coldStartWarmup = false;
+        try
+        {
+            MetadataAndSave();
+        }
+        catch (Exception exc) when (IsColdStartResolverError(exc.Message))
+        {
+            try
+            {
+                sm.LookupTreeItem(projectPath).CheckAllObjects();
+            }
+#pragma warning disable CA1031 // Rethrow with the headless-mode hint (the only actionable cause).
+            catch (Exception warmupExc)
+            {
+                throw new InvalidOperationException(
+                    $"save_plc_as_library cold-start retry failed during warm-up build: {warmupExc.Message}. "
+                    + "Headless XAE mode is known-incompatible with cold-start save "
+                    + "(Microsoft Visual Studio Appid Stub SyncLock); use XAE_MODE=attach.");
+            }
+#pragma warning restore CA1031
+
+            MetadataAndSave();
+            coldStartWarmup = true;
+        }
+
+        session.Save();
+        return Ok(
+            ("plc", plc), ("output_path", outputPath), ("installed", install),
+            ("repository", install ? repository : null), ("title", title), ("company", company),
+            ("version", version), ("cold_start_warmup", coldStartWarmup));
+    }
+
+    // --- project scaffolding -------------------------------------------------
+
+    public static Result CreateProject(ITcSession session, string name, string path)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            throw new ArgumentException("Name required.");
+        }
+
+        if (string.IsNullOrEmpty(path))
+        {
+            throw new ArgumentException("Path required.");
+        }
+
+        var template = ResolveTemplatePath();
+        if (!Directory.Exists(path))
+        {
+            Directory.CreateDirectory(path);
+        }
+
+        var plcName = $"{name}_Plc";
+        session.CreateSolution(path, name);
+        session.AddProjectFromTemplate(template, Path.Combine(path, name), name);
+
+        var tipc = FindEmptyTipc(session);
+        tipc.CreateChild(plcName, 0, null, "Standard PLC Template.plcproj");
+
+        var solutionPath = Path.Combine(path, $"{name}.sln");
+        session.SaveSolutionAs(solutionPath);
+        return Ok(("solution_path", solutionPath), ("plc", plcName));
+    }
+
+    public static Result AddPlcProject(ITcSession session, string slnPath, string plcName, string projectType)
+    {
+        if (string.IsNullOrEmpty(plcName))
+        {
+            throw new ArgumentException("PlcName required.");
+        }
+
+        if (projectType != "standard")
+        {
+            throw new InvalidOperationException($"ProjectType '{projectType}' not supported (only 'standard').");
+        }
+
+        var template = ResolveTemplatePath();
+        session.UseSolution(slnPath ?? "");
+        var solutionPath = string.IsNullOrEmpty(slnPath) ? session.SolutionPath : slnPath;
+
+        // Guard against a PlcName collision against every existing TwinCAT project.
+        foreach (var sm in session.GetSysManagers())
+        {
+            var tipc = sm.LookupTreeItem("TIPC");
+            for (var i = 1; i <= tipc.ChildCount; i++)
+            {
+                if (tipc.Child(i).Name == plcName)
+                {
+                    throw new InvalidOperationException($"PLC project '{plcName}' already exists in solution.");
+                }
+            }
+        }
+
+        // Each PLC lives in its own TwinCAT project ("_Tc" suffix avoids a name collision with the
+        // PLC, which crashes XAE on save), placed in its own subdirectory at sln level.
+        var slnDir = Path.GetDirectoryName(Path.GetFullPath(solutionPath))!;
+        var tcProjectName = $"{plcName}_Tc";
+        session.AddProjectFromTemplate(template, Path.Combine(slnDir, tcProjectName), tcProjectName);
+
+        var newTipc = FindEmptyTipc(session);
+        newTipc.CreateChild(plcName, 0, null, "Standard PLC Template.plcproj");
+
+        session.SaveSolutionAs(solutionPath);
+        return Ok(("solution_path", solutionPath), ("plc", plcName), ("project_type", projectType));
+    }
+
+    // --- library / scaffolding helpers ---------------------------------------
+
+    private static ITcTreeItem ReferencesNode(ITcSysManager sm, string plc)
+        => sm.LookupTreeItem($"TIPC^{plc}^{plc} Project^References");
+
+    private static string? TryFindPlcProj(string? solutionPath, string plc)
+    {
+        try
+        {
+            return PlcProjXml.Find(Path.GetDirectoryName(solutionPath), plc);
+        }
+#pragma warning disable CA1031 // No file yet (or unknown dir) just means "skip the on-disk probe".
+        catch (Exception)
+        {
+            return null;
+        }
+#pragma warning restore CA1031
+    }
+
+    /// <summary>Read EffectiveVersion off the References child matching name + distributor.</summary>
+    private static string? ResolveEffectiveVersion(ITcTreeItem references, string libraryName, string distributor)
+    {
+        for (var i = 1; i <= references.ChildCount; i++)
+        {
+            var child = references.Child(i);
+            if (child.Name != libraryName)
+            {
+                continue;
+            }
+
+            XmlDocument doc;
+            try
+            {
+                doc = new XmlDocument();
+                doc.LoadXml(child.ProduceXml(0));
+            }
+#pragma warning disable CA1031 // A reference that won't serialise can't be the match; skip it.
+            catch (Exception)
+            {
+                continue;
+            }
+#pragma warning restore CA1031
+
+            var library = doc.SelectSingleNode("//Library");
+            if (library is null)
+            {
+                continue;
+            }
+
+            if ((library.SelectSingleNode("Distributor")?.InnerText ?? "") != distributor)
+            {
+                continue;
+            }
+
+            var effective = library.SelectSingleNode("EffectiveVersion")?.InnerText;
+            if (!string.IsNullOrEmpty(effective))
+            {
+                return effective;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Set ProjectInfo Title/Company/Version on a PLC project's ProduceXml output.</summary>
+    private static string WithProjectInfo(string projectXml, string title, string company, string version)
+    {
+        var doc = new XmlDocument();
+        doc.LoadXml(projectXml);
+        var info = doc.SelectSingleNode("//ProjectInfo")
+            ?? throw new InvalidOperationException("ProjectInfo node not found in PLC project XML.");
+        SetChildText(info, "Title", title);
+        SetChildText(info, "Company", company);
+        SetChildText(info, "Version", version);
+        return doc.OuterXml;
+
+        static void SetChildText(XmlNode parent, string child, string value)
+        {
+            var node = parent.SelectSingleNode(child)
+                ?? throw new InvalidOperationException($"ProjectInfo/{child} node not found.");
+            node.InnerText = value;
+        }
+    }
+
+    private static bool IsColdStartResolverError(string message)
+        => message.Contains("PlaceholderReference", StringComparison.OrdinalIgnoreCase)
+            && message.Contains("EffectiveResolution", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The standard 4026 project template, overridable via the TC_PROJECT_TEMPLATE env var.</summary>
+    private static string ResolveTemplatePath()
+    {
+        var template = Environment.GetEnvironmentVariable("TC_PROJECT_TEMPLATE");
+        if (string.IsNullOrEmpty(template))
+        {
+            template = @"C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\PrjTemplate\TwinCAT Project.tsproj";
+        }
+
+        if (!File.Exists(template))
+        {
+            throw new InvalidOperationException(
+                $"Project template not found: {template}. Set TC_PROJECT_TEMPLATE to the .tsproj path.");
+        }
+
+        return template;
+    }
+
+    /// <summary>
+    /// Find the freshly-added TwinCAT project's TIPC (the one with no PLC yet). AddFromTemplate
+    /// returns before XAE has finished exposing the new project, so poll GetSysManagers briefly.
+    /// </summary>
+    private static ITcTreeItem FindEmptyTipc(ITcSession session, int maxAttempts = 20, int delayMs = 250)
+    {
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            foreach (var sm in session.GetSysManagers())
+            {
+                ITcTreeItem tipc;
+                try
+                {
+                    tipc = sm.LookupTreeItem("TIPC");
+                }
+#pragma warning disable CA1031 // A project still loading can't expose TIPC yet; keep polling.
+                catch (Exception)
+                {
+                    continue;
+                }
+#pragma warning restore CA1031
+
+                if (tipc.ChildCount == 0)
+                {
+                    return tipc;
+                }
+            }
+
+            if (attempt < maxAttempts)
+            {
+                Thread.Sleep(delayMs);
+            }
+        }
+
+        throw new InvalidOperationException(
+            "Could not locate the new TwinCAT project's empty TIPC after AddFromTemplate.");
     }
 
     // --- navigation ----------------------------------------------------------

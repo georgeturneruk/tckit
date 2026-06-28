@@ -104,6 +104,44 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
         string pouName, string variableName, string? itemName, string? plcName, CancellationToken cancellationToken)
         => RunAsync(cancellationToken, session => ProjectAuthor.DeleteVariable(session, pouName, variableName, itemName, plcName));
 
+    public Task<Result> CreateProjectAsync(string name, string path, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.CreateProject(session, name, path));
+
+    public Task<Result> AddPlcProjectAsync(
+        string solutionPath, string plcName, string projectType, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.AddPlcProject(session, solutionPath, plcName, projectType));
+
+    public Task<Result> AddLibraryReferenceAsync(
+        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.AddLibraryReference(session, plcName, libraryName, version, distributor));
+
+    public Task<Result> DeleteLibraryReferenceAsync(
+        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.DeleteLibraryReference(session, plcName, libraryName, version, distributor));
+
+    public Task<Result> AddLibraryPlaceholderAsync(
+        string? plcName, string placeholderName, string defaultLibrary, string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.AddLibraryPlaceholder(
+            session, plcName, placeholderName, defaultLibrary, version, distributor, parameters));
+
+    public Task<Result> SetPlaceholderParametersAsync(
+        string? plcName, string placeholderName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> parameters, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.SetPlaceholderParameters(session, plcName, placeholderName, parameters));
+
+    public Task<Result> DeletePlaceholderAsync(string? plcName, string placeholderName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeletePlaceholder(session, plcName, placeholderName));
+
+    public Task<Result> SavePlcAsLibraryAsync(
+        string? plcName, string outputPath, bool install, string repository, bool overwrite,
+        CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.SavePlcAsLibrary(session, plcName, outputPath, install, repository, overwrite));
+
     private Task<Result> RunAsync(CancellationToken cancellationToken, Func<ITcSession, Result> author)
     {
         cancellationToken.ThrowIfCancellationRequested();
