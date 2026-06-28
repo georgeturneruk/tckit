@@ -70,6 +70,17 @@ try {
     $resolvedPlc = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
     $sm = Get-TcSysManager -Dte $dte -PlcName $resolvedPlc
 
+    # Make sure a solution configuration is active before we activate the
+    # configuration below. Without one, ActivateConfiguration throws an opaque
+    # FindActiveProjectCfgName E_UNEXPECTED (issue #117); auto-resolve it here
+    # so the deploy doesn't depend on the IDE having a config pre-selected.
+    try {
+        Resolve-TcSolutionConfiguration -Dte $dte | Out-Null
+    } catch {
+        $msg = $_.Exception.Message
+        return @{ success = $false; error = "$msg$(Get-TcActivateHint -Message $msg)" }
+    }
+
     # Set target NetId before activation so the bootapp lands on the
     # right runtime.
     try {

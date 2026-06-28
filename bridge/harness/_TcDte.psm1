@@ -475,6 +475,67 @@ function Resolve-TcPlcName {
     return $names[0]
 }
 
+function Resolve-TcSolutionConfiguration {
+    <#
+    .SYNOPSIS
+        Ensure a solution configuration is active before ActivateConfiguration,
+        so the deploy path doesn't depend on one being pre-selected in the IDE.
+
+    .DESCRIPTION
+        XAE's ITcSysManager.ActivateConfiguration throws an opaque
+        FindActiveProjectCfgName E_UNEXPECTED when no solution configuration is
+        selected (issue #117). The selected configuration lives on EnvDTE's
+        SolutionBuild, not on the system manager, so we resolve it there:
+
+          * already active    -> no-op, return its name;
+          * exactly one config -> Activate() it (mirrors Resolve-TcPlcName's
+            sole-member rule);
+          * several configs    -> Activate() the first whose name starts with
+            $Prefer (default "Release", i.e. the TwinCAT RT config), else throw
+            with the candidate list.
+
+        Returns the resolved configuration name. Throws a clear, actionable
+        error rather than letting the opaque E_UNEXPECTED surface.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [string]$Prefer = 'Release'
+    )
+    $sb = $Dte.Solution.SolutionBuild
+
+    $active = $null
+    try { $active = $sb.ActiveConfiguration } catch { $active = $null }
+    if ($null -ne $active) {
+        try { return [string]$active.Name } catch { return '' }
+    }
+
+    $configs = @()
+    try {
+        $all = $sb.SolutionConfigurations
+        for ($i = 1; $i -le $all.Count; $i++) { $configs += $all.Item($i) }
+    } catch { $configs = @() }
+
+    if ($configs.Count -eq 0) {
+        throw 'No solution configuration is available to activate. Add a build configuration in XAE (Build > Configuration Manager).'
+    }
+
+    $chosen = $null
+    if ($configs.Count -eq 1) {
+        $chosen = $configs[0]
+    } else {
+        foreach ($c in $configs) {
+            if ($c.Name -like "$Prefer*") { $chosen = $c; break }
+        }
+    }
+    if ($null -eq $chosen) {
+        $names = ($configs | ForEach-Object { $_.Name }) -join ', '
+        throw "No active solution configuration is selected and none matches '$Prefer' (available: $names). Select one in XAE (Build > Configuration Manager)."
+    }
+
+    $chosen.Activate()
+    return [string]$chosen.Name
+}
+
 function Get-TcPlcSysNode {
     <#
     .SYNOPSIS
@@ -828,9 +889,17 @@ function Resolve-TcFolderPath {
         [string]$Path = ''
     )
     if (-not $Path) { Write-Output $Root -NoEnumerate; return }
+    $segments = @($Path -split '[/\\]' | Where-Object { $_ })
+    # The reader reports a POU/DUT/GVL folder WITH its type-root segment
+    # (e.g. "POUs/Drives", "DUTs/RingBuffer"), but resolution starts AT that
+    # root node. Drop a single leading segment that names the root so the
+    # reader's folder value is usable verbatim as parent_folder (reader/writer
+    # symmetry); both "Drives" and "POUs/Drives" then resolve.
+    if ($segments.Count -gt 0 -and $segments[0] -eq $Root.Name) {
+        $segments = @($segments | Select-Object -Skip 1)
+    }
     $cursor = $Root
-    foreach ($seg in ($Path -split '[/\\]')) {
-        if (-not $seg) { continue }
+    foreach ($seg in $segments) {
         $next = $null
         for ($i = 1; $i -le $cursor.ChildCount; $i++) {
             $child = $cursor.Child($i)
@@ -873,6 +942,71 @@ function Remove-TcTreeItem {
     $parent = $SysManager.LookupTreeItem($parentPath)
     $parent.DeleteChild($Item.Name)
     return $parentPath
+}
+
+function Remove-TcPropertyNode {
+    <#
+    .SYNOPSIS
+        Defensively remove a property (and its Get/Set accessor children) from
+        a POU. Shared by Delete-TcProperty.ps1 and the partial-failure cleanup
+        path in Add-TcProperty.ps1.
+
+    .DESCRIPTION
+        Get/Set accessors are tree-item children of the property (kinds 613/614
+        for FB properties, 654/655 for interface properties). Whether
+        DeleteChild on the property cascades to them is undocumented, so we
+        remove them by name first, then delete the property body. XAE names the
+        accessors "Get"/"Set" regardless of kind, so a name-based DeleteChild
+        covers both the FB and interface branches.
+
+        Pass -Property when the caller has already located it (saves a search
+        and lets the caller raise its own not-found error). Otherwise the
+        property is found by recursive name lookup under $Pou.
+
+        -BestEffort swallows the final property delete too, for use as cleanup
+        after a partial failure where surfacing a secondary error would mask the
+        real one. Without it the final DeleteChild propagates so a delete
+        operation can report a genuine failure.
+
+    .OUTPUTS
+        The list of accessor names actually removed.
+    #>
+    param(
+        [Parameter(Mandatory)]$Pou,
+        [Parameter(Mandatory)][string]$PropertyName,
+        $Property = $null,
+        [switch]$BestEffort
+    )
+    if ($null -eq $Property) {
+        $Property = Find-TcChild -Root $Pou -Name $PropertyName
+    }
+    $removed = @()
+    if ($null -ne $Property -and $Property.Name -ne $Pou.Name) {
+        foreach ($accessorName in @('Get', 'Set')) {
+            $accessor = $null
+            try {
+                for ($i = 1; $i -le $Property.ChildCount; $i++) {
+                    $child = $Property.Child($i)
+                    if ($child.Name -eq $accessorName) { $accessor = $child; break }
+                }
+            } catch { $accessor = $null }
+            if ($null -ne $accessor) {
+                try {
+                    $Property.DeleteChild($accessorName)
+                    $removed += $accessorName
+                } catch {
+                    # Some XAE versions cascade-delete on the property; the
+                    # accessor vanishes from the next child walk. Tolerate.
+                }
+            }
+        }
+    }
+    if ($BestEffort) {
+        try { $Pou.DeleteChild($PropertyName) } catch { }
+    } else {
+        $Pou.DeleteChild($PropertyName)
+    }
+    return ,$removed
 }
 
 # ------------------------------------------------------------------
@@ -1512,9 +1646,9 @@ public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
 
 Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Use-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
-    Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
+    Resolve-TcPlcName, Resolve-TcSolutionConfiguration, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
-    Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
+    Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Remove-TcPropertyNode, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, Read-TcErrorList, Read-TcBuildOutput, `
     Read-TcErrorListUia, ConvertTo-TcErrorRow, `
     Get-TcActivateHint, `

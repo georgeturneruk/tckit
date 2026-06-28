@@ -43,6 +43,18 @@ LIBRARY_PLC = f"{SLN_NAME}_Plc"
 FB_NAME = "FB_PropertySmoke"
 ITF_NAME = "I_PropertySmoke"
 DUT_NAME = "E_PropertyMode"
+# A function block nested in a POUs subfolder. Regression for #116: adding a
+# property to a subfoldered FB used to fail with "CreateChild ... Element not
+# found!" while partially creating the property, leaving an orphan.
+SUBFOLDER = "Nested"
+FB_SUB_NAME = "FB_SubProp"
+
+FB_SUB_DECL = f"""\
+FUNCTION_BLOCK {FB_SUB_NAME}
+VAR
+    _depth : DINT;
+END_VAR
+"""
 
 FB_DECL = f"""\
 FUNCTION_BLOCK {FB_NAME}
@@ -174,6 +186,62 @@ def main() -> int:
         ),
     )
 
+    # Subfoldered FB (#116). Author an FB inside a POUs subfolder, then add
+    # properties to it. The bug was that add_property on a subfoldered FB threw
+    # "CreateChild ... Element not found!" — both with the parent POU found
+    # recursively (no parent_folder) and with parent_folder given.
+    _check(
+        f"add_folder({SUBFOLDER})",
+        writer.add_folder(SUBFOLDER, parent_path="POUs", plc_name=LIBRARY_PLC),
+    )
+    _check(
+        f"add_pou({FB_SUB_NAME} in {SUBFOLDER})",
+        writer.add_pou(
+            FB_SUB_NAME,
+            POUType.FUNCTION_BLOCK,
+            FB_SUB_DECL,
+            parent_folder=SUBFOLDER,
+            plc_name=LIBRARY_PLC,
+        ),
+    )
+    # Get-only, parent POU resolved recursively (no parent_folder passed).
+    _check(
+        "add_property(sub Depth, getter only, recursive)",
+        writer.add_property(
+            FB_SUB_NAME, "Depth", "DINT",
+            getter_code="Depth := _depth;", plc_name=LIBRARY_PLC,
+        ),
+    )
+    # Set-only, parent_folder given in the reader's "POUs/Nested" form (the
+    # leading-segment tolerance must accept it verbatim).
+    _check(
+        "add_property(sub Reset, setter only, reader-form parent_folder)",
+        writer.add_property(
+            FB_SUB_NAME, "Reset", "BOOL",
+            setter_code="_depth := 0;",
+            parent_folder=f"POUs/{SUBFOLDER}", plc_name=LIBRARY_PLC,
+        ),
+    )
+    # Get+set on the subfoldered FB.
+    _check(
+        "add_property(sub Level, get+set)",
+        writer.add_property(
+            FB_SUB_NAME, "Level", "DINT",
+            getter_code="Level := _depth;", setter_code="_depth := Level;",
+            plc_name=LIBRARY_PLC,
+        ),
+    )
+    # Idempotency: re-adding an existing property must fail with "already
+    # exists" and must NOT delete or corrupt the property that is already there.
+    _expect_failure(
+        "add_property(sub Depth again) rejects duplicate",
+        writer.add_property(
+            FB_SUB_NAME, "Depth", "DINT",
+            getter_code="Depth := _depth;", plc_name=LIBRARY_PLC,
+        ),
+        "already exists",
+    )
+
     # Negative case: no accessors at all must fail with a clear error.
     _expect_failure(
         "add_property(NoAccessors) rejects empty",
@@ -278,6 +346,38 @@ def main() -> int:
         _fail(
             "round-trip: NoAccessors was rejected by the port but somehow "
             "ended up in the tree."
+        )
+
+    # Subfoldered FB round-trip (#116): every property authored above must be
+    # present with the right accessors. The idempotency re-add must have left
+    # Depth intact (a getter-only property), not deleted or stripped it.
+    sub_interface = reader.get_pou_interface(FB_SUB_NAME, plc_name=LIBRARY_PLC)
+    sub_properties = {p.name: p for p in sub_interface.properties}
+    expected_sub = {
+        "Depth": ("DINT", True, False),
+        "Reset": ("BOOL", False, True),
+        "Level": ("DINT", True, True),
+    }
+    for name, (return_type, has_get, has_set) in expected_sub.items():
+        if name not in sub_properties:
+            _fail(
+                f"subfolder round-trip: property {name!r} missing from "
+                f"{FB_SUB_NAME}. Found: {sorted(sub_properties)}"
+            )
+        prop = sub_properties[name]
+        if (prop.return_type, prop.has_get, prop.has_set) != (
+            return_type,
+            has_get,
+            has_set,
+        ):
+            _fail(
+                f"subfolder round-trip: property {name!r} is "
+                f"({prop.return_type}, get={prop.has_get}, set={prop.has_set}) "
+                f"!= expected ({return_type}, get={has_get}, set={has_set})"
+            )
+        print(
+            f"OK   subfolder round-trip {name} : {return_type} "
+            f"(has_get={has_get}, has_set={has_set})"
         )
 
     # Interface round-trip: the XML reader only handles .TcPOU, so parse the

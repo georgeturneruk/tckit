@@ -469,6 +469,9 @@ def add_pou(
         (e.g. ``"Drives/Motors"``), placing the POU in that folder.
         Intermediate folders must already exist; create them with
         ``add_folder``. Empty (default) puts the POU at the POUs root.
+        A leading ``POUs/`` segment (as reported in ``get_structure``'s
+        ``folder`` field) is accepted and ignored, so that value can be
+        passed verbatim.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
@@ -523,7 +526,8 @@ def add_gvl(
     :param code: Full ST source text including ``VAR_GLOBAL`` / ``END_VAR``.
     :param parent_folder: Optional path under POUs, slash-separated
         (e.g. ``"Settings"``), placing the GVL in that folder. Empty
-        (default) puts the GVL at the POUs root.
+        (default) puts the GVL at the POUs root. A leading ``POUs/``
+        segment (as ``get_structure`` reports it) is accepted and ignored.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
@@ -549,8 +553,9 @@ def add_method(
     :param method_name: Name of the new method (PascalCase, no prefix).
     :param code: Full ST source text including declaration block.
     :param parent_folder: Optional path under POUs identifying the
-        folder the parent POU lives in (e.g. ``"Drives"``). Empty
-        (default) searches the POU subtree recursively.
+        folder the parent POU lives in (e.g. ``"Drives"``). A leading
+        ``POUs/`` segment (as ``get_structure`` reports it) is accepted
+        and ignored. Empty (default) searches the POU subtree recursively.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """
@@ -594,7 +599,8 @@ def add_dut(
         ``"union"``.
     :param parent_folder: Optional path under DUTs, slash-separated
         (e.g. ``"Drives"``), placing the DUT in that folder. Empty
-        (default) puts the DUT at the DUTs root.
+        (default) puts the DUT at the DUTs root. A leading ``DUTs/``
+        segment (as ``get_structure`` reports it) is accepted and ignored.
     :param plc_name: PLC project to write to. Leave empty for
         single-project solutions or to use the ``PLC_PROJECT_NAME`` env
         default.
@@ -647,8 +653,9 @@ def add_property(
     :param getter_code: Body of the Get accessor. Empty string skips it.
     :param setter_code: Body of the Set accessor. Empty string skips it.
     :param parent_folder: Optional path under POUs identifying the
-        folder the parent POU lives in. Empty (default) searches the
-        POU subtree recursively.
+        folder the parent POU lives in. A leading ``POUs/`` segment (as
+        ``get_structure`` reports it) is accepted and ignored. Empty
+        (default) searches the POU subtree recursively.
     :param plc_name: PLC project to write to. Leave empty for single-project
         solutions or to use the ``PLC_PROJECT_NAME`` env default.
     """

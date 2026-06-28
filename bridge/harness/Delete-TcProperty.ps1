@@ -59,32 +59,9 @@ try {
         return @{ success = $false; error = "Property '$PropertyName' not found under POU '$PouName'." }
     }
 
-    # Remove Get / Set children first. XAE names them "Get" / "Set" regardless
-    # of kind (FB vs interface property), so a name-based DeleteChild covers
-    # both branches without us needing to look up the accessor kind.
-    $removedAccessors = @()
-    foreach ($accessorName in @('Get', 'Set')) {
-        $accessor = $null
-        try {
-            for ($i = 1; $i -le $property.ChildCount; $i++) {
-                $child = $property.Child($i)
-                if ($child.Name -eq $accessorName) { $accessor = $child; break }
-            }
-        } catch { $accessor = $null }
-        if ($null -ne $accessor) {
-            try {
-                $property.DeleteChild($accessorName)
-                $removedAccessors += $accessorName
-            } catch {
-                # Some XAE versions cascade-delete on the property; the
-                # accessor disappears when we walk the children again. Tolerate
-                # silently — the final DeleteChild on the property is what
-                # actually matters.
-            }
-        }
-    }
-
-    $pou.DeleteChild($PropertyName)
+    # Remove the property and its Get/Set accessors. Shared with the
+    # partial-failure cleanup path in Add-TcProperty.ps1.
+    $removedAccessors = Remove-TcPropertyNode -Pou $pou -PropertyName $PropertyName -Property $property
     Save-TcSolution -Dte $dte
 
     return @{
