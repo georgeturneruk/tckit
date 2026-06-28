@@ -46,6 +46,55 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
         => RunAsync(cancellationToken, session =>
             ProjectAuthor.AddProperty(session, pouName, propertyName, returnType, getterCode, setterCode, plcName));
 
+    public Task<Result> UpdatePouDeclarationAsync(
+        string pouName, string code, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.UpdatePouDeclaration(session, pouName, code, plcName));
+
+    public Task<Result> UpdatePouImplementationAsync(
+        string pouName, string code, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.UpdatePouImplementation(session, pouName, code, plcName));
+
+    public Task<Result> UpdateMethodBodyAsync(
+        string pouName, string methodName, string code, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.UpdateMethodBody(session, pouName, methodName, code, plcName));
+
+    public Task<Result> UpdatePouDeclarationPatchAsync(
+        string pouName, string oldString, string newString, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.UpdatePouDeclarationPatch(session, pouName, oldString, newString, plcName));
+
+    public Task<Result> UpdatePouImplementationPatchAsync(
+        string pouName, string oldString, string newString, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.UpdatePouImplementationPatch(session, pouName, oldString, newString, plcName));
+
+    public Task<Result> UpdateMethodBodyPatchAsync(
+        string pouName, string methodName, string oldString, string newString, string? plcName,
+        CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session =>
+            ProjectAuthor.UpdateMethodBodyPatch(session, pouName, methodName, oldString, newString, plcName));
+
+    public Task<Result> DeletePouAsync(string name, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeletePou(session, name, plcName));
+
+    public Task<Result> DeleteMethodAsync(
+        string pouName, string methodName, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteMethod(session, pouName, methodName, plcName));
+
+    public Task<Result> DeletePropertyAsync(
+        string pouName, string propertyName, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteProperty(session, pouName, propertyName, plcName));
+
+    public Task<Result> DeleteGvlAsync(string name, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteGvl(session, name, plcName));
+
+    public Task<Result> DeleteDutAsync(string name, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteDut(session, name, plcName));
+
+    public Task<Result> DeleteFolderAsync(
+        string name, string parentPath, bool recursive, string? plcName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteFolder(session, name, parentPath, recursive, plcName));
+
     private Task<Result> RunAsync(CancellationToken cancellationToken, Func<ITcSession, Result> author)
     {
         cancellationToken.ThrowIfCancellationRequested();

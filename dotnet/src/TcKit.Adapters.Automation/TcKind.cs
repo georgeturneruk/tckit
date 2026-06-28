@@ -25,6 +25,7 @@ internal static class TcKind
     public const int PropertySet = 614;
     public const int Gvl = 615;
     public const int Interface = 618;
+    public const int Alias = 623;
     public const int InterfacePropertyGet = 654;
     public const int InterfacePropertySet = 655;
 

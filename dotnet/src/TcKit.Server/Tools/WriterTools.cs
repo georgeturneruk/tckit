@@ -68,6 +68,84 @@ public sealed class WriterTools(IProjectWriter writer)
         => Run(() => writer.AddPropertyAsync(
             pouName, propertyName, returnType, Optional(getterCode), Optional(setterCode), Optional(plcName), cancellationToken));
 
+    [McpServerTool(Name = "UpdatePouDeclaration")]
+    [Description("Replace a POU's FB-level declaration block (VAR sections / signature). code is the "
+        + "new declaration, header through the last END_VAR.")]
+    public Task<string> UpdatePouDeclaration(
+        string pouName, string code, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdatePouDeclarationAsync(pouName, code, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "UpdatePouImplementation")]
+    [Description("Replace a POU's cyclic implementation body. code is ST statements only, no header "
+        + "or VAR blocks.")]
+    public Task<string> UpdatePouImplementation(
+        string pouName, string code, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdatePouImplementationAsync(pouName, code, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "UpdateMethodBody")]
+    [Description("Replace the full body of a method, action, or property. code is the combined "
+        + "declaration + implementation, including the METHOD/ACTION/PROPERTY header and any VAR blocks.")]
+    public Task<string> UpdateMethodBody(
+        string pouName, string methodName, string code, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdateMethodBodyAsync(pouName, methodName, code, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "UpdatePouDeclarationPatch")]
+    [Description("Anchored edit on a POU's declaration: replace the single occurrence of oldString "
+        + "with newString. Fails if oldString is missing or appears more than once.")]
+    public Task<string> UpdatePouDeclarationPatch(
+        string pouName, string oldString, string newString, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdatePouDeclarationPatchAsync(pouName, oldString, newString, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "UpdatePouImplementationPatch")]
+    [Description("Anchored edit on a POU's implementation: replace the single occurrence of oldString "
+        + "with newString. Fails if oldString is missing or appears more than once.")]
+    public Task<string> UpdatePouImplementationPatch(
+        string pouName, string oldString, string newString, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdatePouImplementationPatchAsync(pouName, oldString, newString, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "UpdateMethodBodyPatch")]
+    [Description("Anchored edit on a method/action/property's combined source: replace the single "
+        + "occurrence of oldString with newString. Fails if oldString is missing or appears more than once.")]
+    public Task<string> UpdateMethodBodyPatch(
+        string pouName, string methodName, string oldString, string newString,
+        string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.UpdateMethodBodyPatchAsync(pouName, methodName, oldString, newString, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeletePou")]
+    [Description("Delete a POU (FB, function, program, or interface). Refuses a PROGRAM still bound "
+        + "to a task; detach the task's PouCall first.")]
+    public Task<string> DeletePou(string name, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeletePouAsync(name, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteMethod")]
+    [Description("Delete a method or action from a POU.")]
+    public Task<string> DeleteMethod(
+        string pouName, string methodName, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteMethodAsync(pouName, methodName, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteProperty")]
+    [Description("Delete a property (and its Get/Set accessors) from a POU.")]
+    public Task<string> DeleteProperty(
+        string pouName, string propertyName, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeletePropertyAsync(pouName, propertyName, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteGvl")]
+    [Description("Delete a Global Variable List (validates the item really is a GVL).")]
+    public Task<string> DeleteGvl(string name, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteGvlAsync(name, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteDut")]
+    [Description("Delete a Data Unit Type (struct, enum, union, or alias).")]
+    public Task<string> DeleteDut(string name, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteDutAsync(name, Optional(plcName), cancellationToken));
+
+    [McpServerTool(Name = "DeleteFolder")]
+    [Description("Delete a folder from a PLC project's source tree. Refuses a non-empty folder "
+        + "unless recursive is true. parentPath optionally disambiguates a name in multiple subtrees.")]
+    public Task<string> DeleteFolder(
+        string name, string parentPath = "", bool recursive = false, string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.DeleteFolderAsync(name, parentPath, recursive, Optional(plcName), cancellationToken));
+
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
 
     private static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch

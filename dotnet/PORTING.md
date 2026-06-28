@@ -84,18 +84,18 @@ lands), so these stay unchecked until that confirms.
 - [ ] add_library_placeholder
 - [ ] set_placeholder_parameters
 - [ ] save_plc_as_library
-- [ ] update_pou_declaration
-- [ ] update_pou_implementation
-- [ ] update_method_body
-- [ ] update_pou_declaration_patch
-- [ ] update_pou_implementation_patch
-- [ ] update_method_body_patch
-- [ ] delete_pou
-- [ ] delete_gvl
-- [ ] delete_dut
-- [ ] delete_method
-- [ ] delete_property
+- [~] update_pou_declaration — logic CI-tested (fake); pending live COM smoke
+- [~] update_pou_implementation — logic CI-tested (fake); pending live COM smoke
+- [~] update_method_body — logic CI-tested (fake); pending live COM smoke
+- [~] update_pou_declaration_patch — logic CI-tested (fake); pending live COM smoke
+- [~] update_pou_implementation_patch — logic CI-tested (fake); pending live COM smoke
+- [~] update_method_body_patch — logic CI-tested (fake); pending live COM smoke
+- [~] delete_pou — logic + task-binding scan CI-tested (fake); pending live COM smoke
+- [~] delete_gvl — logic CI-tested (fake); pending live COM smoke
+- [~] delete_dut — logic CI-tested (fake); pending live COM smoke
+- [~] delete_method — logic CI-tested (fake); pending live COM smoke
+- [~] delete_property — logic CI-tested (fake); pending live COM smoke
 - [ ] delete_variable
-- [ ] delete_folder
+- [~] delete_folder — logic CI-tested (fake); pending live COM smoke
 - [ ] delete_library_reference
 - [ ] delete_placeholder

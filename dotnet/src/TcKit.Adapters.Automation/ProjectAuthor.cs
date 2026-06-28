@@ -130,6 +130,211 @@ internal static partial class ProjectAuthor
         return Ok(("pou_name", pouName), ("property_name", propertyName), ("plc_name", plc));
     }
 
+    // --- update --------------------------------------------------------------
+
+    public static Result UpdatePouDeclaration(ITcSession session, string pouName, string code, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        LocatePouUnderProject(sm, plc, pouName).DeclarationText = code;
+        session.Save();
+        return Ok(("pou_name", pouName), ("plc_name", plc));
+    }
+
+    public static Result UpdatePouImplementation(ITcSession session, string pouName, string code, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        LocatePouUnderProject(sm, plc, pouName).ImplementationText = code;
+        session.Save();
+        return Ok(("pou_name", pouName), ("plc_name", plc));
+    }
+
+    public static Result UpdateMethodBody(ITcSession session, string pouName, string methodName, string code, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateItem(sm, plc, pouName, methodName);
+        SetSourceFromCode(item, code);
+        session.Save();
+        return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc));
+    }
+
+    public static Result UpdatePouDeclarationPatch(
+        ITcSession session, string pouName, string oldString, string newString, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var pou = LocatePouUnderProject(sm, plc, pouName);
+        pou.DeclarationText = ApplyPatch(pou.DeclarationText, oldString, newString, $"{pouName} declaration");
+        session.Save();
+        return Ok(("pou_name", pouName), ("plc_name", plc), ("replacements", 1));
+    }
+
+    public static Result UpdatePouImplementationPatch(
+        ITcSession session, string pouName, string oldString, string newString, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var pou = LocatePouUnderProject(sm, plc, pouName);
+        pou.ImplementationText = ApplyPatch(pou.ImplementationText, oldString, newString, $"{pouName} implementation");
+        session.Save();
+        return Ok(("pou_name", pouName), ("plc_name", plc), ("replacements", 1));
+    }
+
+    public static Result UpdateMethodBodyPatch(
+        ITcSession session, string pouName, string methodName, string oldString, string newString, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateItem(sm, plc, pouName, methodName);
+        var patched = ApplyPatch(CombineSource(item), oldString, newString, $"{pouName}.{methodName}");
+        SetSourceFromCode(item, patched);
+        session.Save();
+        return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc), ("replacements", 1));
+    }
+
+    // --- delete --------------------------------------------------------------
+
+    private static readonly int[] s_pouKinds = [TcKind.Program, TcKind.Function, TcKind.FunctionBlock, TcKind.Interface];
+    private static readonly int[] s_dutKinds = [TcKind.Struct, TcKind.Enum, TcKind.Union, TcKind.Alias];
+
+    public static Result DeletePou(ITcSession session, string name, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var pous = PousFolder(sm, plc);
+        var item = LocateUnderFolder(pous, name, "POU", plc);
+        if (!s_pouKinds.Contains(item.ItemType))
+        {
+            throw new InvalidOperationException(
+                $"'{name}' is not a POU (kind={item.ItemType}). Use delete_folder / delete_gvl / delete_dut.");
+        }
+
+        if (item.ItemType == TcKind.Program)
+        {
+            var solutionDir = Path.GetDirectoryName(session.SolutionPath);
+            if (!string.IsNullOrEmpty(solutionDir) && TaskBinding.Find(solutionDir, name) is { } binding)
+            {
+                throw new InvalidOperationException(
+                    $"PROGRAM '{name}' is bound to task '{binding.Task}' in {binding.File}. Remove the PouCall first.");
+            }
+        }
+
+        var parentPath = Remove(sm, item);
+        session.Save();
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+    }
+
+    public static Result DeleteMethod(ITcSession session, string pouName, string methodName, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
+        var method = FindChild(pou, methodName);
+        if (method is null || method.Name == pou.Name)
+        {
+            throw new InvalidOperationException($"Method '{methodName}' not found under POU '{pouName}'.");
+        }
+
+        pou.DeleteChild(methodName);
+        session.Save();
+        return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc));
+    }
+
+    public static Result DeleteProperty(ITcSession session, string pouName, string propertyName, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
+        var property = FindChild(pou, propertyName);
+        if (property is null || property.Name == pou.Name)
+        {
+            throw new InvalidOperationException($"Property '{propertyName}' not found under POU '{pouName}'.");
+        }
+
+        var removed = RemovePropertyNode(pou, property, propertyName);
+        session.Save();
+        return Ok(("pou_name", pouName), ("property_name", propertyName), ("plc_name", plc), ("removed_accessors", removed));
+    }
+
+    public static Result DeleteGvl(ITcSession session, string name, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateUnderFolder(PousFolder(sm, plc), name, "GVL", plc);
+        if (item.ItemType != TcKind.Gvl)
+        {
+            throw new InvalidOperationException(
+                $"'{name}' is not a GVL (kind={item.ItemType}, expected {TcKind.Gvl}). Use delete_pou / delete_folder / delete_dut.");
+        }
+
+        var parentPath = Remove(sm, item);
+        session.Save();
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+    }
+
+    public static Result DeleteDut(ITcSession session, string name, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var item = LocateUnderFolder(DutsFolder(sm, plc), name, "DUT", plc);
+        if (!s_dutKinds.Contains(item.ItemType))
+        {
+            throw new InvalidOperationException(
+                $"'{name}' is not a DUT (kind={item.ItemType}). Use delete_pou / delete_gvl / delete_folder.");
+        }
+
+        var parentPath = Remove(sm, item);
+        session.Save();
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", parentPath), ("kind", item.ItemType));
+    }
+
+    public static Result DeleteFolder(
+        ITcSession session, string name, string parentPath, bool recursive, string? plcName)
+    {
+        var (plc, sm) = Open(session, plcName);
+        var plcProject = ProjectNode(sm, plc);
+
+        ITcTreeItem? folder;
+        if (!string.IsNullOrEmpty(parentPath))
+        {
+            var parent = plcProject;
+            foreach (var segment in parentPath.Split('/', '\\', StringSplitOptions.RemoveEmptyEntries))
+            {
+                parent = FindChild(parent, segment)
+                    ?? throw new InvalidOperationException(
+                        $"Parent path segment '{segment}' not found under PLC project '{plc}'.");
+            }
+
+            folder = DirectChild(parent, name);
+        }
+        else
+        {
+            folder = FindChild(plcProject, name);
+            if (folder is not null && folder.Name == plcProject.Name)
+            {
+                folder = null;
+            }
+        }
+
+        if (folder is null)
+        {
+            throw new InvalidOperationException($"Folder '{name}' not found under PLC project '{plc}'.");
+        }
+
+        if (folder.ItemType != TcKind.Folder)
+        {
+            throw new InvalidOperationException(
+                $"'{name}' is not a folder (kind={folder.ItemType}, expected {TcKind.Folder}). Use delete_pou / delete_gvl / delete_dut.");
+        }
+
+        if (folder.ChildCount > 0 && !recursive)
+        {
+            throw new InvalidOperationException(
+                $"Folder '{name}' is not empty (contains {folder.ChildCount} item(s)); pass recursive=true to cascade.");
+        }
+
+        // DeleteChild shifts indices, so always drain the first child until empty.
+        while (folder.ChildCount > 0)
+        {
+            folder.DeleteChild(folder.Child(1).Name);
+        }
+
+        var reported = Remove(sm, folder);
+        session.Save();
+        return Ok(("name", name), ("plc_name", plc), ("parent_path", reported));
+    }
+
     // --- navigation ----------------------------------------------------------
 
     private static (string Plc, ITcSysManager SysManager) Open(ITcSession session, string? plcName)
@@ -195,6 +400,120 @@ internal static partial class ProjectAuthor
     private static ITcTreeItem LocatePou(ITcSysManager sm, string plc, string pouName)
         => FindChild(PousFolder(sm, plc), pouName)
             ?? throw new InvalidOperationException($"POU '{pouName}' not found in PLC project '{plc}'.");
+
+    private static ITcTreeItem LocatePouUnderProject(ITcSysManager sm, string plc, string pouName)
+        => FindChild(ProjectNode(sm, plc), pouName)
+            ?? throw new InvalidOperationException($"POU '{pouName}' not found in PLC project '{plc}'.");
+
+    private static ITcTreeItem LocateItem(ITcSysManager sm, string plc, string pouName, string itemName)
+    {
+        var pou = LocatePouUnderProject(sm, plc, pouName);
+        return FindChild(pou, itemName)
+            ?? throw new InvalidOperationException($"Item '{itemName}' not found on POU '{pouName}'.");
+    }
+
+    /// <summary>Find an item by name under a type-root folder, rejecting the folder itself.</summary>
+    private static ITcTreeItem LocateUnderFolder(ITcTreeItem folder, string name, string label, string plc)
+    {
+        var item = FindChild(folder, name);
+        if (item is null || item.Name == folder.Name)
+        {
+            throw new InvalidOperationException($"{label} '{name}' not found under {folder.Name} of '{plc}'.");
+        }
+
+        return item;
+    }
+
+    /// <summary>Delete a tree item by resolving its parent from its PathName and calling DeleteChild.</summary>
+    private static string Remove(ITcSysManager sm, ITcTreeItem item)
+    {
+        var segments = item.PathName.Split('^');
+        if (segments.Length < 2)
+        {
+            throw new InvalidOperationException($"Cannot resolve parent of '{item.Name}' (PathName={item.PathName}).");
+        }
+
+        var parentPath = string.Join('^', segments[..^1]);
+        sm.LookupTreeItem(parentPath).DeleteChild(item.Name);
+        return parentPath;
+    }
+
+    /// <summary>Delete a property's Get/Set accessors (best-effort) then the property body.</summary>
+    private static IReadOnlyList<string> RemovePropertyNode(ITcTreeItem pou, ITcTreeItem property, string propertyName)
+    {
+        var removed = new List<string>();
+        foreach (var accessor in new[] { "Get", "Set" })
+        {
+            if (DirectChild(property, accessor) is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                property.DeleteChild(accessor);
+                removed.Add(accessor);
+            }
+#pragma warning disable CA1031 // Some XAE versions cascade-delete accessors with the property; tolerate.
+            catch (Exception)
+            {
+            }
+#pragma warning restore CA1031
+        }
+
+        pou.DeleteChild(propertyName);
+        return removed;
+    }
+
+    private static ITcTreeItem? DirectChild(ITcTreeItem parent, string name)
+    {
+        for (var i = 1; i <= parent.ChildCount; i++)
+        {
+            var child = parent.Child(i);
+            if (child.Name == name)
+            {
+                return child;
+            }
+        }
+
+        return null;
+    }
+
+    private static string CombineSource(ITcTreeItem item)
+    {
+        var implementation = item.ImplementationText;
+        return string.IsNullOrEmpty(implementation) ? item.DeclarationText : $"{item.DeclarationText}\n{implementation}";
+    }
+
+    /// <summary>Anchored single-occurrence replacement, mirroring Claude Code's Edit semantics.</summary>
+    private static string ApplyPatch(string text, string oldString, string newString, string where)
+    {
+        if (string.IsNullOrEmpty(oldString))
+        {
+            throw new ArgumentException("OldString required.");
+        }
+
+        var count = 0;
+        for (var i = text.IndexOf(oldString, StringComparison.Ordinal); i >= 0;
+            i = text.IndexOf(oldString, i + oldString.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        if (count == 0)
+        {
+            throw new InvalidOperationException($"OldString not found in {where}.");
+        }
+
+        if (count > 1)
+        {
+            throw new InvalidOperationException(
+                $"OldString appears {count} times in {where}; anchor must be unique. Extend OldString with more surrounding context.");
+        }
+
+        var index = text.IndexOf(oldString, StringComparison.Ordinal);
+        return text[..index] + newString + text[(index + oldString.Length)..];
+    }
 
     /// <summary>Walk a slash-separated path of child names under a root, returning the leaf item.</summary>
     public static ITcTreeItem ResolveFolderPath(ITcTreeItem root, string path)

@@ -12,6 +12,9 @@ internal interface ITcTreeItem
     /// <summary>The '^'-delimited tree path of this item.</summary>
     string PathName { get; }
 
+    /// <summary>The TwinCAT kind constant (e.g. 604 for a function block); carried on ItemType.</summary>
+    int ItemType { get; }
+
     int ChildCount { get; }
 
     /// <summary>FB-level / item declaration text. Setting it on an item with no declaration throws.</summary>
@@ -39,6 +42,9 @@ internal interface ITcSysManager
 /// <summary>A connection to the IDE: the open solution and its system managers.</summary>
 internal interface ITcSession : IDisposable
 {
+    /// <summary>Absolute path of the open solution (empty when none / not knowable). Used for file-side scans.</summary>
+    string SolutionPath { get; }
+
     /// <summary>Open the solution at <paramref name="path"/>, or require one already open when empty.</summary>
     void UseSolution(string path);
 

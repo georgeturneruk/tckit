@@ -14,6 +14,8 @@ internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
 
     public string PathName => ComRetry.Invoke(() => (string)_item.PathName);
 
+    public int ItemType => ComRetry.Invoke(() => (int)_item.ItemType);
+
     public int ChildCount => ComRetry.Invoke(() => (int)_item.ChildCount);
 
     public string DeclarationText
@@ -60,6 +62,8 @@ internal sealed class ComTcSession : ITcSession
     private readonly dynamic _dte;
 
     public ComTcSession() => _dte = Attach();
+
+    public string SolutionPath => ComRetry.Invoke(() => (string)_dte.Solution.FullName);
 
     public void UseSolution(string path)
     {

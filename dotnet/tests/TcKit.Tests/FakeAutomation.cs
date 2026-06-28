@@ -21,6 +21,7 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
     public IReadOnlyList<FakeTreeItem> Children => _children;
 
     public string PathName => Parent is null ? Name : $"{Parent.PathName}^{Name}";
+    public int ItemType => Kind;
     public int ChildCount => _children.Count;
 
     public string DeclarationText
@@ -48,6 +49,17 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
 
     public ITcTreeItem CreateChild(string name, int kind, object? before, object? vInfo)
     {
+        // XAE names property accessors "Get"/"Set" regardless of the (empty) name passed in.
+        if (string.IsNullOrEmpty(name))
+        {
+            name = kind switch
+            {
+                TcKind.PropertyGet or TcKind.InterfacePropertyGet => "Get",
+                TcKind.PropertySet or TcKind.InterfacePropertySet => "Set",
+                _ => name,
+            };
+        }
+
         var child = new FakeTreeItem(name, kind) { Parent = this, VInfo = vInfo };
         _children.Add(child);
         return child;
@@ -91,6 +103,8 @@ internal sealed class FakeSysManager(FakeTreeItem tipc) : ITcSysManager
 internal sealed class FakeSession(params ITcSysManager[] sysManagers) : ITcSession
 {
     private readonly IReadOnlyList<ITcSysManager> _sysManagers = sysManagers;
+
+    public string SolutionPath { get; init; } = "";
 
     public int SaveCount { get; private set; }
 

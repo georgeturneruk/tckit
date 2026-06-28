@@ -211,3 +211,10 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   fake (46 tests total). Resolves the typed-interop open question (dynamic + seam,
   not typed); the live COM wrapper still needs an on-XAE smoke against a
   throwaway/demo solution. update / delete / library verbs next.
+- 2026-06-28: update + delete verbs added on the seam: update_pou_declaration /
+  _implementation / _method_body and the three anchored _patch variants; delete_pou
+  (with a file-side .TcTTO task-binding refusal for PROGRAMs), delete_method,
+  delete_property (accessor cascade), delete_gvl, delete_dut, delete_folder
+  (recursive + kind validation). 61 tests pass against the fake. Remaining writer
+  verbs: add_variable / delete_variable, library refs/placeholders, add_plc_project,
+  save_plc_as_library, create_project; then the live COM smoke.
