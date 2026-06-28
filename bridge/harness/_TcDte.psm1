@@ -475,6 +475,67 @@ function Resolve-TcPlcName {
     return $names[0]
 }
 
+function Resolve-TcSolutionConfiguration {
+    <#
+    .SYNOPSIS
+        Ensure a solution configuration is active before ActivateConfiguration,
+        so the deploy path doesn't depend on one being pre-selected in the IDE.
+
+    .DESCRIPTION
+        XAE's ITcSysManager.ActivateConfiguration throws an opaque
+        FindActiveProjectCfgName E_UNEXPECTED when no solution configuration is
+        selected (issue #117). The selected configuration lives on EnvDTE's
+        SolutionBuild, not on the system manager, so we resolve it there:
+
+          * already active    -> no-op, return its name;
+          * exactly one config -> Activate() it (mirrors Resolve-TcPlcName's
+            sole-member rule);
+          * several configs    -> Activate() the first whose name starts with
+            $Prefer (default "Release", i.e. the TwinCAT RT config), else throw
+            with the candidate list.
+
+        Returns the resolved configuration name. Throws a clear, actionable
+        error rather than letting the opaque E_UNEXPECTED surface.
+    #>
+    param(
+        [Parameter(Mandatory)]$Dte,
+        [string]$Prefer = 'Release'
+    )
+    $sb = $Dte.Solution.SolutionBuild
+
+    $active = $null
+    try { $active = $sb.ActiveConfiguration } catch { $active = $null }
+    if ($null -ne $active) {
+        try { return [string]$active.Name } catch { return '' }
+    }
+
+    $configs = @()
+    try {
+        $all = $sb.SolutionConfigurations
+        for ($i = 1; $i -le $all.Count; $i++) { $configs += $all.Item($i) }
+    } catch { $configs = @() }
+
+    if ($configs.Count -eq 0) {
+        throw 'No solution configuration is available to activate. Add a build configuration in XAE (Build > Configuration Manager).'
+    }
+
+    $chosen = $null
+    if ($configs.Count -eq 1) {
+        $chosen = $configs[0]
+    } else {
+        foreach ($c in $configs) {
+            if ($c.Name -like "$Prefer*") { $chosen = $c; break }
+        }
+    }
+    if ($null -eq $chosen) {
+        $names = ($configs | ForEach-Object { $_.Name }) -join ', '
+        throw "No active solution configuration is selected and none matches '$Prefer' (available: $names). Select one in XAE (Build > Configuration Manager)."
+    }
+
+    $chosen.Activate()
+    return [string]$chosen.Name
+}
+
 function Get-TcPlcSysNode {
     <#
     .SYNOPSIS
@@ -1585,7 +1646,7 @@ public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
 
 Export-ModuleMember -Function `
     Get-TcKind, Get-TcDte, Open-TcSolution, Use-TcSolution, Get-TcSysManager, Get-TcSysManagers, `
-    Resolve-TcPlcName, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
+    Resolve-TcPlcName, Resolve-TcSolutionConfiguration, Get-TcPlcSysNode, Get-TcPlcProjectNode, Get-TcPousFolder, `
     Get-TcDutsFolder, `
     Find-TcChild, Resolve-TcFolderPath, Remove-TcTreeItem, Remove-TcPropertyNode, Set-TcItemSource, Get-TcItemSource, Test-TcInterfacePou, Split-TcCode, Find-Devenv, `
     Invoke-TcDevenvBuild, Read-TcBuildLog, Read-TcErrorList, Read-TcBuildOutput, `
