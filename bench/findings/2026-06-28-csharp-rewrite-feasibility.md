@@ -49,21 +49,41 @@ concern did not bite: NuGet unifies to 7.x and the project builds.
 - COM probes need `[STAThread]` and x64 (the AI COM server is registered in the
   64-bit hive); late-bound `dynamic` needs no interop assembly.
 
-## Not covered here (needs a live 4026 + open project)
+## On-machine spike (live 4026, same day)
 
-- DTE attach (`TcXaeShell.DTE.17.0`) + a real `add_pou`. The COM mechanism is
-  proven via the headless RM path; the authoring lane uses DTE (same IDispatch
-  plumbing) but is unproven end-to-end.
-- `read_symbols` via `Beckhoff.TwinCAT.Ads` / TwinSharp against a running
-  runtime.
-- Typed `TCatSysManagerLib` interop (production form; the probe used `dynamic`).
+Run against a live XAE (TcXaeShell 17.0, solution `C:\tckitdemo\T3TckitUtils.sln`)
+with the bridge healthy on `:8765`. All from a net8 build:
+
+- **DTE attach.** `Marshal.GetActiveObject` was removed from .NET Core/8, so net8
+  attaches via a P/Invoke of `GetActiveObject` (oleaut32) + `CLSIDFromProgID`
+  (ole32). Attached `TcXaeShell.DTE.17.0`, read the open solution and both
+  TwinCAT projects. **Concrete requirement for the COM adapter.**
+- **Tree read.** Walked the doubled-name path (`TIPC^<plc>^<plc> Project^POUs`)
+  and listed the real POU tree.
+- **`add_pou` authoring.** `pous.CreateChild("FB_CsSpike", 604, null, null)`
+  authored the POU (verified PathName), then `DeleteChild` removed it; the
+  solution was not saved, so disk was untouched. The hard, no-library lane works
+  from net8 against the live project.
+- **ADS.** The `Beckhoff.TwinCAT.Ads` client links and reaches the AMS router
+  from net8 (proper ADS-level errors returned through a working client). A symbol
+  value read was not possible because no PLC runtime is currently in Run on the
+  target (`192.168.0.142.1.1:851` -> AdsErrorCode 6, port not found), the same
+  precondition the bridge's reader requires. Not a feasibility gap.
+- **MCP server.** Completes a real stdio `initialize` handshake (`serverInfo:
+  TcKit.Server`, tools capability). Found and fixed a bug: the host logger wrote
+  to stdout, which corrupts the JSON-RPC channel; logs now go to stderr.
+
+## Remaining for full coverage
+
+- ADS symbol value read end-to-end, blocked only on a runtime in Run (deploy + start).
 - SSE transport, separate-machines.
+- Typed `TCatSysManagerLib` interop (the spike used late-bound `dynamic`).
 
 ## Verdict
 
-The language / platform / dependency risk for ADR-0015 is retired: COM drives
-from C#/net8 with bridge-parity behaviour, and the three core dependencies
-coexist on net8. What remains is integration against live hardware, not
-feasibility. Confidence is high; the dominant remaining variable is constant
-access to a 4026 system for per-tool validation, not any open technical
-question.
+Feasibility is settled, including the hardest lane. COM authoring (DTE attach +
+`add_pou`) is proven from net8 against a live 4026; ADS links and routes from
+net8; the dependency stack builds; the MCP server completes a real stdio
+handshake. The COM adapter must use the `GetActiveObject` P/Invoke on net8. What
+remains is ordinary integration (a running runtime for ADS values, SSE wiring)
+and the per-tool port, not open technical risk.

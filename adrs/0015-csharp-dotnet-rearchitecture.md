@@ -21,20 +21,18 @@ TcUnit-Runner as the reference for COM bring-up; MCP is the official .NET SDK
 with stdio + SSE transports, and the project stays MIT. Sharp cutover on a branch, with the existing
 Python stack kept as a parity oracle until every tool matches.
 
-**Where it lives:** Committed; implementation not yet started. Off-machine
-feasibility retired (see
-[finding](../bench/findings/2026-06-28-csharp-rewrite-feasibility.md)).
-Execution begins with the on-machine Phase 0 spike against a live 4026 project,
-now the first build step rather than a kill-gate.
+**Where it lives:** Committed; scaffold on `feat/csharp-rewrite`. Both off- and
+on-machine feasibility now retired against a live 4026 (see
+[finding](../bench/findings/2026-06-28-csharp-rewrite-feasibility.md)): net8 DTE
+attach + tree read + self-cleaning `add_pou` authoring, the dependency stack, and
+a real MCP stdio handshake all work. The per-tool port is the remaining work.
 
-**Open questions:** What the feasibility spike could not cover off-machine, all
-needing a live 4026 + open project:
-- DTE attach (`TcXaeShell.DTE.17.0`) + a real `add_pou` (the COM mechanism is
-  proven via the headless RM path; the authoring lane uses DTE, unproven
-  end-to-end).
-- `read_symbols` via `Beckhoff.TwinCAT.Ads` / TwinSharp against a running
-  runtime; typed `TCatSysManagerLib` interop (the probe used `dynamic`).
+**Open questions:** Narrowed after the on-machine spike. Remaining:
+- ADS symbol value read end-to-end (proven to link and route from net8; blocked
+  only on a PLC runtime in Run on the target).
 - SSE working for the separate-machines case.
+- Typed `TCatSysManagerLib` interop (the spike used late-bound `dynamic`; the
+  port moves to typed interop).
 
 ## Context
 
@@ -163,3 +161,9 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
 - 2026-06-28: Promoted to `Accepted`. The rewrite is committed; the on-machine
   Phase 0 spike is now the first execution step (confirmation of DTE-attach
   authoring, ADS reads, and SSE), not a go/no-go that could shelve the work.
+- 2026-06-28: On-machine spike passed against a live 4026 (see finding). net8 DTE
+  attach (via a `GetActiveObject` P/Invoke, since `Marshal.GetActiveObject` is
+  gone from .NET Core/8), tree read, and self-cleaning `add_pou` authoring all
+  work against the open solution; ADS links and routes from net8; the MCP server
+  completes a real stdio handshake. The highest-risk lane (COM authoring) is
+  proven; scaffold committed on `feat/csharp-rewrite`.
