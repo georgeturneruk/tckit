@@ -60,6 +60,19 @@ try {
         }
     }
 
+    # Declared up front so the partial-failure cleanup in catch can reference
+    # them even when we throw before they're assigned (Set-StrictMode is on).
+    # NB: do not init $plcName here — PowerShell variable names are
+    # case-insensitive, so it aliases the $PlcName parameter; nulling it would
+    # wipe the caller's explicit PLC name. The cleanup only runs once $sm is
+    # set, by which point $plcName has been resolved.
+    $dte = $null; $sm = $null
+    # Tracks whether THIS call created the property parent. Cleanup on failure
+    # must only remove a property we created — never one that already existed
+    # (a re-add hits "already exists" on the parent CreateChild before this
+    # flips true, so the pre-existing property is left untouched).
+    $propCreated = $false
+
     $dte = Get-TcDte -ComVersion $ComVersion -Mode $XaeMode
     Use-TcSolution -Dte $dte -Path $ProjectPath | Out-Null
     $plcName = Resolve-TcPlcName -Dte $dte -Explicit $PlcName
@@ -80,36 +93,38 @@ try {
     if ($null -eq $pou) { return @{ success = $false; error = "POU '$PouName' not found." } }
 
     # Properties under an INTERFACE need different CreateChild kinds (612 /
-    # 654 / 655) and a different vInfo shape than properties under an FB.
+    # 654 / 655) and a different parent vInfo shape than properties under an FB.
     # Mirrors the InterfaceMethod branch in Add-TcMethod.ps1.
     #
-    # vInfo shape (see Beckhoff samples, TC_AI_DOTNET_Samples
+    # Parent vInfo (see Beckhoff samples, TC_AI_DOTNET_Samples
     # GeneratePlcProject.cs:1106-1119 for FB, :213-216 for interface):
     #
     #   FB property parent:   [language, return_type, access_modifier]
-    #   FB property Get/Set:  [language, access_modifier, body_xml_seed]
     #   ITF property parent:  return_type as a single string
-    #   ITF property Get/Set: $null
     #
-    # Set-TcItemSource overwrites the seed body straight after, so the body
-    # XML in vInfo[2] is only the initial placeholder XAE generates while
-    # the tree item is being constructed.
+    # Accessor vInfo is $null for BOTH kinds. An FB accessor used to be seeded
+    # with [language, access_modifier, body_xml_seed], but that seed array makes
+    # CreateChild fail with "Element not found!" when the property's POU lives in
+    # a SUBFOLDER (e.g. POUs/RingBuffer) — the parent is created, then the Get
+    # CreateChild throws, leaving an orphan. Passing $null (as the interface
+    # branch always has) creates the accessor with XAE's default PUBLIC / VAR..
+    # END_VAR declaration; Set-TcItemSource then writes the real body, which is
+    # what overwrote the seed anyway. So the seed bought nothing and cost the
+    # subfolder case.
     $isInterface = Test-TcInterfacePou -Item $pou
     if ($isInterface) {
         $kindProperty = Get-TcKind -Type 'interface_property'
         $kindGet      = Get-TcKind -Type 'interface_property_get'
         $kindSet      = Get-TcKind -Type 'interface_property_set'
         $propertyVInfo = [object]$ReturnType
-        $getVInfo      = $null
-        $setVInfo      = $null
     } else {
         $kindProperty = Get-TcKind -Type 'property'
         $kindGet      = Get-TcKind -Type 'property_get'
         $kindSet      = Get-TcKind -Type 'property_set'
         $propertyVInfo = [string[]]@('ST', $ReturnType, 'PUBLIC')
-        $getVInfo      = [string[]]@('ST', 'PUBLIC', '<ST><![CDATA[(* ST PropGet *)]]></ST>')
-        $setVInfo      = [string[]]@('ST', 'PUBLIC', '<ST><![CDATA[(* ST PropSet *)]]></ST>')
     }
+    $getVInfo = $null
+    $setVInfo = $null
 
     # 3rd arg (bstrBefore) is $null — insert at end. 4th arg (vInfo) shape
     # is the load-bearing thing: passing $null or a scalar string here is
@@ -117,6 +132,7 @@ try {
     # value LREAL was not found' errors. Keep the returned property item — the
     # interface branch creates its accessors directly on it.
     $propItem = $pou.CreateChild($PropertyName, $kindProperty, $null, $propertyVInfo)
+    $propCreated = $true
 
     $accessors = @()
 
@@ -141,36 +157,29 @@ try {
         if ($SetterCode) { $null = $propItem.CreateChild('', $kindSet, $null, $null); $accessors += 'Set' }
     }
     else {
-        # FB property: bodies must be written. PowerShell's apartment-threaded
-        # COM marshalling does not preserve tree-item refs across the mutating
-        # Set-TcItemSource call — re-using the parent ref between the Get and
-        # Set CreateChild calls surfaces "Item 'Get' is deleted or invalidated
-        # by an earlier operation!" on XAE versions that revalidate siblings
-        # during accessor creation. Save + LookupTreeItem on the full path
-        # gives a stable single-call reference for each accessor.
-        # Derive the property path from the created item, not by rebuilding it
-        # from $ParentFolder: when the POU is found by recursive search (no
-        # ParentFolder passed), the folder segment is unknown, so a path rebuilt
-        # as POUs^PouName drops it and LookupTreeItem fails for an FB in a
-        # subfolder. The item's own PathName is always the correct ^-delimited
-        # tree path (same property Resolve-TcParentPath splits on).
-        $propPath = $propItem.PathName
-
+        # FB property: accessors carry bodies. Create both Get/Set directly on
+        # the in-process property item (as the interface branch does), capturing
+        # each child ref, THEN write the bodies with Set-TcItemSource. This
+        # replaces the former Save + LookupTreeItem "dance" between accessors.
+        #
+        # The dance, plus a body-seed accessor vInfo, was what broke properties
+        # on an FB in a SUBFOLDER: the property parent created fine, then the Get
+        # CreateChild threw "Element not found!" and left an orphan. Two changes
+        # fix it: accessor vInfo is now $null (see the parent/accessor vInfo
+        # comment above — the seed was the actual trigger), and we no longer
+        # re-resolve the parent via LookupTreeItem (the in-process $propItem ref
+        # works at any folder depth). Creating both children before any
+        # Set-TcItemSource also avoids the "Item 'Get' is deleted or
+        # invalidated..." stale-ref the dance originally guarded against.
+        #
         # Accessor name is intentionally empty: the kind constant (613/614)
         # already identifies which accessor this is, and XAE names the child.
-        if ($GetterCode) {
-            $propParent = $sm.LookupTreeItem($propPath)
-            $getItem = $propParent.CreateChild('', $kindGet, $null, $getVInfo)
-            Set-TcItemSource -Item $getItem -Code $GetterCode
-            Save-TcSolution -Dte $dte  # flush tree mutations before adding sibling
-            $accessors += 'Get'
-        }
-        if ($SetterCode) {
-            $propParent = $sm.LookupTreeItem($propPath)
-            $setItem = $propParent.CreateChild('', $kindSet, $null, $setVInfo)
-            Set-TcItemSource -Item $setItem -Code $SetterCode
-            $accessors += 'Set'
-        }
+        $getItem = $null
+        $setItem = $null
+        if ($GetterCode) { $getItem = $propItem.CreateChild('', $kindGet, $null, $getVInfo); $accessors += 'Get' }
+        if ($SetterCode) { $setItem = $propItem.CreateChild('', $kindSet, $null, $setVInfo); $accessors += 'Set' }
+        if ($null -ne $getItem) { Set-TcItemSource -Item $getItem -Code $GetterCode }
+        if ($null -ne $setItem) { Set-TcItemSource -Item $setItem -Code $SetterCode }
     }
 
     Save-TcSolution -Dte $dte
@@ -187,5 +196,20 @@ try {
     }
 }
 catch {
-    return @{ success = $false; error = $_.Exception.Message }
+    $err = $_.Exception.Message
+    # A CreateChild / Set-TcItemSource failure can leave a partially created
+    # property (parent node, maybe a Get accessor) behind. Remove it so the
+    # operation stays idempotent — a retry must not hit "already exists".
+    # Re-resolve the POU freshly rather than trusting a possibly-stale ref.
+    try {
+        if ($propCreated -and $null -ne $sm -and $PouName -and $PropertyName) {
+            $pousCleanup = Get-TcPousFolder -SysManager $sm -PlcName $plcName
+            $pouCleanup = Find-TcChild -Root $pousCleanup -Name $PouName
+            if ($null -ne $pouCleanup -and $pouCleanup.Name -ne $pousCleanup.Name) {
+                $null = Remove-TcPropertyNode -Pou $pouCleanup -PropertyName $PropertyName -BestEffort
+                Save-TcSolution -Dte $dte
+            }
+        }
+    } catch { }
+    return @{ success = $false; error = $err }
 }
