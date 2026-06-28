@@ -1,0 +1,8 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+*.user
+
+# Test / coverage artefacts
+[Tt]est[Rr]esults/
+*.trx
