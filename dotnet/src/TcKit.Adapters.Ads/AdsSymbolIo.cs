@@ -1,0 +1,96 @@
+using System.Globalization;
+using TcKit.Core.Models;
+using TcKit.Core.Ports;
+using TwinCAT.Ads;
+
+namespace TcKit.Adapters.Ads;
+
+/// <summary>
+/// ADS <see cref="ISymbolIo"/>: symbol read/write and RPC invocation on a running PLC runtime. Thin
+/// shell over <see cref="SymbolOperations"/> (seam-driven, unit-tested against a fake); failures map
+/// to the Result error contract. The live ADS specifics live in <see cref="AdsSymbolSession"/>.
+/// </summary>
+public sealed class AdsSymbolIo : ISymbolIo
+{
+    private readonly ISymbolSessionFactory _factory;
+
+    public AdsSymbolIo()
+        : this(new AdsSymbolSessionFactory())
+    {
+    }
+
+    internal AdsSymbolIo(ISymbolSessionFactory factory) => _factory = factory;
+
+    public Task<IReadOnlyDictionary<string, string?>> ReadSymbolsAsync(
+        string targetAmsId, IReadOnlyList<string> paths, CancellationToken cancellationToken)
+        => Task.Run(() => SymbolOperations.ReadSymbols(_factory, targetAmsId, paths), cancellationToken);
+
+    public Task<Result> WriteSymbolsAsync(
+        string targetAmsId, IReadOnlyDictionary<string, object?> writes, CancellationToken cancellationToken)
+        => Task.Run(() => Guarded(() => SymbolOperations.WriteSymbols(_factory, targetAmsId, writes)), cancellationToken);
+
+    public Task<Result> InvokeRpcAsync(
+        string targetAmsId, string symbolPath, string methodName, IReadOnlyList<object?> parameters,
+        CancellationToken cancellationToken)
+        => Task.Run(
+            () => Guarded(() => SymbolOperations.InvokeRpc(_factory, targetAmsId, symbolPath, methodName, parameters)),
+            cancellationToken);
+
+    private static Result Guarded(Func<Result> call)
+    {
+        try
+        {
+            return call();
+        }
+#pragma warning disable CA1031 // The adapter boundary funnels every failure into the Result error contract.
+        catch (Exception exc)
+        {
+            return Result.Fail(exc.Message);
+        }
+#pragma warning restore CA1031
+    }
+}
+
+/// <summary>Native ADS session factory over Beckhoff.TwinCAT.Ads.</summary>
+internal sealed class AdsSymbolSessionFactory : ISymbolSessionFactory
+{
+    public ISymbolSession Open(string netId, int port) => new AdsSymbolSession(netId, port);
+}
+
+/// <summary>
+/// A live AdsClient on a PLC runtime port. ReadValue/WriteValue resolve and marshal the symbol's
+/// declared type from ADS; InvokeRpcMethod calls a {attribute 'TcRpcEnable'} method positionally.
+/// </summary>
+internal sealed class AdsSymbolSession : ISymbolSession
+{
+    private readonly AdsClient _client;
+
+    public AdsSymbolSession(string netId, int port)
+    {
+        _client = new AdsClient();
+        _client.Connect(AmsNetId.Parse(netId), port);
+    }
+
+    public string ReadValue(string path) => Render(_client.ReadValue(path));
+
+    public void WriteValue(string path, object? value)
+        => _client.WriteValue(path, value ?? throw new ArgumentNullException(nameof(value), "Cannot write a null value."));
+
+    public RpcOutcome InvokeRpc(string symbolPath, string methodName, object?[] parameters)
+    {
+        var result = _client.InvokeRpcMethod(symbolPath, methodName, parameters!);
+        return result is null
+            ? new RpcOutcome(false, null, null)
+            : new RpcOutcome(true, Render(result), result.GetType().Name);
+    }
+
+    public void Dispose() => _client.Dispose();
+
+    private static string Render(object? value) => value switch
+    {
+        null => string.Empty,
+        bool b => b ? "True" : "False",
+        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? string.Empty,
+    };
+}

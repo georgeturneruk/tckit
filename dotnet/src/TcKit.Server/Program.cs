@@ -20,6 +20,9 @@ builder.Services.AddSingleton<IProjectWriter, AutomationProjectWriter>();
 builder.Services.AddSingleton<IBuildRunner, AutomationBuildRunner>();
 builder.Services.AddSingleton<IRuntimeControl, AdsRuntimeControl>();
 builder.Services.AddSingleton<ITestRunner, TcUnitTestRunner>();
+builder.Services.AddSingleton<ISymbolIo, AdsSymbolIo>();
+builder.Services.AddSingleton<IHardwareInspector, TwinSharpHardwareInspector>();
+builder.Services.AddSingleton<IHardwareScanner, AutomationHardwareScanner>();
 
 builder.Services
     .AddMcpServer()

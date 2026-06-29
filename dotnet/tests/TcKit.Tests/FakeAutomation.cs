@@ -179,9 +179,22 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
     public FakeTreeItem? FindDirect(string name) => _children.FirstOrDefault(c => c.Name == name);
 }
 
-internal sealed class FakeSysManager(FakeTreeItem tipc) : ITcSysManager
+internal sealed class FakeSysManager : ITcSysManager
 {
-    public FakeTreeItem Tipc { get; } = tipc;
+    private readonly Dictionary<string, FakeTreeItem> _roots = new(StringComparer.Ordinal);
+
+    /// <summary>The TIPC tree is the primary root; pass extra roots (e.g. a "TIID" I/O tree) to model them.</summary>
+    public FakeSysManager(FakeTreeItem tipc, params FakeTreeItem[] extraRoots)
+    {
+        Tipc = tipc;
+        _roots[tipc.Name] = tipc;
+        foreach (var root in extraRoots)
+        {
+            _roots[root.Name] = root;
+        }
+    }
+
+    public FakeTreeItem Tipc { get; }
 
     public string? TargetNetId { get; private set; }
     public bool Activated { get; private set; }
@@ -193,12 +206,11 @@ internal sealed class FakeSysManager(FakeTreeItem tipc) : ITcSysManager
     public ITcTreeItem LookupTreeItem(string path)
     {
         var parts = path.Split('^');
-        if (parts.Length == 0 || parts[0] != Tipc.Name)
+        if (parts.Length == 0 || !_roots.TryGetValue(parts[0], out var node))
         {
-            throw new InvalidOperationException($"Tree path does not start at '{Tipc.Name}': '{path}'.");
+            throw new InvalidOperationException($"Tree path root not found: '{path}'.");
         }
 
-        var node = Tipc;
         for (var i = 1; i < parts.Length; i++)
         {
             node = node.FindDirect(parts[i])

@@ -108,6 +108,66 @@ async Task<int> RunBuildTestVerb()
             return EmitObj(result, result.Success);
         }
 
+        case "read-symbols" when pos.Length >= 1:
+        {
+            var values = await new AdsSymbolIo()
+                .ReadSymbolsAsync(pos[0], pos[1..], ct)
+                .ConfigureAwait(false);
+            return Emit(new { success = true, values });
+        }
+
+        case "write-symbols" when pos.Length >= 2:
+        {
+            var result = await new AdsSymbolIo()
+                .WriteSymbolsAsync(pos[0], ParseWrites(Code(pos[1])), ct)
+                .ConfigureAwait(false);
+            return EmitResult(result);
+        }
+
+        case "invoke-rpc" when pos.Length >= 3:
+        {
+            var result = await new AdsSymbolIo()
+                .InvokeRpcAsync(pos[0], pos[1], pos[2], ParseParams(OptOr("params", "[]")), ct)
+                .ConfigureAwait(false);
+            return EmitResult(result);
+        }
+
+        case "list-ethercat-masters" when pos.Length >= 1:
+        {
+            var masters = await new TwinSharpHardwareInspector()
+                .ListEtherCatMastersAsync(pos[0], ct).ConfigureAwait(false);
+            return Emit(new { success = true, masters });
+        }
+
+        case "get-ethercat-status" when pos.Length >= 1:
+        {
+            var status = await new TwinSharpHardwareInspector()
+                .GetEtherCatStatusAsync(pos[0], OptOr("master", ""), ct).ConfigureAwait(false);
+            return Emit(status);
+        }
+
+        case "get-ipc-hardware" when pos.Length >= 1:
+        {
+            var ipc = await new TwinSharpHardwareInspector()
+                .GetIpcHardwareAsync(pos[0], ct).ConfigureAwait(false);
+            return Emit(ipc);
+        }
+
+        case "list-axes" when pos.Length >= 1:
+        {
+            var axes = await new TwinSharpHardwareInspector()
+                .ListAxesAsync(pos[0], ct).ConfigureAwait(false);
+            return Emit(new { success = true, axes });
+        }
+
+        case "get-axis-state" when pos.Length >= 2:
+        {
+            var axisId = int.Parse(pos[1], System.Globalization.CultureInfo.InvariantCulture);
+            var axis = await new TwinSharpHardwareInspector()
+                .GetAxisStateAsync(pos[0], axisId, ct).ConfigureAwait(false);
+            return Emit(new { success = true, axes = new[] { axis } });
+        }
+
         default:
             return await RunWriteVerb().ConfigureAwait(false);
     }
@@ -115,6 +175,23 @@ async Task<int> RunBuildTestVerb()
 
 async Task<int> RunWriteVerb()
 {
+    switch (args[0])
+    {
+        case "scan-hardware":
+        {
+            using var scanner = new AutomationHardwareScanner();
+            return Emit(await scanner.ScanHardwareAsync(ct).ConfigureAwait(false));
+        }
+
+        case "scaffold-hardware-code":
+        {
+            using var scanner = new AutomationHardwareScanner();
+            var gvl = pos.Length >= 1 ? pos[0] : "HardwareIO";
+            return EmitResult(await scanner
+                .ScaffoldHardwareCodeAsync(gvl, Opt("plc"), OptOr("parent", ""), ct).ConfigureAwait(false));
+        }
+    }
+
     using var writer = new AutomationProjectWriter();
     switch (args[0])
     {
@@ -301,6 +378,20 @@ static DutKind ParseDutKind(string value) => value.Trim().ToLowerInvariant() swi
     _ => throw new ArgumentException($"Unknown dutKind '{value}'."),
 };
 
+static IReadOnlyDictionary<string, object?> ParseWrites(string json)
+{
+    var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(json)
+        ?? throw new ArgumentException("writes must be a JSON object of symbol path -> value.");
+    return parsed.ToDictionary(kv => kv.Key, kv => (object?)kv.Value, StringComparer.Ordinal);
+}
+
+static IReadOnlyList<object?> ParseParams(string json)
+{
+    var parsed = System.Text.Json.JsonSerializer.Deserialize<List<System.Text.Json.JsonElement>>(json)
+        ?? throw new ArgumentException("params must be a JSON array of positional parameters.");
+    return parsed.Select(e => (object?)e).ToList();
+}
+
 static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? ParseParameters(string? json)
 {
     if (string.IsNullOrWhiteSpace(json))
@@ -346,10 +437,22 @@ static void PrintUsage()
     Console.WriteLine("  set-placeholder-parameters <name> <paramsJson> [--plc <name>]");
     Console.WriteLine("  delete-placeholder <name> [--plc <name>]");
     Console.WriteLine("  save-plc-as-library <output> [--no-install] [--repo System] [--overwrite] [--plc <name>]");
+    Console.WriteLine("  scan-hardware");
+    Console.WriteLine("  scaffold-hardware-code [<gvlName>] [--plc <name>] [--parent <folder>]");
     Console.WriteLine("build / test / deploy verbs:");
     Console.WriteLine("  build [--plc <name>] [--force-log]");
     Console.WriteLine("  deploy <targetAmsId> [--plc <name>] [--no-autostart]");
     Console.WriteLine("  start-runtime <targetAmsId>");
     Console.WriteLine("  run-tests <targetAmsId> [--plc <name>] [--no-wait] [--timeout 120]");
     Console.WriteLine("  get-test-results <targetAmsId> [--plc <name>] [--xml <path>]");
+    Console.WriteLine("symbol I/O verbs (ADS; target must be in Run mode):");
+    Console.WriteLine("  read-symbols <targetAmsId> <path> [<path> ...]");
+    Console.WriteLine("  write-symbols <targetAmsId> <writesJson|@file>");
+    Console.WriteLine("  invoke-rpc <targetAmsId> <symbolPath> <methodName> [--params <json>]");
+    Console.WriteLine("hardware diagnostics verbs (ADS / TwinSharp):");
+    Console.WriteLine("  list-ethercat-masters <targetAmsId>");
+    Console.WriteLine("  get-ethercat-status <targetAmsId> [--master <netId>]");
+    Console.WriteLine("  get-ipc-hardware <targetAmsId>");
+    Console.WriteLine("  list-axes <targetAmsId>");
+    Console.WriteLine("  get-axis-state <targetAmsId> <axisId>");
 }

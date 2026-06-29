@@ -24,16 +24,36 @@ adapter lane; until then call get_structure first in a session.
 
 ## ADS / hardware (port early; TwinSharp + Beckhoff.TwinCAT.Ads)
 
-- [ ] read_symbols
-- [ ] write_symbols
-- [ ] invoke_rpc
-- [ ] get_ethercat_status
-- [ ] list_ethercat_masters
-- [ ] get_ipc_hardware
-- [ ] get_axis_state
-- [ ] list_axes
-- [ ] scan_hardware
-- [ ] scaffold_hardware_code
+The eight ADS-native tools are ported behind two seams so the orchestration and decoding are
+CI-tested against fakes without a live runtime: symbol I/O (`ISymbolSessionFactory` →
+`AdsSymbolIo`, native `AdsClient.ReadValue/WriteValue/InvokeRpcMethod`) and hardware diagnostics
+(`IHardwareSource` → `TwinSharpHardwareInspector`, native TwinSharp `TcSystem`/`IPC`/`NC`). The
+pure decoding (EtherCAT slave state names + link health, master device-state flags, axis state
+name, UPS power/battery health) lives in `HardwareDecode` and is unit-tested directly. All eight
+are exposed as `TcKit.Cli` verbs and MCP tools; write_symbols / invoke_rpc gate on confirmed=true
+at the tool boundary. **Live validation against a real 4026 is still pending** (no live target in
+the porting session); the IPC reads in particular (CPU frequency units, router-memory mapping)
+want a live cross-check.
+
+- [x] read_symbols — CI-tested (fake); live-validation pending
+- [x] write_symbols — best-effort per-path errors + confirmed gate; CI-tested (fake); live pending
+- [x] invoke_rpc — confirmed gate; CI-tested (fake); live pending
+- [x] get_ethercat_status — master flags + slave decode CI-tested; live pending
+- [x] list_ethercat_masters — CI-tested (fake); live pending
+- [x] get_ipc_hardware — module mapping CI-tested (fake); live pending (units cross-check)
+- [x] get_axis_state — axis lookup + state-name decode CI-tested; live pending
+- [x] list_axes — CI-tested (fake); live pending
+
+scan_hardware and scaffold_hardware_code are **not** ADS — they navigate the TIID I/O tree over
+the COM Automation Interface (and scaffold_hardware_code also reuses add_gvl), so they ride the
+automation seam (`IHardwareScanner` → `AutomationHardwareScanner`, delegating to
+`ProjectAuthor.ScanHardware` / `ScaffoldHardwareCode`). The terminal-name parsing, the device
+catalogue, the GVL codegen, and the TIID topology build are all CI-tested against the in-memory
+fake; scaffold stays atomic within one COM session. Exposed as `TcKit.Cli` verbs and MCP tools.
+**Live validation against a real 4026 is still pending.**
+
+- [x] scan_hardware — TIID walk + name parsing CI-tested (fake); live pending
+- [x] scaffold_hardware_code — catalogue + codegen + add_gvl reuse CI-tested (fake); live pending
 
 ## Build / test / deploy
 
