@@ -27,6 +27,10 @@ internal static class InfosysParser
 {
     private static readonly HtmlParser Parser = new();
 
+    // A Beckhoff order number, e.g. EL3004, EPP1008-0001 — used to drop comparison-header rows.
+    private static readonly Regex OrderNumberLike =
+        new(@"^[A-Z]{2,4}\d{3,4}(-\d{3,4})?$", RegexOptions.Compiled);
+
     private static readonly string[] InputHeadings =
         ["var_input", "input", "inputs", "varat_eingang", "eingang"];
 
@@ -157,14 +161,19 @@ internal static class InfosysParser
         return string.IsNullOrEmpty(value) ? null : value;
     }
 
-    /// <summary>Return the href of the first anchor whose visible text equals <paramref name="text"/>
-    /// (case-insensitive, whitespace-normalised), or null. Used to resolve a terminal's page from a
-    /// product-overview table where the order number is the link text.</summary>
-    public static string? FindLinkByText(IDocument doc, string text)
+    /// <summary>
+    /// Return the href of the first anchor whose visible text is the order number, or null. Matches an
+    /// exact text ("EL3004") and a variant-suffixed text whose leading token equals the order
+    /// ("EPP1008-0001" -> "EPP1008"), so EtherCAT Box modules (which list each variant in the product
+    /// overview) resolve too. Whitespace-normalised, case-insensitive.
+    /// </summary>
+    public static string? FindLinkByOrder(IDocument doc, string order)
     {
         foreach (var a in doc.QuerySelectorAll("a[href]"))
         {
-            if (StripText(a).Equals(text, StringComparison.OrdinalIgnoreCase))
+            var text = StripText(a);
+            if (text.Equals(order, StringComparison.OrdinalIgnoreCase)
+                || text.Split(' ', '-')[0].Equals(order, StringComparison.OrdinalIgnoreCase))
             {
                 return a.GetAttribute("href");
             }
@@ -174,43 +183,94 @@ internal static class InfosysParser
     }
 
     /// <summary>
-    /// Extract a hardware "Technical data" table as property/value rows. Infosys renders it as a
-    /// two-column table whose first row reads "Technical data | &lt;order number&gt;"; rows with fewer
-    /// than two cells (sub-headings) are skipped. Returns an empty list when no such table is present.
+    /// Extract a hardware "Technical data" table as property/value rows. Each row contributes its last
+    /// two non-empty cells (so a 2-column EL table "property | value" and a 3-column EtherCAT Box table
+    /// "category | property | value" both yield property/value). A table explicitly marked "Technical
+    /// data" (first row, caption, or a preceding heading) is preferred; otherwise the richest
+    /// property/value table on the page is used, which suits the dedicated technical-data page
+    /// find_hardware navigates to. Returns an empty list when nothing table-like is found.
     /// </summary>
     public static IReadOnlyList<TechRow> ExtractTechnicalData(IDocument doc)
     {
-        foreach (var table in doc.QuerySelectorAll("table"))
+        var tables = doc.QuerySelectorAll("table");
+
+        foreach (var table in tables)
         {
-            var trs = table.QuerySelectorAll("tr");
-            if (trs.Length == 0)
+            if (IsMarkedTechnicalData(table))
             {
-                continue;
-            }
-
-            var header = string.Join(" ", trs[0].QuerySelectorAll("td, th").Select(StripText)).ToLowerInvariant();
-            if (!header.Contains("technical data", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var rows = new List<TechRow>();
-            foreach (var tr in trs.Skip(1))
-            {
-                var cells = tr.QuerySelectorAll("td, th").Select(StripText).ToList();
-                if (cells.Count >= 2 && cells[0].Length > 0)
+                var marked = ParseKeyValueRows(table);
+                if (marked.Count > 0)
                 {
-                    rows.Add(new TechRow(cells[0], cells[1]));
+                    return marked;
                 }
-            }
-
-            if (rows.Count > 0)
-            {
-                return rows;
             }
         }
 
-        return [];
+        var best = new List<TechRow>();
+        foreach (var table in tables)
+        {
+            var rows = ParseKeyValueRows(table);
+            if (rows.Count > best.Count)
+            {
+                best = rows;
+            }
+        }
+
+        // A handful of rows guards against picking up an incidental two-cell table.
+        return best.Count >= 3 ? best : [];
+    }
+
+    private static List<TechRow> ParseKeyValueRows(IElement table)
+    {
+        var rows = new List<TechRow>();
+        foreach (var tr in table.QuerySelectorAll("tr"))
+        {
+            var cells = tr.QuerySelectorAll("td, th").Select(StripText).Where(c => c.Length > 0).ToList();
+            if (cells.Count < 2)
+            {
+                continue;
+            }
+
+            var property = cells[^2];
+            if (property.Equals("technical data", StringComparison.OrdinalIgnoreCase)
+                || OrderNumberLike.IsMatch(property))
+            {
+                // The "Technical data | <order>" header row, or an EtherCAT Box comparison header
+                // whose cells are the variant order numbers (e.g. EPP1008-0001 | EPP1018-0001).
+                continue;
+            }
+
+            rows.Add(new TechRow(property, cells[^1]));
+        }
+
+        return rows;
+    }
+
+    private static bool IsMarkedTechnicalData(IElement table)
+    {
+        var firstRow = table.QuerySelector("tr");
+        if (firstRow is not null
+            && string.Join(" ", firstRow.QuerySelectorAll("td, th").Select(StripText))
+                .Contains("technical data", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var caption = table.QuerySelector("caption");
+        if (caption is not null && StripText(caption).Contains("technical data", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        for (var sib = table.PreviousElementSibling; sib is not null; sib = sib.PreviousElementSibling)
+        {
+            if (sib.TagName is "H1" or "H2" or "H3" or "H4" or "H5" or "H6" or "P" or "CAPTION" or "STRONG" or "B")
+            {
+                return StripText(sib).Contains("technical data", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        return false;
     }
 
     // -----------------------------------------------------------------------

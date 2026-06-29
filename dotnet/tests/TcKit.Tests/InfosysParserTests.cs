@@ -133,13 +133,61 @@ public sealed class InfosysParserTests
     }
 
     [Fact]
-    public void FindLinkByText_ResolvesAnchorByExactText()
+    public void ExtractTechnicalData_HeadingMarkedThreeColumnTable()
     {
-        const string html = "<html><body>"
-            + "<a href=\"x.html\">EL3001</a><a href=\"t.html\">EL3004</a></body></html>";
+        // EtherCAT Box layout: a preceding "Technical data" heading and a category|property|value
+        // table (category cells span rows). Property/value come from the last two non-empty cells.
+        const string html = """
+            <html><body>
+              <h2>Technical data</h2>
+              <table>
+                <tr><td>EtherCAT P</td><td>Connection</td><td>2 x M8 socket</td></tr>
+                <tr><td></td><td>Supply voltage</td><td>24 V</td></tr>
+                <tr><td>Inputs</td><td>Number</td><td>8</td></tr>
+              </table>
+            </body></html>
+            """;
         using var doc = InfosysParser.Parse(html);
 
-        Assert.Equal("t.html", InfosysParser.FindLinkByText(doc, "EL3004"));
-        Assert.Null(InfosysParser.FindLinkByText(doc, "EL9999"));
+        var rows = InfosysParser.ExtractTechnicalData(doc);
+
+        Assert.Equal(3, rows.Count);
+        Assert.Equal(new TechRow("Connection", "2 x M8 socket"), rows[0]);
+        Assert.Equal(new TechRow("Supply voltage", "24 V"), rows[1]); // spanned category dropped
+        Assert.Equal(new TechRow("Number", "8"), rows[2]);
+    }
+
+    [Fact]
+    public void ExtractTechnicalData_DropsComparisonHeaderOfOrderNumbers()
+    {
+        // EtherCAT Box comparison table: the header row's cells are the variant order numbers.
+        const string html = """
+            <html><body><h2>Technical data</h2><table>
+              <tr><td>EPP1008-0001</td><td>EPP1018-0001</td></tr>
+              <tr><td>Number of inputs</td><td>8</td></tr>
+              <tr><td>Connection</td><td>8 x M8 socket</td></tr>
+            </table></body></html>
+            """;
+        using var doc = InfosysParser.Parse(html);
+
+        var rows = InfosysParser.ExtractTechnicalData(doc);
+
+        Assert.Equal(2, rows.Count); // the order-number header row is dropped
+        Assert.DoesNotContain(rows, r => r.Property.StartsWith("EPP", StringComparison.Ordinal));
+        Assert.Equal(new TechRow("Number of inputs", "8"), rows[0]);
+    }
+
+    [Fact]
+    public void FindLinkByOrder_MatchesExactAndVariantSuffix()
+    {
+        const string html = "<html><body>"
+            + "<a href=\"x.html\">EL3001</a>"
+            + "<a href=\"t.html\">EL3004</a>"
+            + "<a href=\"p.html\">EPP1008-0001</a></body></html>";
+        using var doc = InfosysParser.Parse(html);
+
+        Assert.Equal("t.html", InfosysParser.FindLinkByOrder(doc, "EL3004"));    // exact
+        Assert.Equal("p.html", InfosysParser.FindLinkByOrder(doc, "EPP1008"));   // variant suffix
+        Assert.Null(InfosysParser.FindLinkByOrder(doc, "EL9999"));
     }
 }

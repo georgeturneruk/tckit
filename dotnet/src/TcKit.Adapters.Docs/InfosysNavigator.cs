@@ -16,18 +16,57 @@ internal static class InfosysNavigator
     public const string InfosysHost = "https://infosys.beckhoff.com";
     private const string MenuUrl = $"{InfosysHost}/english/menu/menu.php";
 
-    /// <summary>Sections searched in order of likelihood for find_fb().</summary>
+    /// <summary>
+    /// PLC-library / TF / documentation sections searched in order of likelihood for find_fb() and
+    /// search_docs(). Ordered most-common first so a find_fb hit short-circuits early. The library set
+    /// was sourced from the infosys PLC-libraries menu tree (2026-06) plus the motion libraries (which
+    /// live under a separate menu branch).
+    /// </summary>
     public static readonly IReadOnlyList<string> KnownSections =
     [
-        // Standard PLC libraries
+        // Standard / utility PLC libraries
         "tcplclib_tc2_standard",
+        "tcplclib_tc2_utilities",
         "tcplclib_tc2_math",
         "tcplclib_tc3_math",
         "tcplclib_tc3_string",
-        "tcplclib_tc2_ethercat",
-        "tcplclib_tc2_drive",
-        "tcplclib_tc2_iofunctions",
         "tcplclib_tc2_system",
+        "tcplclib_tc2_iofunctions",
+        // Motion / drives
+        "tcplclib_tc2_mc2",
+        "tcplclib_tc2_mc2_drive",
+        "tcplclib_tc2_drive",
+        // Fieldbus / communication
+        "tcplclib_tc2_ethercat",
+        "tcplclib_tc3_ethercatdiag",
+        "tcplclib_tc2_dataexchange",
+        "tcplclib_tc2_coupler",
+        "tcplclib_tc2_mdp",
+        "tcplclib_tc2_mpbus",
+        "tcplclib_tc2_mbus",
+        "tcplclib_tc2_genibus",
+        "tcplclib_tc2_profinetdiag",
+        // IO-Link
+        "tcplclib_tc3_iolink",
+        // System / utility (TC3)
+        "tcplclib_tc3_eventlogger",
+        "tcplclib_tc3_jsonxml",
+        "tcplclib_tc3_dynamicmemory",
+        "tcplclib_tc3_module",
+        "tcplclib_tc3_ipcdiag",
+        "tcplclib_tc2_sups",
+        "tcplclib_tc2_systemcx",
+        "tcplclib_tc2_systemc69xx",
+        // Building automation
+        "tcplclib_tc3_ba_common",
+        "tcplclib_tc3_ba2_common",
+        "tcplclib_tc2_dali",
+        "tcplclib_tc3_dali",
+        "tcplclib_tc2_dmx",
+        "tcplclib_tc2_eib",
+        "tcplclib_tc2_enocean",
+        "tcplclib_tc2_lon",
+        "tcplclib_tc2_smi",
         // TwinCAT Functions
         "tf6310_tc3_tcpip",
         "tf6100_tc3_opcua",
@@ -49,6 +88,8 @@ internal static class InfosysNavigator
     public static readonly IReadOnlyList<string> HardwareSections =
     [
         "ethercatsystem", "ep1xxx",
+        // EtherCAT P boxes (EPP)
+        "epp1xxx", "epp2xxx", "epp31xx", "epp5xxx",
         "el1052_el1054", "el10xx_el11xx", "el1202_el1252", "el125x_el2258", "el126x", "el1382",
         "el1409", "el1417", "el1429", "el1489", "el15xx", "el18xx",
         "el2044", "el2068", "el20xx_el2124", "el2202_el2252", "el2212", "el2262", "el2407", "el2409",

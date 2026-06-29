@@ -265,7 +265,7 @@ public sealed class BeckhoffInfosysSearcher : IDocsSearcher
             }
 
             using var doc = InfosysParser.Parse(html);
-            var href = InfosysParser.FindLinkByText(doc, order);
+            var href = InfosysParser.FindLinkByOrder(doc, order);
             if (href is not null)
             {
                 return InfosysNavigator.ToAbsolute(href, url);
@@ -289,26 +289,63 @@ public sealed class BeckhoffInfosysSearcher : IDocsSearcher
         var siblings = await InfosysNavigator
             .GetMenuLinksAsync(_client, section, contentFile, termPrimaryId, cancellationToken).ConfigureAwait(false);
 
-        var techLink = siblings.FirstOrDefault(s =>
-            s.Title.Contains("technical data", StringComparison.OrdinalIgnoreCase)
-            && s.Title.Contains(order, StringComparison.OrdinalIgnoreCase));
-        if (techLink.Url is null)
+        var techUrl = ResolveTechnicalDataUrl(siblings, order, termUrl);
+        if (techUrl is null)
         {
             return [];
         }
 
         await DelayAsync(cancellationToken).ConfigureAwait(false);
-        var html = await _client.GetAsync(techLink.Url, cancellationToken).ConfigureAwait(false);
+        var html = await _client.GetAsync(techUrl, cancellationToken).ConfigureAwait(false);
         if (html is null)
         {
             return [];
         }
 
         using var doc = InfosysParser.Parse(html);
-        SavePageCache(techLink.Url, InfosysParser.ExtractTitle(doc), InfosysParser.ExtractMainContent(doc));
+        SavePageCache(techUrl, InfosysParser.ExtractTitle(doc), InfosysParser.ExtractMainContent(doc));
         return InfosysParser.ExtractTechnicalData(doc)
             .Select(t => new TechnicalDataItem(t.Property, t.Value))
             .ToList();
+    }
+
+    /// <summary>
+    /// Pick the terminal's "Technical data" page from the expanded menu siblings. EL terminals name
+    /// the node "&lt;order&gt; - Technical data"; EtherCAT Box modules title it bare ("Technical
+    /// data"), so when no node names the order we take the first technical-data node following the
+    /// terminal page in tree order (its own subsection), falling back to the first one found.
+    /// </summary>
+    private static string? ResolveTechnicalDataUrl(
+        IReadOnlyList<(string Url, string Title)> siblings, string order, string termUrl)
+    {
+        bool IsTech((string Url, string Title) s) =>
+            s.Title.Contains("technical data", StringComparison.OrdinalIgnoreCase);
+
+        var named = siblings.FirstOrDefault(s => IsTech(s) && s.Title.Contains(order, StringComparison.OrdinalIgnoreCase));
+        if (named.Url is not null)
+        {
+            return named.Url;
+        }
+
+        var termIndex = -1;
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            if (siblings[i].Url == termUrl)
+            {
+                termIndex = i;
+                break;
+            }
+        }
+
+        for (var i = termIndex + 1; i >= 0 && i < siblings.Count; i++)
+        {
+            if (IsTech(siblings[i]))
+            {
+                return siblings[i].Url;
+            }
+        }
+
+        return siblings.FirstOrDefault(IsTech).Url;
     }
 
     private Task DelayAsync(CancellationToken cancellationToken) =>

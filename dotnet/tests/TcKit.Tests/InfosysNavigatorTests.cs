@@ -76,6 +76,28 @@ public sealed class InfosysNavigatorTests
         Assert.Empty(index);
     }
 
+    [Fact]
+    public void KnownSections_IncludeMotionAndIoLinkLibraries()
+    {
+        Assert.Contains("tcplclib_tc2_mc2", InfosysNavigator.KnownSections);
+        Assert.Contains("tcplclib_tc2_mc2_drive", InfosysNavigator.KnownSections);
+        Assert.Contains("tcplclib_tc3_iolink", InfosysNavigator.KnownSections);
+    }
+
+    [Fact]
+    public void HardwareSections_IncludeEtherCatPBoxes()
+    {
+        Assert.Contains("epp1xxx", InfosysNavigator.HardwareSections);
+        Assert.Contains("epp31xx", InfosysNavigator.HardwareSections);
+    }
+
+    [Theory]
+    [InlineData("epp1xxx", "EPP1008", true)]
+    [InlineData("epp31xx", "EPP3174", true)]
+    [InlineData("epp31xx", "EPP3204", false)]
+    public void SectionCoversOrder_HandlesEtherCatP(string slug, string order, bool expected)
+        => Assert.Equal(expected, InfosysNavigator.SectionCoversOrder(slug, order));
+
     [Theory]
     [InlineData("el30xx", "EL3004", true)]
     [InlineData("el30xx", "EL3104", false)]            // EL31xx is a different section

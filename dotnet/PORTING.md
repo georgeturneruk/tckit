@@ -98,20 +98,32 @@ are all CI-tested against canned HTML without a live infosys. Exposed as `TcKit.
 + a full `find_fb` crawl). The disk-cache JSON keys match the Python adapter's so caches interchange.
 `find_library` is on the port for completeness but, as in Python, is not exposed as a tool.
 
-- [x] find_fb — navigator + parser CI-tested (fake) + live-smoked
+`KnownSections` was broadened beyond the Python set (which missed major libraries): it now covers the
+motion libraries (`tc2_mc2`, `tc2_mc2_drive`), IO-Link (`tc3_iolink`), and the wider PLC-library set
+(fieldbus, system/utility, building automation), sourced from the infosys PLC-libraries menu tree.
+The first find_fb into a large, uncached library section is slow (the BFS crawl walks the whole
+section with a polite delay); the result is cached, so subsequent lookups are local.
+
+- [x] find_fb — navigator + parser CI-tested (fake) + live-smoked (FB_MemSet, MC_Power)
 - [x] search_docs — cached-index search (now also over the hardware sections) CI-tested (fake) + live-smoked
 - [x] get_doc_page — fetch + parse + cache CI-tested (fake) + live-smoked
 
 ### Hardware docs (net-new; no Python equivalent)
 
-`find_hardware(orderNumber)` looks up a Beckhoff hardware product by order number (EL/EK/EP/ELM/EM)
-and returns its terminal page description plus the parsed "Technical data" table. The order number is
-matched to one of the curated EtherCAT-terminal doc sections (`InfosysNavigator.HardwareSections`,
-sourced from the infosys menu tree) by an x-wildcard matcher (`SectionCoversOrder`), then resolved by
-targeted navigation: section overview -> terminal page -> menu-expand -> "&lt;order&gt; - Technical
-data" page. The matcher, the technical-data table parser, the anchor-by-text resolver, and the full
-navigation are CI-tested against the fake seam; live-smoked against real infosys (EL3004). Pairs with
-scan_hardware and the EtherCAT authoring verbs, which deal in the same order numbers.
+`find_hardware(orderNumber)` looks up a Beckhoff hardware product by order number and returns its
+terminal page description plus the parsed "Technical data" table. The order number is matched to one
+of the curated hardware doc sections (`InfosysNavigator.HardwareSections`, sourced from the infosys
+menu tree) by an x-wildcard matcher (`SectionCoversOrder`), then resolved by targeted navigation:
+section overview -> terminal page -> menu-expand -> "&lt;order&gt; - Technical data" page. The matcher,
+the technical-data table parser, the anchor-by-text resolver, and the full navigation are CI-tested
+against the fake seam; live-smoked against real infosys (EL3004, EPP1008). Pairs with scan_hardware
+and the EtherCAT authoring verbs, which deal in the same order numbers. Coverage: EtherCAT
+terminals/boxes/measurement modules (EL/EK/EP/ELM/EM) and EtherCAT P boxes (EPP).
+
+Not covered: the AX servo drives (AX5000/AX8000). Their documentation is not in the
+`/content/1033/<section>/` tree that the menu.php navigator walks, so find_hardware cannot reach it
+without a different fetch strategy. The motion/drives *programming* side is covered via `tc2_mc2` on
+the find_fb path.
 
 - [x] find_hardware — matcher + nav + technical-data parser CI-tested (fake) + live-smoked
 
