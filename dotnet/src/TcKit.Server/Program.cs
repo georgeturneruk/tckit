@@ -23,6 +23,7 @@ builder.Services.AddSingleton<ITestRunner, TcUnitTestRunner>();
 builder.Services.AddSingleton<ISymbolIo, AdsSymbolIo>();
 builder.Services.AddSingleton<IHardwareInspector, TwinSharpHardwareInspector>();
 builder.Services.AddSingleton<IHardwareScanner, AutomationHardwareScanner>();
+builder.Services.AddSingleton<IHardwareConfigurer, AutomationHardwareConfigurer>();
 
 builder.Services
     .AddMcpServer()

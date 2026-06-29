@@ -190,6 +190,26 @@ async Task<int> RunWriteVerb()
             return EmitResult(await scanner
                 .ScaffoldHardwareCodeAsync(gvl, Opt("plc"), OptOr("parent", ""), ct).ConfigureAwait(false));
         }
+
+        case "add-ethercat-master":
+        {
+            using var hw = new AutomationHardwareConfigurer();
+            var name = pos.Length >= 1 ? pos[0] : "Device 1 (EtherCAT)";
+            return EmitResult(await hw.AddEtherCatMasterAsync(name, ct).ConfigureAwait(false));
+        }
+
+        case "add-ethercat-box" when pos.Length >= 3:
+        {
+            using var hw = new AutomationHardwareConfigurer();
+            return EmitResult(await hw
+                .AddEtherCatBoxAsync(pos[0], pos[1], pos[2], OptOr("before", ""), ct).ConfigureAwait(false));
+        }
+
+        case "delete-io-device" when pos.Length >= 1:
+        {
+            using var hw = new AutomationHardwareConfigurer();
+            return EmitResult(await hw.DeleteIoDeviceAsync(pos[0], ct).ConfigureAwait(false));
+        }
     }
 
     using var writer = new AutomationProjectWriter();
@@ -439,6 +459,9 @@ static void PrintUsage()
     Console.WriteLine("  save-plc-as-library <output> [--no-install] [--repo System] [--overwrite] [--plc <name>]");
     Console.WriteLine("  scan-hardware");
     Console.WriteLine("  scaffold-hardware-code [<gvlName>] [--plc <name>] [--parent <folder>]");
+    Console.WriteLine("  add-ethercat-master [<deviceName>]");
+    Console.WriteLine("  add-ethercat-box <parentName> <boxName> <orderNumber> [--before <sibling>]");
+    Console.WriteLine("  delete-io-device <name>");
     Console.WriteLine("build / test / deploy verbs:");
     Console.WriteLine("  build [--plc <name>] [--force-log]");
     Console.WriteLine("  deploy <targetAmsId> [--plc <name>] [--no-autostart]");

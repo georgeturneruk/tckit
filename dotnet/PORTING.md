@@ -49,11 +49,25 @@ the COM Automation Interface (and scaffold_hardware_code also reuses add_gvl), s
 automation seam (`IHardwareScanner` → `AutomationHardwareScanner`, delegating to
 `ProjectAuthor.ScanHardware` / `ScaffoldHardwareCode`). The terminal-name parsing, the device
 catalogue, the GVL codegen, and the TIID topology build are all CI-tested against the in-memory
-fake; scaffold stays atomic within one COM session. Exposed as `TcKit.Cli` verbs and MCP tools.
-**Live validation against a real 4026 is still pending.**
+fake; scaffold stays atomic within one COM session. Exposed as `TcKit.Cli` verbs and MCP tools,
+and **live-validated on a real 4026** (scan enumerated a master + EK1100 + EL terminals; scaffold
+wrote the expected GVL).
 
-- [x] scan_hardware — TIID walk + name parsing CI-tested (fake); live pending
-- [x] scaffold_hardware_code — catalogue + codegen + add_gvl reuse CI-tested (fake); live pending
+- [x] scan_hardware — TIID walk + name parsing CI-tested (fake) + live-validated
+- [x] scaffold_hardware_code — catalogue + codegen + add_gvl reuse CI-tested (fake) + live-validated
+
+### I/O authoring (net-new; no Python equivalent)
+
+Hardware-configuration verbs added on top of the Python surface, behind `IHardwareConfigurer` →
+`AutomationHardwareConfigurer` (delegating to `ProjectAuthor.AddEtherCatMaster` / `AddEtherCatBox` /
+`DeleteIoDevice`). They drive `ITcSmTreeItem.CreateChild` on the I/O tree (EtherCAT master = subtype
+111, box/terminal = subtype 9099 with the order number as vInfo). CI-tested against the fake seam
+and **live-validated on a real 4026** (added a master + EK1100 + EL1008 nested under the coupler,
+scanned them back, then cascade-deleted the device).
+
+- [x] add_ethercat_master — CI-tested (fake) + live-validated
+- [x] add_ethercat_box — coupler/terminal by order number + nesting CI-tested (fake) + live-validated
+- [x] delete_io_device — name lookup + cascade CI-tested (fake) + live-validated
 
 ## Build / test / deploy
 
