@@ -9,6 +9,7 @@
 // code-bearing args accept either a literal string or '@<path>' to read a file.
 using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
+using TcKit.Adapters.Docs;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Models;
 using TcKit.Core.Serialization;
@@ -54,6 +55,18 @@ try
         case "get-dut" when pos.Length >= 2:
             await reader.GetStructureAsync(pos[0], null, ct).ConfigureAwait(false);
             return Emit(await reader.GetDutAsync(pos[1], Opt("plc"), ct).ConfigureAwait(false));
+
+        case "find-fb" when pos.Length >= 1:
+            return Emit(await new BeckhoffInfosysSearcher().FindFbAsync(pos[0], ct).ConfigureAwait(false));
+
+        case "find-hardware" when pos.Length >= 1:
+            return Emit(await new BeckhoffInfosysSearcher().FindHardwareAsync(pos[0], ct).ConfigureAwait(false));
+
+        case "search-docs" when pos.Length >= 1:
+            return Emit(await new BeckhoffInfosysSearcher().SearchAsync(pos[0], Opt("section"), ct).ConfigureAwait(false));
+
+        case "get-doc-page" when pos.Length >= 1:
+            return Emit(await new BeckhoffInfosysSearcher().GetPageAsync(pos[0], ct).ConfigureAwait(false));
 
         default:
             return await RunBuildTestVerb().ConfigureAwait(false);
@@ -433,6 +446,11 @@ static void PrintUsage()
     Console.WriteLine("  get-pou-interface | get-pou-declaration <path> <pou> [--plc <name>]");
     Console.WriteLine("  get-pou-item <path> <pou> <item> [--plc <name>]");
     Console.WriteLine("  get-gvl | get-dut <path> <name> [--plc <name>]");
+    Console.WriteLine("infosys docs verbs (network; results cached locally):");
+    Console.WriteLine("  find-fb <fbName>");
+    Console.WriteLine("  find-hardware <orderNumber>");
+    Console.WriteLine("  search-docs <query> [--section <sectionPath>]");
+    Console.WriteLine("  get-doc-page <url>");
     Console.WriteLine("write verbs (target the open XAE solution; code args accept '@<file>'):");
     Console.WriteLine("  create-project <name> <path>");
     Console.WriteLine("  add-plc-project <plcName> [--sln <path>] [--type standard]");

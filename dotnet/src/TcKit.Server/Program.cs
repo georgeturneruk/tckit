@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
+using TcKit.Adapters.Docs;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Ports;
 
@@ -24,6 +25,7 @@ builder.Services.AddSingleton<ISymbolIo, AdsSymbolIo>();
 builder.Services.AddSingleton<IHardwareInspector, TwinSharpHardwareInspector>();
 builder.Services.AddSingleton<IHardwareScanner, AutomationHardwareScanner>();
 builder.Services.AddSingleton<IHardwareConfigurer, AutomationHardwareConfigurer>();
+builder.Services.AddSingleton<IDocsSearcher>(_ => new BeckhoffInfosysSearcher());
 
 builder.Services
     .AddMcpServer()

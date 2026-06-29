@@ -89,9 +89,35 @@ with the runner publishing a real xUnit XML that get_test_results parsed.
 
 ## Docs (Beckhoff infosys)
 
-- [ ] find_fb
-- [ ] search_docs
-- [ ] get_doc_page
+The infosys searcher (`TcKit.Adapters.Docs`, `IDocsSearcher` -> `BeckhoffInfosysSearcher`) navigates
+infosys's own `menu.php` tree to build per-section title -> URL indexes, caching both the indexes and
+fetched pages to disk; no external search. HTTP sits behind an `IInfosysClient` seam so the navigator,
+HTML parser (AngleSharp, replacing BeautifulSoup), index search, URL normalisation, and disk caching
+are all CI-tested against canned HTML without a live infosys. Exposed as `TcKit.Cli` verbs (`find-fb`,
+`search-docs`, `get-doc-page`) and MCP tools, and live-smoked against real infosys (single-page fetch
++ a full `find_fb` crawl). The disk-cache JSON keys match the Python adapter's so caches interchange.
+`find_library` is on the port for completeness but, as in Python, is not exposed as a tool.
+
+- [x] find_fb — navigator + parser CI-tested (fake) + live-smoked
+- [x] search_docs — cached-index search (now also over the hardware sections) CI-tested (fake) + live-smoked
+- [x] get_doc_page — fetch + parse + cache CI-tested (fake) + live-smoked
+
+### Hardware docs (net-new; no Python equivalent)
+
+`find_hardware(orderNumber)` looks up a Beckhoff hardware product by order number (EL/EK/EP/ELM/EM)
+and returns its terminal page description plus the parsed "Technical data" table. The order number is
+matched to one of the curated EtherCAT-terminal doc sections (`InfosysNavigator.HardwareSections`,
+sourced from the infosys menu tree) by an x-wildcard matcher (`SectionCoversOrder`), then resolved by
+targeted navigation: section overview -> terminal page -> menu-expand -> "&lt;order&gt; - Technical
+data" page. The matcher, the technical-data table parser, the anchor-by-text resolver, and the full
+navigation are CI-tested against the fake seam; live-smoked against real infosys (EL3004). Pairs with
+scan_hardware and the EtherCAT authoring verbs, which deal in the same order numbers.
+
+- [x] find_hardware — matcher + nav + technical-data parser CI-tested (fake) + live-smoked
+
+The doc *generator* lane (`generate_docs`, `get_doc_status`) is a separate port (it parses local ST
+comments, not infosys) and is not part of the searcher port:
+
 - [ ] get_doc_status
 - [ ] generate_docs
 

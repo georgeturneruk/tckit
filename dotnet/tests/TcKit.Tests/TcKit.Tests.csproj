@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Adapters.Ads\TcKit.Adapters.Ads.csproj" />
+    <ProjectReference Include="..\..\src\TcKit.Adapters.Docs\TcKit.Adapters.Docs.csproj" />
   </ItemGroup>
 
 </Project>
