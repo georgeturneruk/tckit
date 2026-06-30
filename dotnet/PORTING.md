@@ -128,10 +128,22 @@ the find_fb path.
 - [x] find_hardware — matcher + nav + technical-data parser CI-tested (fake) + live-smoked
 
 The doc *generator* lane (`generate_docs`, `get_doc_status`) is a separate port (it parses local ST
-comments, not infosys) and is not part of the searcher port:
+comments, not infosys) and is not part of the searcher port. It lives in `TcKit.Adapters.DocGen`
+(`IDocGenerator` -> `DocGenerator`), self-contained: it parses the local `.TcPOU`/`.TcGVL`/`.TcDUT`
+tree into a doc model (comment auto-detection of RST line, RST block, and Beckhoff XML `<docu>`
+styles; the same variable/struct/enum and meta parsing as the Python `_doc_model`) and hand-renders
+either a self-contained HTML site or GitHub Flavoured Markdown (no Jinja, no Sphinx). The two Python
+adapters collapse into one generator selected by a `format` argument (`html` default | `markdown`).
+Adapter isolation forbids reusing the Reader's TcFileParser, so the lane carries its own slim XML
+parse. The comment extractor, doc-model parsing, and full multi-PLC output layout (ADR-0005:
+per-`.plcproj` sub-tree, per-PLC hierarchy + lunr `search-index.json`, used-by scoped within a PLC)
+are CI-tested (xUnit), and cross-checked against the Python generators on both fixtures: the rendered
+HTML is structurally identical (only insignificant inter-tag whitespace differs) and the search
+index is byte-identical after JSON canonicalisation. Exposed as a `TcKit.Cli` verb (`generate-docs`)
+and MCP tools.
 
-- [ ] get_doc_status
-- [ ] generate_docs
+- [x] get_doc_status — instance status (idle/generating/complete/error); CI-tested
+- [x] generate_docs — HTML + Markdown renderers CI-tested + oracle-checked vs Python on both fixtures
 
 ## Project / config
 

@@ -9,9 +9,11 @@
 // code-bearing args accept either a literal string or '@<path>' to read a file.
 using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
+using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Models;
+using TcKit.Core.Ports;
 using TcKit.Core.Serialization;
 
 if (args.Length == 0)
@@ -67,6 +69,10 @@ try
 
         case "get-doc-page" when pos.Length >= 1:
             return Emit(await new BeckhoffInfosysSearcher().GetPageAsync(pos[0], ct).ConfigureAwait(false));
+
+        case "generate-docs" when pos.Length >= 2:
+            return EmitResult(await new DocGenerator()
+                .GenerateAsync(pos[0], pos[1], ParseDocFormat(OptOr("format", "html")), ct).ConfigureAwait(false));
 
         default:
             return await RunBuildTestVerb().ConfigureAwait(false);
@@ -403,6 +409,13 @@ static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() swi
     _ => throw new ArgumentException($"Unknown pouType '{value}'."),
 };
 
+static DocFormat ParseDocFormat(string value) => value.Trim().ToLowerInvariant() switch
+{
+    "" or "html" => DocFormat.Html,
+    "markdown" or "md" => DocFormat.Markdown,
+    _ => throw new ArgumentException($"Unknown doc format '{value}'. Use 'html' or 'markdown'."),
+};
+
 static DutKind ParseDutKind(string value) => value.Trim().ToLowerInvariant() switch
 {
     "struct" => DutKind.Struct,
@@ -451,6 +464,8 @@ static void PrintUsage()
     Console.WriteLine("  find-hardware <orderNumber>");
     Console.WriteLine("  search-docs <query> [--section <sectionPath>]");
     Console.WriteLine("  get-doc-page <url>");
+    Console.WriteLine("doc generator verbs (local ST comments; no network):");
+    Console.WriteLine("  generate-docs <projectDir> <outputDir> [--format html|markdown]");
     Console.WriteLine("write verbs (target the open XAE solution; code args accept '@<file>'):");
     Console.WriteLine("  create-project <name> <path>");
     Console.WriteLine("  add-plc-project <plcName> [--sln <path>] [--type standard]");

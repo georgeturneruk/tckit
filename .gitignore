@@ -54,6 +54,7 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+.vs/
 *.swp
 
 # Claude Code (per-user; CLAUDE.md and .claude/skills/ stay committed)
