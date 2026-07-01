@@ -51,9 +51,10 @@ full procedure; this index just points to it.
 |-------|------------|
 | [tc-orient-project](.claude/skills/tc-orient-project/SKILL.md) | First touch on a TwinCAT project, "structural overview", "what's in this project" |
 | [tc-read-project](.claude/skills/tc-read-project/SKILL.md) | Follow-up POU / GVL / DUT lookups once orientation is done |
-| [tc-beckhoff-docs](.claude/skills/tc-beckhoff-docs/SKILL.md) | Researching a Beckhoff library FB / function / TF library |
+| [tc-beckhoff-docs](.claude/skills/tc-beckhoff-docs/SKILL.md) | Researching a Beckhoff library FB / function / TF library, or a hardware product by order number |
 | [tc-write-st](.claude/skills/tc-write-st/SKILL.md) | Writing or modifying ST code |
 | [tc-build-test-loop](.claude/skills/tc-build-test-loop/SKILL.md) | Building, deploying, running TcUnit tests |
+| [tc-hardware](.claude/skills/tc-hardware/SKILL.md) | EtherCAT/IPC/axis diagnostics, live symbol I/O, scanning or authoring the I/O tree |
 | [tc-config](.claude/skills/tc-config/SKILL.md) | Initial setup, safety stance, runtime mode, `tckit doctor` |
 | [tc-docs-write](.claude/skills/tc-docs-write/SKILL.md) | Editing anything under `docs/content/` or `README.md` |
 | [tc-adr](.claude/skills/tc-adr/SKILL.md) | Reading, writing, or promoting an ADR under `adrs/` |

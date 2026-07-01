@@ -33,9 +33,9 @@ This skill targets the stdio path (the plugin and pip installs both use it). Doc
 Ask the user, validating each:
 
 - **TARGET_AMS_ID** — AMS Net ID of their primary PLC or test VM. Validate with regex `^\d+\.\d+\.\d+\.\d+\.\d+\.\d+$` (six dot-separated octets, e.g. `192.168.1.100.1.1`). Reject anything else and ask them to retype.
-- **ALLOWED_NETIDS** — optional, comma-separated NetIds. Explain: "These bypass the confirmation gate for deploy/start_runtime. Use for test VMs, never production."
+- **ALLOWED_NETIDS** — optional, comma-separated NetIds. Explain: "These bypass the confirmation gate for Deploy/StartRuntime. Use for test VMs, never production."
 - **BLOCKED_NETIDS** — optional. Permanently rejected, cannot be bypassed.
-- **SAFETY_CONFIRMATIONS** — default `"true"`. Only set `"false"` if the user explicitly asks; explain that it disables the deploy/start_runtime gate entirely.
+- **SAFETY_CONFIRMATIONS** — default `"true"`. Only set `"false"` if the user explicitly asks; explain that it disables the Deploy/StartRuntime gate entirely.
 - **COM_VERSION** — default `"17.0"`. Don't change unless the user knows their TcXaeShell version is different.
 - **XAE_MODE** — default `"attach"`. `"headless"` is for CI.
 - **BRIDGE_URL** — default `http://localhost:8765`.
