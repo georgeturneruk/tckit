@@ -162,24 +162,39 @@ internal static class InfosysParser
     }
 
     /// <summary>
-    /// Return the href of the first anchor whose visible text is the order number, or null. Matches an
-    /// exact text ("EL3004") and a variant-suffixed text whose leading token equals the order
-    /// ("EPP1008-0001" -> "EPP1008"), so EtherCAT Box modules (which list each variant in the product
-    /// overview) resolve too. Whitespace-normalised, case-insensitive.
+    /// Return the href of the anchor whose visible text names the order number, or null. The anchor
+    /// text may carry an exact order ("EL3004"), a variant-suffixed order ("EPP1008-0001"), or one-or-
+    /// more orders in family-wildcard form ("EK110x-00xx, EK15xx", "EPI1008-000x, ERI1008-000x"). Each
+    /// comma/space/slash-separated token is matched with the same x-wildcard and variant-suffix rules
+    /// used to pick the section (<see cref="InfosysNavigator.SectionCoversOrder"/>). An exact
+    /// (variant-suffix) match is preferred over a wildcard one, so a specific "EP3174-0002" entry wins
+    /// over a broad "EP31xx-xxxx" group heading on the same overview. Whitespace-normalised,
+    /// case-insensitive.
     /// </summary>
     public static string? FindLinkByOrder(IDocument doc, string order)
     {
+        string? wildcardHref = null;
         foreach (var a in doc.QuerySelectorAll("a[href]"))
         {
             var text = StripText(a);
-            if (text.Equals(order, StringComparison.OrdinalIgnoreCase)
-                || text.Split(' ', '-')[0].Equals(order, StringComparison.OrdinalIgnoreCase))
+            foreach (var token in text.Split([',', ' ', '/'], StringSplitOptions.RemoveEmptyEntries))
             {
-                return a.GetAttribute("href");
+                // Exact: the token's base (variant suffix dropped) equals the order, e.g.
+                // "EP3174-0002" -> "EP3174". Returns at once.
+                if (token.Split('-')[0].Equals(order, StringComparison.OrdinalIgnoreCase))
+                {
+                    return a.GetAttribute("href");
+                }
+
+                // Wildcard / group: e.g. "EK110x-00xx" covers EK1100. Kept only if no exact is found.
+                if (wildcardHref is null && InfosysNavigator.SectionCoversOrder(token, order))
+                {
+                    wildcardHref = a.GetAttribute("href");
+                }
             }
         }
 
-        return null;
+        return wildcardHref;
     }
 
     /// <summary>

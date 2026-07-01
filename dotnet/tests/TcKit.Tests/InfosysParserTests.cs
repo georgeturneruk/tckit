@@ -190,4 +190,19 @@ public sealed class InfosysParserTests
         Assert.Equal("p.html", InfosysParser.FindLinkByOrder(doc, "EPP1008"));   // variant suffix
         Assert.Null(InfosysParser.FindLinkByOrder(doc, "EL9999"));
     }
+
+    [Fact]
+    public void FindLinkByOrder_MatchesWildcardAnchorText()
+    {
+        // Coupler / IO-Link overviews name anchors in family-wildcard form, listing several products.
+        const string html = "<html><body>"
+            + "<a href=\"ek.html\">EK110x-00xx, EK15xx</a>"
+            + "<a href=\"epi.html\">EPI1008-000x, ERI1008-000x</a></body></html>";
+        using var doc = InfosysParser.Parse(html);
+
+        Assert.Equal("ek.html", InfosysParser.FindLinkByOrder(doc, "EK1100"));    // first wildcard token
+        Assert.Equal("ek.html", InfosysParser.FindLinkByOrder(doc, "EK1502"));    // second token EK15xx
+        Assert.Equal("epi.html", InfosysParser.FindLinkByOrder(doc, "EPI1008"));
+        Assert.Null(InfosysParser.FindLinkByOrder(doc, "EK1700"));               // EK17xx not listed
+    }
 }
