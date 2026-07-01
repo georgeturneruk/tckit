@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ModelContextProtocol.Server;
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using TcKit.Core.Security;
 using TcKit.Core.Serialization;
 
 namespace TcKit.Server.Tools;
@@ -9,10 +10,10 @@ namespace TcKit.Server.Tools;
 /// <summary>
 /// COM hardware-authoring tools: add an EtherCAT master, add couplers/terminals by order number, and
 /// remove I/O items. These mutate the open TwinCAT project's I/O configuration (XAE must be open with a
-/// solution loaded). The write counterpart to <see cref="HardwareScanTools"/>.
+/// solution loaded). The write counterpart to <see cref="HardwareScanTools"/>; all write-class.
 /// </summary>
 [McpServerToolType]
-public sealed class HardwareConfigTools(IHardwareConfigurer hardware)
+public sealed class HardwareConfigTools(IHardwareConfigurer hardware, IPermissionGate gate)
 {
     [McpServerTool(Name = "AddEtherCatMaster")]
     [Description("Add an EtherCAT master device to a TwinCAT project's I/O Devices tree. deviceName is the "
@@ -51,8 +52,15 @@ public sealed class HardwareConfigTools(IHardwareConfigurer hardware)
 
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
 
-    private static async Task<string> Run(Func<Task<Result>> call)
+    // Every verb here is write-class (mutates the project I/O on disk, not a live target).
+    private async Task<string> Run(Func<Task<Result>> call)
     {
+        var denied = gate.Deny(PermissionLevel.Write);
+        if (denied is not null)
+        {
+            return TckitJson.Serialize(Result.Fail(denied));
+        }
+
         try
         {
             return TckitJson.Serialize(await call().ConfigureAwait(false));

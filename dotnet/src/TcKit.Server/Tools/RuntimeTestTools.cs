@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using TcKit.Core.Ports;
+using TcKit.Core.Security;
 using TcKit.Core.Serialization;
 
 namespace TcKit.Server.Tools;
@@ -8,16 +9,17 @@ namespace TcKit.Server.Tools;
 /// <summary>
 /// Runtime control + TcUnit test tools (ADS). They target a runtime by AMS Net ID; no XAE needed.
 /// run_tests ensures Run mode, polls the TcUnit runner, and inlines failures-only results; the full
-/// per-test list (passes included) comes from GetTestResults.
+/// per-test list (passes included) comes from GetTestResults. StartRuntime and RunTests act on a live
+/// target (execute-class, NetId-gated); GetTestResults just parses the published XML (read-class).
 /// </summary>
 [McpServerToolType]
-public sealed class RuntimeTestTools(IRuntimeControl runtime, ITestRunner tests)
+public sealed class RuntimeTestTools(IRuntimeControl runtime, ITestRunner tests, IPermissionGate gate)
 {
     [McpServerTool(Name = "StartRuntime")]
     [Description("Restart the target into Run mode over ADS (WriteControl on the system service), "
         + "waiting until it is reached. targetAmsId is the target's AMS Net ID.")]
     public Task<string> StartRuntime(string targetAmsId, CancellationToken cancellationToken = default)
-        => Run(() => runtime.StartRuntimeAsync(targetAmsId, cancellationToken));
+        => Run(PermissionLevel.Execute, targetAmsId, () => runtime.StartRuntimeAsync(targetAmsId, cancellationToken));
 
     [McpServerTool(Name = "RunTests")]
     [Description("Run the TcUnit suites on a target to completion and return the outcome. Ensures Run "
@@ -26,19 +28,26 @@ public sealed class RuntimeTestTools(IRuntimeControl runtime, ITestRunner tests)
     public Task<string> RunTests(
         string targetAmsId, bool waitForResults = true, int timeoutSeconds = 120,
         string plcName = "", CancellationToken cancellationToken = default)
-        => Run(() => tests.RunTestsAsync(targetAmsId, Optional(plcName), waitForResults, timeoutSeconds, cancellationToken));
+        => Run(PermissionLevel.Execute, targetAmsId,
+            () => tests.RunTestsAsync(targetAmsId, Optional(plcName), waitForResults, timeoutSeconds, cancellationToken));
 
     [McpServerTool(Name = "GetTestResults")]
     [Description("Parse the full TcUnit results (passes included) from the published xUnit XML. "
         + "xmlPath overrides the resolved default (set it when the project overrides xUnitFilePath).")]
     public Task<string> GetTestResults(
         string targetAmsId, string plcName = "", string xmlPath = "", CancellationToken cancellationToken = default)
-        => Run(() => tests.GetResultsAsync(targetAmsId, Optional(plcName), Optional(xmlPath), cancellationToken));
+        => Run(PermissionLevel.Read, null, () => tests.GetResultsAsync(targetAmsId, Optional(plcName), Optional(xmlPath), cancellationToken));
 
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
 
-    private static async Task<string> Run<T>(Func<Task<T>> call)
+    private async Task<string> Run<T>(PermissionLevel level, string? targetAmsId, Func<Task<T>> call)
     {
+        var denied = gate.Deny(level, targetAmsId);
+        if (denied is not null)
+        {
+            return TckitJson.Serialize(new { error = denied });
+        }
+
         try
         {
             return TckitJson.Serialize(await call().ConfigureAwait(false));

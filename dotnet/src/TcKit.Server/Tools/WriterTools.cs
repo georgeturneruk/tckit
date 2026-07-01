@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ModelContextProtocol.Server;
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using TcKit.Core.Security;
 using TcKit.Core.Serialization;
 
 namespace TcKit.Server.Tools;
@@ -9,10 +10,11 @@ namespace TcKit.Server.Tools;
 /// <summary>
 /// Project-authoring tools (COM Automation Interface). They mutate the solution open in the
 /// attached TcXaeShell, so XAE must be running with the project open. PascalCase tool names +
-/// camelCase parameters (C# conventions); each returns the snake_case Result contract.
+/// camelCase parameters (C# conventions); each returns the snake_case Result contract. Every verb
+/// here authors the project on disk, so the whole class is write-class (gated in <see cref="Run"/>).
 /// </summary>
 [McpServerToolType]
-public sealed class WriterTools(IProjectWriter writer)
+public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
 {
     [McpServerTool(Name = "OpenProject")]
     [Description("Open (or confirm open) a TwinCAT solution in XAE. Idempotent; rarely needed if "
@@ -269,8 +271,14 @@ public sealed class WriterTools(IProjectWriter writer)
         _ => throw new ArgumentException($"Unknown dutKind '{value}'. Use struct | enum | union."),
     };
 
-    private static async Task<string> Run(Func<Task<Result>> call)
+    private async Task<string> Run(Func<Task<Result>> call)
     {
+        var denied = gate.Deny(PermissionLevel.Write);
+        if (denied is not null)
+        {
+            return TckitJson.Serialize(Result.Fail(denied));
+        }
+
         try
         {
             return TckitJson.Serialize(await call().ConfigureAwait(false));

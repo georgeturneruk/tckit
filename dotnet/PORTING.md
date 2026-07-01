@@ -155,6 +155,35 @@ comments, not infosys) and is not part of the searcher port:
 - [x] open_project — CI-tested + live-validated (XAE)
 - [x] create_project — CI-tested (fake) + live-validated (writer smoke)
 
+### Safety stance (permission gate)
+
+The Python `init` / `config` / `doctor` CLI subcommands and the layered TOML+JSON config loader are
+**deliberately not ported** (most of it was bridge-era plumbing: `BRIDGE_URL`, `XAE_MODE`, adapter
+overrides). Runtime defaults the C# server needs (e.g. `COM_VERSION`) are read straight from the
+environment. The one piece with real behaviour behind it — the safety stance — is ported as a small,
+hot-reloaded permission gate instead:
+
+- `IPermissionGate` (`TcKit.Core.Ports`) → `FilePermissionGate` (`TcKit.Core.Security`), reading
+  `~/.tckit/permissions.json` (or `$TCKIT_HOME/permissions.json`), hot-reloaded on mtime so an
+  in-session edit (or a `SetPermissions` call) takes effect on the next tool call with no reconnect.
+- Two axes. **mode** = `read` (inspect only) < `write` (author on disk) < `execute` (act on a live
+  target); every mutating tool declares its level and the gate short-circuits with an error when the
+  mode is below it. **NetId allow/block** gates execute-class calls by target: `blocked_net_ids` is a
+  hard, unbypassable "never touch production" guard (block always wins); a non-empty `allowed_net_ids`
+  is an allowlist. Execute-class = exactly the NetId-gated set (Deploy, StartRuntime, RunTests,
+  WriteSymbols, InvokeRpc).
+- `GetPermissions` / `SetPermissions` MCP tools make the soft facets (mode, allowlist) easy to swap
+  mid-session; `SetPermissions` can *append* a blocked NetId but never remove one (the hard guard is
+  lifted only by editing the file). Both tools are callable in any mode.
+- Failure stances: missing file = permissive (opt-in); unparseable file = keep last good (no brick,
+  no silent widening); valid file with a typo'd `mode` = fall to `read` (safe side).
+- Fully CI-tested (`FilePermissionGateTests`, 18 cases: mode tiering, allow/block semantics, block-wins,
+  hot-reload, append-only blocklist, failure stances). The dev/oracle CLI drives adapters directly and
+  stays ungated by design — the gate guards the agent-facing MCP surface.
+
+- [x] permission gate + GetPermissions / SetPermissions — CI-tested (`FilePermissionGateTests`)
+- [ ] docs page for the safety stance (docs/content + tc-config skill still describe the Python config)
+
 ## Authoring (Automation Interface; port last)
 
 COM foundation in place (`TcKit.Adapters.Automation`), built around an **automation
