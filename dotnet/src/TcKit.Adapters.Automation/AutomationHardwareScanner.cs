@@ -12,7 +12,7 @@ public sealed class AutomationHardwareScanner : IHardwareScanner, IDisposable
 {
     private readonly StaExecutor _sta = new();
 
-    public Task<HardwareTopology> ScanHardwareAsync(CancellationToken cancellationToken)
+    public Task<HardwareTopology> ScanHardwareAsync(string? projectName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -20,12 +20,12 @@ public sealed class AutomationHardwareScanner : IHardwareScanner, IDisposable
         return Task.FromResult(_sta.Run(() =>
         {
             using var session = new ComTcSession();
-            return ProjectAuthor.ScanHardware(session);
+            return ProjectAuthor.ScanHardware(session, projectName);
         }));
     }
 
     public Task<Result> ScaffoldHardwareCodeAsync(
-        string gvlName, string? plcName, string parentFolder, CancellationToken cancellationToken)
+        string gvlName, string? plcName, string parentFolder, string? projectName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         try
@@ -33,7 +33,7 @@ public sealed class AutomationHardwareScanner : IHardwareScanner, IDisposable
             return Task.FromResult(_sta.Run(() =>
             {
                 using var session = new ComTcSession();
-                return ProjectAuthor.ScaffoldHardwareCode(session, gvlName, parentFolder, plcName);
+                return ProjectAuthor.ScaffoldHardwareCode(session, gvlName, parentFolder, plcName, projectName);
             }));
         }
 #pragma warning disable CA1031 // The scaffold boundary funnels every failure into the Result error contract.

@@ -14,21 +14,24 @@ namespace TcKit.Server.Tools;
 public sealed class HardwareScanTools(IHardwareScanner scanner)
 {
     [McpServerTool(Name = "ScanHardware")]
-    [Description("Read the hardware topology from the open TwinCAT project: every EtherCAT master with "
-        + "its terminals (slot, full tree name, order number). Requires XAE open with a solution loaded. "
-        + "Reads the configured topology without triggering a physical bus scan.")]
-    public Task<string> ScanHardware(CancellationToken cancellationToken = default)
-        => Run(async () => await scanner.ScanHardwareAsync(cancellationToken).ConfigureAwait(false));
+    [Description("Read the hardware topology from a TwinCAT project: every EtherCAT master with its "
+        + "terminals (slot, full tree name, order number), plus the resolved project name. Requires XAE "
+        + "open with a solution loaded. project is the TwinCAT project name to read and is REQUIRED when "
+        + "the solution has more than one project. Reads the configured topology without a physical bus scan.")]
+    public Task<string> ScanHardware(string project = "", CancellationToken cancellationToken = default)
+        => Run(async () => await scanner.ScanHardwareAsync(Optional(project), cancellationToken).ConfigureAwait(false));
 
     [McpServerTool(Name = "ScaffoldHardwareCode")]
-    [Description("Scaffold a GVL of VAR_GLOBAL I/O declarations from the connected hardware topology. "
+    [Description("Scaffold a GVL of VAR_GLOBAL I/O declarations from a TwinCAT project's hardware topology. "
         + "Variables are named Slot{N}_{OrderNumber}_{Channel}; terminals not in the bundled catalogue "
-        + "get a comment placeholder. gvlName defaults to 'HardwareIO'. Run ScanHardware first to preview.")]
+        + "get a comment placeholder. gvlName defaults to 'HardwareIO'. project is the TwinCAT project "
+        + "whose I/O is scanned (REQUIRED when >1); plcName is the PLC project the GVL is added to. Run "
+        + "ScanHardware first to preview.")]
     public Task<string> ScaffoldHardwareCode(
-        string gvlName = "HardwareIO", string plcName = "", string parentFolder = "",
+        string gvlName = "HardwareIO", string plcName = "", string parentFolder = "", string project = "",
         CancellationToken cancellationToken = default)
         => Run(async () => await scanner
-            .ScaffoldHardwareCodeAsync(gvlName, Optional(plcName), parentFolder, cancellationToken)
+            .ScaffoldHardwareCodeAsync(gvlName, Optional(plcName), parentFolder, Optional(project), cancellationToken)
             .ConfigureAwait(false));
 
     private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;

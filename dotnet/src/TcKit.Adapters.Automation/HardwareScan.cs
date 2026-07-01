@@ -12,26 +12,18 @@ namespace TcKit.Adapters.Automation;
 /// </summary>
 internal static partial class HardwareScan
 {
-    public static HardwareTopology Build(ITcSession session)
+    public static HardwareTopology Build(ITcSysManager sm)
     {
-        session.UseSolution("");
-        var managers = session.GetSysManagers();
-        if (managers.Count == 0)
-        {
-            throw new InvalidOperationException(
-                "No TwinCAT System Manager found. Ensure XAE is open with a solution loaded.");
-        }
-
-        // The I/O tree (TIID) lives at the project level; mirror the bridge and read the first one.
+        // The I/O tree (TIID) lives at the project level; the caller resolved which project's sys manager.
         ITcTreeItem tiid;
         try
         {
-            tiid = managers[0].LookupTreeItem("TIID");
+            tiid = sm.LookupTreeItem("TIID");
         }
         catch (Exception exc)
         {
             throw new InvalidOperationException(
-                $"Failed to access the I/O devices tree (TIID): {exc.Message}. Ensure a solution is loaded in XAE.");
+                $"Failed to access the I/O devices tree (TIID) of project '{sm.ProjectName}': {exc.Message}.");
         }
 
         var segments = new List<EtherCatSegment>();
@@ -58,7 +50,7 @@ internal static partial class HardwareScan
         }
 
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
-        return new HardwareTopology(segments, timestamp);
+        return new HardwareTopology(segments, timestamp, sm.ProjectName);
     }
 
     /// <summary>True when a TIID device is an EtherCAT master (by name, like the bridge heuristic).</summary>

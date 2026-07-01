@@ -10,5 +10,8 @@ public sealed record TerminalInfo(int Slot, string Name, string OrderNumber);
 /// <summary>One EtherCAT master and the terminals configured under it.</summary>
 public sealed record EtherCatSegment(string MasterName, IReadOnlyList<TerminalInfo> Terminals);
 
-/// <summary>The configured hardware topology of the open TwinCAT project (one segment per master).</summary>
-public sealed record HardwareTopology(IReadOnlyList<EtherCatSegment> Segments, string ScanTimestamp);
+/// <summary>The configured hardware topology of the scanned TwinCAT project (one segment per master).
+/// <c>Project</c> is the resolved TwinCAT project the topology was read from, so a multi-project scan is
+/// unambiguous about which system it describes.</summary>
+public sealed record HardwareTopology(
+    IReadOnlyList<EtherCatSegment> Segments, string ScanTimestamp, string Project = "");

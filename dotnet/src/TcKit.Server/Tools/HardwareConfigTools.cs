@@ -15,29 +15,41 @@ namespace TcKit.Server.Tools;
 public sealed class HardwareConfigTools(IHardwareConfigurer hardware)
 {
     [McpServerTool(Name = "AddEtherCatMaster")]
-    [Description("Add an EtherCAT master device to the open project's I/O Devices tree. deviceName is the "
-        + "display name (default 'Device 1 (EtherCAT)'). Add couplers/terminals under it with "
-        + "AddEtherCatBox.")]
+    [Description("Add an EtherCAT master device to a TwinCAT project's I/O Devices tree. deviceName is the "
+        + "display name (default 'Device 1 (EtherCAT)'). project is the TwinCAT project name to target and "
+        + "is REQUIRED when the solution has more than one project (otherwise the call is refused, listing "
+        + "the available projects) — do not let I/O land in the wrong project. The change is saved to that "
+        + "project's .tsproj immediately. Add couplers/terminals under the master with AddEtherCatBox.")]
     public Task<string> AddEtherCatMaster(
-        string deviceName = "Device 1 (EtherCAT)", CancellationToken cancellationToken = default)
-        => Run(() => hardware.AddEtherCatMasterAsync(deviceName, cancellationToken));
+        string deviceName = "Device 1 (EtherCAT)", string project = "",
+        CancellationToken cancellationToken = default)
+        => Run(() => hardware.AddEtherCatMasterAsync(deviceName, Optional(project), cancellationToken));
 
     [McpServerTool(Name = "AddEtherCatBox")]
     [Description("Add an EtherCAT box (coupler or terminal) by Beckhoff order number under a named parent. "
         + "E-bus terminals (EL...) nest under their coupler, so parentName is the coupler (e.g. 'Box 1 "
         + "(EK1100)'); EtherCAT-native slaves go directly under the master. orderNumber may be "
         + "revision-qualified (e.g. 'EL1008' or 'EK1100-0000-0017'). before optionally names the sibling "
-        + "to insert before (empty appends).")]
+        + "to insert before (empty appends). project is the TwinCAT project name to target and is REQUIRED "
+        + "when the solution has more than one project. Saved to the project's .tsproj immediately.")]
     public Task<string> AddEtherCatBox(
-        string parentName, string boxName, string orderNumber, string before = "",
+        string parentName, string boxName, string orderNumber, string before = "", string project = "",
         CancellationToken cancellationToken = default)
-        => Run(() => hardware.AddEtherCatBoxAsync(parentName, boxName, orderNumber, before, cancellationToken));
+        => Run(() => hardware.AddEtherCatBoxAsync(
+            parentName, boxName, orderNumber, before, Optional(project), cancellationToken));
 
     [McpServerTool(Name = "DeleteIoDevice")]
-    [Description("Remove an I/O device or box from the project's I/O Devices tree by name (cascades its "
-        + "children). name is the display name (e.g. 'Device 1 (EtherCAT)' or 'Box 1 (EK1100)').")]
-    public Task<string> DeleteIoDevice(string name, CancellationToken cancellationToken = default)
-        => Run(() => hardware.DeleteIoDeviceAsync(name, cancellationToken));
+    [Description("Remove an I/O device or box from a TwinCAT project's I/O Devices tree (cascades its "
+        + "children). target is a display name (must be UNIQUE in the project — an ambiguous name is "
+        + "refused, listing the candidate paths) or an exact '^'-delimited tree path. project is the "
+        + "TwinCAT project name, REQUIRED when the solution has more than one. WARNING: destructive; "
+        + "requires confirmed=true. The first call with confirmed=false returns a preview (the resolved "
+        + "path and the child items that will cascade) and deletes nothing.")]
+    public Task<string> DeleteIoDevice(
+        string target, string project = "", bool confirmed = false, CancellationToken cancellationToken = default)
+        => Run(() => hardware.DeleteIoDeviceAsync(target, Optional(project), confirmed, cancellationToken));
+
+    private static string? Optional(string value) => string.IsNullOrEmpty(value) ? null : value;
 
     private static async Task<string> Run(Func<Task<Result>> call)
     {
