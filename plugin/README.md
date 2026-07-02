@@ -1,6 +1,6 @@
 # TcKit (Claude Code plugin)
 
-Connects Claude Code to TwinCAT 3 PLC projects. Read project structure, write Structured Text, trigger builds, deploy to targets, run TcUnit tests.
+Connects Claude Code to TwinCAT 3 PLC projects. Read project structure, write Structured Text, build, deploy, run TcUnit tests, and inspect or author EtherCAT hardware.
 
 ## Install
 
@@ -17,31 +17,29 @@ Then walk through setup:
 > Set me up for TcKit.
 ```
 
-The bundled `tc-config` skill drives a guided init: prompts for your AMS Net IDs, safety stance, project paths, writes `~/.tckit/config.toml`, runs a smoke test.
+The bundled `tc-config` skill sets your safety stance (mode and target NetId allow/block lists) in `~/.tckit/permissions.json`.
 
 ## Prerequisites
 
 - **Claude Code** (CLI / IDE extension / desktop app).
-- **`uv`** — install via `pip install uv` or your platform's installer. The plugin's MCP server runs as `uvx tckit`, which fetches the Python package from PyPI on first use.
-- **TwinCAT 3.1 Build 4026** + **TcXaeShell** on a Windows host (only required for write/build/deploy/test; read-only operations work without it).
-- **Bridge service**: run `tckit bridge install` once to copy the bundled Windows bridge to `~/.tckit/bridge/`, then start `~/.tckit/bridge/Start-Bridge.ps1` in a separate PowerShell window. `tckit doctor` will offer to run the install for you the first time. Requires TcXaeShell to be open.
+- **.NET 8 SDK** — the plugin builds and runs the bundled C# MCP server on first use.
+- **TwinCAT 3.1 Build 4026** + **TcXaeShell** on a Windows host. Writes, builds, and hardware authoring need TcXaeShell open; reads and docs work without it; runtime tools need an ADS route to the target.
 
 ## What you get
 
-Six skills that load on demand based on what you ask:
+Seven skills that load on demand based on what you ask:
 
 | Skill | Loads when |
 |-------|------------|
 | `tckit:tc-orient-project` | First touch on a TwinCAT project ("what's in this project") |
 | `tckit:tc-read-project` | Inspecting / navigating a TwinCAT project |
-| `tckit:tc-beckhoff-docs` | Researching a Beckhoff library FB or function |
+| `tckit:tc-beckhoff-docs` | Researching a Beckhoff library FB or a hardware product by order number |
 | `tckit:tc-write-st` | Writing or modifying Structured Text |
 | `tckit:tc-build-test-loop` | Building, deploying, running TcUnit tests |
-| `tckit:tc-config` | Configuring TcKit, editing safety stance, switching modes |
+| `tckit:tc-hardware` | EtherCAT/IPC/axis diagnostics, live symbols, authoring the I/O tree |
+| `tckit:tc-config` | Setting or editing the safety stance |
 
-Plus the underlying MCP server exposing 20 tools (project reader, writer, builder, test runner, doc generator, Beckhoff infosys searcher).
-
-The plugin is stdio-only. Docker mode exists for CI / contributor workflows and isn't a user install path; see the [docker-setup docs](https://tckit.org/getting-started/docker-setup/) if you need it.
+Plus the underlying MCP server exposing the full tool surface: reader, writer, build/deploy, TcUnit tests, live symbols, hardware diagnostics and authoring, Beckhoff infosys search, and the doc generator.
 
 ## Documentation
 

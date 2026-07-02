@@ -1,52 +1,53 @@
-# ProjectWriter
+# Writer
 
-**File:** `tckit/ports/writer.py`
-**Purpose:** Structural writes that go through the IDE's authoring interface, not raw file edits.
+Structural writes routed through Beckhoff's Automation Interface, never raw file edits. Requires TcXaeShell open; every change lands via the same mechanism the IDE uses, so GUIDs and project cross-references stay consistent.
 
-| Method | Returns |
-|--------|---------|
-| `open_project(solution_path)` | `Result` |
-| `create_project(name, path)` | `Result` |
-| `add_plc_project(sln_path, plc_name, *, project_type='standard')` | `Result` |
-| `save_plc_as_library(plc_name, output_path, *, install=True, repository='System', overwrite=False)` | `Result` |
-| `add_library_reference(consumer_plc_name, library_name, *, version='*', distributor='Tc3 Project')` | `Result` |
-| `add_library_placeholder(consumer_plc_name, placeholder_name, default_library, *, version='*', distributor='', parameters=None)` | `Result` |
-| `add_pou(name, pou_type, code, *, plc_name=None)` | `Result` |
-| `add_gvl(name, code, *, plc_name=None)` | `Result` |
-| `add_dut(name, code, *, dut_kind=DUTKind.STRUCT, plc_name=None)` | `Result` |
-| `add_method(pou_name, method_name, code, *, plc_name=None)` | `Result` |
-| `add_property(pou_name, property_name, return_type, *, getter_code=None, setter_code=None, plc_name=None)` | `Result` |
-| `update_pou_declaration(pou_name, code, *, plc_name=None)` | `Result` |
-| `update_pou_implementation(pou_name, code, *, plc_name=None)` | `Result` |
-| `update_method_body(pou_name, method_name, code, *, plc_name=None)` | `Result` |
-| `update_pou_declaration_patch(pou_name, old, new, *, plc_name=None)` | `Result` |
-| `update_pou_implementation_patch(pou_name, old, new, *, plc_name=None)` | `Result` |
-| `update_method_body_patch(pou_name, method_name, old, new, *, plc_name=None)` | `Result` |
-| `add_variable(pou_name, scope, declaration, item_name=None, *, plc_name=None)` | `Result` |
+All write tools take an optional `plcName` to target one PLC project in a multi-PLC solution; an ambiguous call returns an error listing the candidates.
 
-## POU updates
+## Create
 
-A POU has its own declaration block and (for FBs / programs) its own
-cyclic body, plus zero or more methods / actions / properties hanging
-underneath. The three `update_pou_*` calls target the POU itself; the
-three `update_method_body*` calls target a named child item.
-The patch variants mirror Claude Code's `Edit` semantics — exactly one
-unique anchor, fail otherwise.
+| Tool | Notes |
+|---|---|
+| `OpenProject(solutionPath)` | Open (or confirm open) a solution in XAE; idempotent |
+| `CreateProject(name, path)` | New solution + standard PLC project (`<name>_Plc`) |
+| `AddPlcProject(plcName, solutionPath?)` | Second (or further) PLC project in an existing solution |
+| `AddPou(name, pouType, code, parentFolder?)` | `function_block` \| `function` \| `program` \| `interface`; full ST source |
+| `AddGvl(name, code, parentFolder?)` | Declaration-only VAR_GLOBAL block |
+| `AddDut(name, code, dutKind?)` | `struct` \| `enum` \| `union`; full TYPE source |
+| `AddMethod(pouName, methodName, code)` | Full source including METHOD header |
+| `AddProperty(pouName, propertyName, returnType, getterCode?, setterCode?)` | At least one accessor |
+| `AddVariable(pouName, scope, declaration, itemName?)` | One line into a named VAR block; `itemName` targets a method's locals |
+| `AddFolder(name, parentPath?)` | Folder in the source tree |
 
-## Multi-project solutions
+## Update
 
-PLC-scoped writes take an optional `plc_name`. The bridge already enforces
-the same fallback policy on the PowerShell side (`Resolve-TcPlcName`):
-per-call name → `PLC_PROJECT_NAME` env var → auto-resolve on a
-single-project sln → throw with the candidate list. `open_project` and
-`create_project` stay solution-scoped.
+| Tool | Replaces |
+|---|---|
+| `UpdatePouDeclaration(pouName, code)` | FB-level declaration block |
+| `UpdatePouImplementation(pouName, code)` | Cyclic body (statements only) |
+| `UpdateMethodBody(pouName, methodName, code)` | Full method/action/property source |
 
-To author a multi-PLC sln from scratch (e.g. a Library + Tests split), use
-`create_project` for the sln + first PLC project, then `add_plc_project` for
-each additional PLC. `save_plc_as_library` and `add_library_reference` author
-a compiled library reference between in-sln PLC projects. See
-[multi-plc](multi-plc.md) for the full workflow.
+Each has a `...Patch(pouName, oldString, newString)` variant: an anchored edit that replaces exactly one occurrence and fails if the anchor is missing or ambiguous. Prefer the patch for small edits; it can't clobber code you didn't look at.
+
+## Delete
+
+`DeletePou`, `DeleteMethod`, `DeleteProperty`, `DeleteGvl`, `DeleteDut`, `DeleteVariable`, `DeleteFolder`. Guards where it matters: a PROGRAM still bound to a task is refused, and a non-empty folder needs `recursive=true`.
+
+## Libraries and multi-PLC solutions
+
+The typical split is a library PLC plus a consumer (application or TcUnit tests) in one solution:
+
+1. `CreateProject` the solution, author the library source.
+2. `SavePlcAsLibrary(outputPath, install=true)` to produce and install the `.library`.
+3. `AddPlcProject` for the consumer, then `AddLibraryReference(libraryName)` from it.
+
+A compiled reference resolves against the *installed* library, so after editing library source, save + install again before rebuilding the consumer; otherwise the build picks up stale code.
+
+Two reference styles:
+
+- `AddLibraryReference` pins a specific library by name + version + distributor. Use it for libraries you produced in the same solution. Distributor defaults to `Tc3 Project`; a "library not found" after adding usually means a distributor mismatch.
+- `AddLibraryPlaceholder` adds a re-pointable placeholder, which is what the IDE writes for external libraries (`TcUnit` with distributor `www.tcunit.org`, `Tc2_Standard`, `Tc3_Module`, ...). `SetPlaceholderParameters` sets library parameter overrides on it, e.g. TcUnit's `xUnitEnablePublish`.
 
 ## Why this shape
 
-A TwinCAT project is more than a folder of `.TcPOU` files — there are GUIDs, cross-references in `.plcproj`, and tree indexes that have to stay consistent. If the agent edits XML directly it ends up reasoning over two parallel realities: the files on disk, and what the IDE thinks the project is. ProjectWriter routes every structural change through the IDE so there is **one source of truth** and the agent never has to invent GUIDs or reconcile drift.
+A TwinCAT project is more than a folder of `.TcPOU` files: GUIDs, cross-references in `.plcproj`, and tree indexes have to stay consistent. If an agent edits XML directly it reasons over two parallel realities, the files on disk and what the IDE thinks the project is. Routing every structural change through the Automation Interface keeps one source of truth; the agent never invents GUIDs or reconciles drift.

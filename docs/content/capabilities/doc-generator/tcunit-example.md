@@ -1,6 +1,6 @@
 # Example: TcUnit
 
-This is the output of TcKit's [html generator](html-generator.md) run against
+This is the output of TcKit's [doc generator](overview.md) run against
 [TcUnit](https://github.com/tcunit/TcUnit), the open-source unit testing
 framework for TwinCAT 3.
 

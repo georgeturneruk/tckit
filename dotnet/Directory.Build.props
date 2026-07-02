@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- Shared build settings for every TcKit .NET project. See CONVENTIONS.md. -->
+  <PropertyGroup>
+    <!-- Windows-only product: COM Automation Interface + ADS. net8.0-windows
+         lets the platform analyser allow Marshal / COM APIs without CA1416. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Strict by default: the analogue of the Python side's `strict` mypy + ruff gate. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- XML docs on public APIs are a convention, not a build gate. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- COM interop lives only in adapter projects; they opt in explicitly. -->
+  </PropertyGroup>
+
+</Project>

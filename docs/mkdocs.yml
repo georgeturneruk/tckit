@@ -30,30 +30,17 @@ nav:
   - Home: index.md
   - Getting Started:
     - Installation: getting-started/installation.md
-    - Docker Setup: getting-started/docker-setup.md
-    - Bridge Setup: getting-started/bridge-setup.md
+    - Safety stance: getting-started/permissions.md
   - Capabilities:
-    - ProjectReader:
-      - Overview: capabilities/project-reader/overview.md
-      - xml_reader: capabilities/project-reader/xml-reader.md
-    - ProjectWriter:
-      - Overview: capabilities/project-writer/overview.md
-      - automation_writer: capabilities/project-writer/automation-writer.md
-      - "Multi-PLC + library tools": capabilities/project-writer/multi-plc.md
-    - BuildRunner:
-      - Overview: capabilities/build-runner/overview.md
-      - xae_com_builder: capabilities/build-runner/xae-com-builder.md
-    - TestRunner:
-      - Overview: capabilities/test-runner/overview.md
-      - tcunit_runner: capabilities/test-runner/tcunit-runner.md
-    - DocGenerator:
+    - Reader: capabilities/project-reader/overview.md
+    - Writer: capabilities/project-writer/overview.md
+    - Build & deploy: capabilities/build-runner/overview.md
+    - Testing: capabilities/test-runner/overview.md
+    - Hardware: capabilities/hardware/overview.md
+    - Doc generator:
       - Overview: capabilities/doc-generator/overview.md
-      - html_generator: capabilities/doc-generator/html-generator.md
-      - markdown_generator: capabilities/doc-generator/markdown-generator.md
       - "Example: TcUnit": capabilities/doc-generator/tcunit-example.md
-    - DocsSearcher:
-      - Overview: capabilities/docs-searcher/overview.md
-      - beckhoff_infosys: capabilities/docs-searcher/beckhoff-infosys-searcher.md
+    - Docs search: capabilities/docs-searcher/overview.md
   - Architecture:
     - Overview: architecture/overview.md
   - Contributing: contributing.md

@@ -1,91 +1,87 @@
 ---
 name: tc-config
-description: Use when configuring TcKit, including initial setup ("set me up", "configure tckit"), ongoing edits to safety stance ("add NetId to allowed", "edit safety settings", "change confirmation behaviour"), or running health checks ("tckit doctor", "tckit not working", "is the bridge up"). Wraps the `tckit init`, `tckit config`, and `tckit doctor` CLI subcommands and the user-global config file at `~/.tckit/config.toml`. Do NOT use for runtime tool calls like building, deploying, reading projects, or researching Beckhoff FBs (those are owned by tc-build-test-loop, tc-read-project, tc-write-st, and tc-beckhoff-docs).
-allowed-tools: Bash, Read, Edit, Write
+description: Use when configuring TcKit's safety stance (the permission gate), including initial setup ("set me up", "configure tckit", "make tckit read-only"), ongoing edits ("raise the mode to execute", "add NetId to allowed", "block this NetId"), or inspecting the stance ("what permissions does tckit have", "why was deploy denied", "tckit not working"). Wraps the GetPermissions / SetPermissions MCP tools and the user-global permission file at `~/.tckit/permissions.json`. Do NOT use for runtime tool calls like building, deploying, reading projects, or researching Beckhoff FBs (those are owned by tc-build-test-loop, tc-read-project, tc-write-st, and tc-beckhoff-docs).
+allowed-tools: mcp__tckit__GetPermissions, mcp__tckit__SetPermissions, Read, Edit, Write
 ---
 
 # Configuring TcKit
 
-This skill orchestrates first-time setup and ongoing edits via the `tckit` CLI. It does **not** call MCP tools because config changes happen before the MCP server is fully reachable.
+TcKit's configuration surface is the safety stance: one JSON file at `~/.tckit/permissions.json` (or `$TCKIT_HOME/permissions.json`). The server hot-reloads it on every tool call, so a change (a `SetPermissions` call or a hand edit) takes effect on the next call with no reconnect. The old Python CLI (`tckit init` / `tckit config` / `tckit doctor`) and `~/.tckit/config.toml` are retired; if the user reaches for one of those, drive the flows below instead.
 
-## Subcommands you can drive
+## The two axes
 
-- **`tckit init`** — scaffold `~/.tckit/config.toml` from the bundled template (refuses to overwrite without `--force`).
-- **`tckit init --print`** — emit the bundled template to stdout. The skill uses this as its single source of truth for the template content.
-- **`tckit config show`** — print resolved config and its sources.
-- **`tckit config validate`** — check the config for malformed values (returns non-zero on issues).
-- **`tckit doctor`** — run health checks: config file present + config validation + bridge reachability. When the bridge is reachable but its launcher isn't installed yet, doctor offers to run `tckit bridge install` for you.
-- **`tckit bridge install`** — copy the bundled Windows bridge (`Start-Bridge.ps1` + `harness/`) to `~/.tckit/bridge/`. Refuses to overwrite without `--force`.
+**Mode** is a tier: `read` < `write` < `execute`.
 
-## When the user wants to set up TcKit
+- `read`: inspect only (project reads, doc lookups).
+- `write`: also author the project on disk (add/update POUs, GVLs, DUTs).
+- `execute`: also act on a live target. Execute-class tools are exactly the NetId-gated set: Deploy, StartRuntime, RunTests, WriteSymbols, InvokeRpc.
 
-Triggers: "set me up", "configure tckit", "first time setup".
+A call above the current mode returns `{"error": "Permission denied: ..."}` naming the missing mode.
 
-### Pre-flight
+**Target NetIds** gate execute-class calls by target:
 
-1. Run `tckit config show` to see whether `~/.tckit/config.toml` already exists. If it does, ask before overwriting; offer to `--force` or to edit the existing file in place.
-2. Verify `uvx` is on PATH (the plugin's MCP server runs as `uvx tckit`). If missing, tell the user to `pip install uv` first.
+- `blocked_net_ids`: NetIds that can never be acted on from this machine. Block always wins over the allowlist.
+- `allowed_net_ids`: if non-empty, execute-class calls are permitted only against these NetIds. Empty means any non-blocked target.
 
-This skill targets the stdio path (the plugin and pip installs both use it). Docker mode is CI/dev-only and not driven by this skill; see [docker-setup](../../docs/content/getting-started/docker-setup.md) and issue [#43](https://github.com/georgeturneruk/tckit/issues/43).
+## The two tools
 
-### Prompt for values
+- **`GetPermissions()`**: show the current stance (mode plus both NetId lists). Callable in any mode.
+- **`SetPermissions(mode, allowedNetIds, blockNetIds)`**: change the stance and persist it (creates the file on first use). Callable in any mode. Argument semantics:
+  - `mode`: `read` | `write` | `execute`; empty leaves it unchanged.
+  - `allowedNetIds`: comma-separated list that **replaces** the allowlist; empty leaves it unchanged; the literal `none` clears it (any non-blocked target allowed).
+  - `blockNetIds`: comma-separated list **appended** to `blocked_net_ids`. This tool can never remove a blocked NetId; unblocking happens only by editing the file.
 
-Ask the user, validating each:
+## Failure stances (how the gate reads an odd file)
 
-- **TARGET_AMS_ID** — AMS Net ID of their primary PLC or test VM. Validate with regex `^\d+\.\d+\.\d+\.\d+\.\d+\.\d+$` (six dot-separated octets, e.g. `192.168.1.100.1.1`). Reject anything else and ask them to retype.
-- **ALLOWED_NETIDS** — optional, comma-separated NetIds. Explain: "These bypass the confirmation gate for deploy/start_runtime. Use for test VMs, never production."
-- **BLOCKED_NETIDS** — optional. Permanently rejected, cannot be bypassed.
-- **SAFETY_CONFIRMATIONS** — default `"true"`. Only set `"false"` if the user explicitly asks; explain that it disables the deploy/start_runtime gate entirely.
-- **COM_VERSION** — default `"17.0"`. Don't change unless the user knows their TcXaeShell version is different.
-- **XAE_MODE** — default `"attach"`. `"headless"` is for CI.
-- **BRIDGE_URL** — default `http://localhost:8765`.
-- **PLC_PROJECT_NAME** — optional. Name of the PLC sub-project under `TIPC`; set it only to disambiguate a multi-PLC solution (auto-resolved when there's just one). There is no project-path setting: TcKit operates on whatever solution is open in TcXaeShell.
+- Missing file: permissive (`execute`, no NetId restrictions). The stance is opt-in.
+- Unparseable file: keep the last good settings rather than bricking the server or silently widening.
+- Valid file with an unrecognised `mode` value: fall to `read` (a present-but-typo'd mode signals an intent to restrict).
+- Valid file with the `mode` key absent: `execute` (unrestricted).
 
-### Write the config
+## Flows
 
-1. Pull the canonical template with `tckit init --print`. **Always** use this as the source — never embed template content in the skill. That keeps the template in one place ([tckit/templates/config.toml.example](../../tckit/templates/config.toml.example)).
-2. Substitute the user's values into the template.
-3. Write to `~/.tckit/config.toml` (or `$TCKIT_HOME/config.toml`).
+### First-time setup ("set me up", "configure tckit")
 
-If a file already exists and the user said yes to overwrite, prefer `tckit init --force` for the empty scaffold, then edit it. If they said no, just edit in place.
+1. Call `GetPermissions` to see the current stance. A fresh machine reports `execute` with empty lists (no file yet).
+2. Ask the user which mode they want and for any allow/block NetIds. Validate every NetId with `^\d+\.\d+\.\d+\.\d+\.\d+\.\d+$` (six dot-separated octets, e.g. `192.168.1.100.1.1`); reject anything else and ask them to retype.
+3. Apply with a single `SetPermissions` call; it creates `~/.tckit/permissions.json` and persists.
+4. Read back with `GetPermissions` and surface the result.
 
-### Verify
+If the MCP server is not reachable, write the file directly, using the annotated template at `dotnet/permissions.example.json` in the repo as the source (never embed the template content in this skill).
 
-Run `tckit doctor` and surface the result. If the bridge is down on first run, doctor will offer to install the bundled bridge to `~/.tckit/bridge/`; accept the prompt (or run `tckit bridge install` manually). Then tell the user to start `~/.tckit/bridge/Start-Bridge.ps1` in a separate PowerShell window with TcXaeShell open, and retry.
+### Change one thing
 
-### Final prompt
+1. `GetPermissions` to read the current stance.
+2. Validate any new NetId format.
+3. `SetPermissions` with only the changed argument (the others stay empty, meaning unchanged).
+4. State the effect so the user understands it: block always wins; a non-empty allowlist restricts execute-class calls to exactly those targets; the change is live on the next tool call, no reconnect needed.
 
-"Done. Open or reload Claude Code, then ask a real question to use TcKit. The Windows bridge (`~/.tckit/bridge/Start-Bridge.ps1`) needs to be running for write/build/deploy/test tools to work; read-only tools work without it."
+### Unblock a NetId
 
-## When the user wants to change just one thing
+`SetPermissions` cannot do this by design. Only on an explicit user request: read `~/.tckit/permissions.json`, confirm the exact NetId with the user, remove it with `Edit`, and remind them that `blocked_net_ids` is the "never touch production" guard, so they know what they just lifted.
 
-### Edit safety stance / add NetId to allowed / block a NetId
+### Diagnose ("why was deploy denied", "tckit not working")
 
-1. Read current values via `tckit config show`.
-2. Identify the change (typically `ALLOWED_NETIDS` or `BLOCKED_NETIDS`).
-3. Validate the new NetId format.
-4. Edit `~/.tckit/config.toml` directly.
-5. State the precedence rule so the user understands the effect: `BLOCKED > ALLOWED > SAFETY_CONFIRMATIONS > confirmed=True`.
-6. Run `tckit doctor` to verify the file parses cleanly.
-7. Tell the user to run `/mcp` in Claude Code, then reconnect tckit, so the next MCP call uses fresh env.
+1. Call `GetPermissions`. The `Permission denied` text from the failing tool names the missing mode or the offending NetId; cross-check it against the stance.
+2. Mode too low: the raise must come from the user. Suggest the `SetPermissions` call but do not make it unprompted.
+3. Target in `blocked_net_ids`: hard guard. Surface it and stop; do not offer to lift it unless the user raises it.
+4. Target missing from a non-empty `allowed_net_ids`: offer to add it once the user confirms the NetId.
+5. If tools fail for reasons other than `Permission denied`, the problem is not this file; hand off to the relevant runtime skill.
 
-## When the user wants to diagnose ("tckit doctor", "tckit not working")
+## Guardrails
 
-Run `tckit doctor` and read the FAIL lines. Map common failures to next steps:
-
-- **Config file FAIL** ("no config file at ..., TARGET_AMS_ID unset") → run `tckit init`, then edit `~/.tckit/config.toml`.
-- **Config FAIL** with NetId issues → drive the edit flow above.
-- **Bridge FAIL, launcher not installed yet** → accept doctor's install prompt, or run `tckit bridge install` manually, then start `~/.tckit/bridge/Start-Bridge.ps1` in a PowerShell window with TcXaeShell open.
-- **Bridge FAIL, launcher already at `~/.tckit/bridge/`** → tell them to start `~/.tckit/bridge/Start-Bridge.ps1` in a PowerShell window. Verify TcXaeShell is open first.
-- **Bridge dependencies FAIL** → re-run `tckit doctor` and accept the install prompt, or `Install-Module -Name <name> -Scope CurrentUser -Force` manually.
+- **Never self-elevate.** A `Permission denied` from another tool is a normal control-flow signal, not an obstacle to route around. Call `SetPermissions` (or edit the file) only when the user explicitly asks for that stance change in chat.
+- **Block is hard.** Never remove a `blocked_net_ids` entry on your own initiative, and never suggest deleting the file to get past one.
+- **Never loosen by deletion.** A missing file means permissive; deleting or truncating `permissions.json` is a stance change and needs the same explicit user request as any other widening.
 
 ## Anti-patterns
 
-- Calling MCP tools (`mcp__tckit__*`) from this skill — config changes happen before MCP is reachable, and config writes don't go through the server.
-- Embedding the config template inline. Always pull it with `tckit init --print`.
-- Auto-bypassing the safety confirmation gate. If the user wants to skip it for a specific NetId, add to `ALLOWED_NETIDS`. If they want to disable it entirely, ask for explicit confirmation before setting `SAFETY_CONFIRMATIONS=false`.
-- Restarting the user's stdio MCP server. You can't — it's spawned by Claude Code per session. Tell the user to use `/mcp` instead.
+- Calling `SetPermissions` to get a denied Deploy or StartRuntime through without the user asking.
+- Trying to remove a blocked NetId via `SetPermissions` (append-only by design).
+- Telling the user to reconnect via `/mcp` after a stance change; hot-reload makes that unnecessary.
+- Driving the retired Python CLI (`tckit init` / `tckit config` / `tckit doctor`) or writing `~/.tckit/config.toml`.
+- Embedding the permissions template inline. Point at `dotnet/permissions.example.json`.
 
 ## Next
 
-Once setup is green, normal work uses `tc-read-project`, `tc-beckhoff-docs`, `tc-write-st`, `tc-build-test-loop` as appropriate. This skill stays out of the way until something needs reconfiguring.
+Once the stance is set, normal work uses `tc-read-project`, `tc-beckhoff-docs`, `tc-write-st`, `tc-build-test-loop` as appropriate. This skill stays out of the way until the stance needs changing.

@@ -1,0 +1,11 @@
+{
+  "//": "TcKit safety stance. Copy to ~/.tckit/permissions.json (or $TCKIT_HOME/permissions.json).",
+  "//mode": "read = inspect only; write = also author the project on disk; execute = also act on a live target (deploy, start runtime, run tests, symbol writes, RPC). Absent file = execute (unrestricted).",
+  "mode": "write",
+
+  "//allowed_net_ids": "If non-empty, execute-class calls are permitted ONLY against these target AMS Net IDs. Empty = any non-blocked target.",
+  "allowed_net_ids": [],
+
+  "//blocked_net_ids": "AMS Net IDs that can NEVER be acted on from this machine. Blocking always wins over the allowlist and is not lifted by the SetPermissions tool - only by editing this file.",
+  "blocked_net_ids": []
+}

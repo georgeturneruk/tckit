@@ -1,52 +1,45 @@
 # TcKit
 
-An MCP server that gives AI agents a precise, structured view of a TwinCAT 3 project, and the tools to change, build, and test it.
+TwinCAT MCP server.
+
+What can it do?
+
+ - Read and write structured text code, and deploy it to a runtime
+ - Read and write live variables over ADS
+ - Write and run tests with TcUnit
+ - Inspect and author EtherCAT hardware
+ - Look up Beckhoff FBs and hardware datasheets, generate project docs
 
 ---
 
 ## Why TcKit
 
-LLMs get worse as their context fills up. Anthropic call this [context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents). TwinCAT's file format makes it worse: a `.TcPOU` is XML wrapped around code, easily thousands of lines for one function block. That XML contaminates context the moment it's loaded.
+TwinCAT programming isn't like other software development. Code is stored in a proprietary format and there's no command line runner. Everything has to go through the Windows-based XAE.
 
-TcKit is the layer in between. It groups six MCP capabilities around three ideas: just-in-time retrieval for reads, a single source of truth for writes, and structured results from builds and tests.
+Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer goes through Beckhoff's Automation Interface. It avoids manual edits. Instead it uses the exact same mechanism as the XAE.
 
-Wired together, the model runs that loop without an engineer walking each cycle: write a method, build, test, fix the failure, build again.
+The reader is more efficient than having an agent manually sift through large amounts of XML (the format of TwinCAT files). [Context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) kills performance. TcKit prevents that.
+
+And some of it simply isn't possible without extra tooling: reading live variables over ADS, EtherCAT diagnostics, running TcUnit suites and getting parsed results back.
 
 ## Capabilities
 
-| Port | Purpose |
+| Capability | Purpose |
 |---|---|
-| [**ProjectReader**](capabilities/project-reader/overview.md) | Layered reads: project structure, POU interface, single method or property |
-| [**ProjectWriter**](capabilities/project-writer/overview.md) | Structural writes via the IDE so GUIDs and cross-refs stay consistent |
-| [**BuildRunner**](capabilities/build-runner/overview.md) | Build, deploy, and runtime control with parsed `{file, line, message, severity}` diagnostics |
-| [**TestRunner**](capabilities/test-runner/overview.md) | Run TcUnit suites and return parsed pass/fail trees |
-| [**DocGenerator**](capabilities/doc-generator/overview.md) | Render navigable HTML docs from comments in the ST source |
-| [**DocsSearcher**](capabilities/docs-searcher/overview.md) | Fetch the one relevant Beckhoff infosys page on demand, no manual pre-loading |
+| [**Reader**](capabilities/project-reader/overview.md) | Layered reads: project structure, POU interface, single method or property |
+| [**Writer**](capabilities/project-writer/overview.md) | Structural writes via the Automation Interface so GUIDs and cross-refs stay consistent |
+| [**Build & deploy**](capabilities/build-runner/overview.md) | Build with parsed `{file, line, message, severity}` diagnostics, deploy to a target |
+| [**Testing**](capabilities/test-runner/overview.md) | Run TcUnit suites and return parsed pass/fail trees |
+| [**Hardware**](capabilities/hardware/overview.md) | EtherCAT/IPC/axis diagnostics, live symbol I/O, I/O tree scanning and authoring |
+| [**Doc generator**](capabilities/doc-generator/overview.md) | HTML or Markdown docs rendered from comments in the ST source |
+| [**Docs search**](capabilities/docs-searcher/overview.md) | Fetch the one relevant Beckhoff infosys page on demand, no manual pre-loading |
 
-Each port is a stable contract; adapters are swappable. See [Architecture → Overview](architecture/overview.md) for method tables and rationale.
-
-## Benchmarks
-
-Head-to-head writer-task runs of TcKit-equipped Claude vs vanilla Claude:
-
-| Task | Tokens | Wall time | Tool calls |
-|---|---|---|---|
-| Add a `VAR_INPUT` to an FB | **2.4× fewer** (1,653 → 691) | **1.27× faster** (27.5s → 21.7s) | 5 → 3 |
-| Add a method to an FB | **2.4× fewer** (1,236 → 508) | **1.69× faster** (26.2s → 15.5s) | 5 → 2 |
-
-N=1 per cell. See [`bench/findings/`](https://github.com/georgeturneruk/tckit/tree/main/bench/findings) for full methodology.
+Full tool list on the [architecture overview](architecture/overview.md).
 
 ## See it in action
 
-The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published live at [tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/). Navigate the function block hierarchy, search the API, drill into a method, all rendered from TcUnit's source code. Under the hood, the same understanding of TwinCAT's XML powers [ProjectReader](capabilities/project-reader/overview.md): an agent reads a project the way you would, never loading more than the question needs.
+The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published at [tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/). Under the hood, the same understanding of TwinCAT's XML powers the reader: an agent navigates a project the way you would, never loading more than the question needs.
 
 ## Quick start
 
-!!! warning
-    **TcKit is in active development and not yet production-ready.** Expect breaking changes between minor versions, rough edges, and missing features.
-
-See [Getting Started → Installation](getting-started/installation.md). Plugin install in Claude Code is one command; for write, build, deploy, and test you also need the Windows bridge running.
-
-## Status
-
-All six capabilities are implemented and shipping. See [releases](https://github.com/georgeturneruk/tckit/releases) for version history.
+See [Installation](getting-started/installation.md). Before pointing TcKit at a live PLC, set the [safety stance](getting-started/permissions.md).
