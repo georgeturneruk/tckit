@@ -5,7 +5,7 @@ status: Accepted
 created: 2026-06-28
 last_reviewed: 2026-07-02
 issue:
-pr:
+pr: 132
 supersedes:
 superseded_by:
 related: [0006, 0009, 0011, 0014]
@@ -245,4 +245,4 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   tests (fixtures kept for xUnit), `pyproject.toml`, the Python CI + PyPI release
   workflows, and the parity-oracle `compare.ps1`. `scripts/build-docs.sh` now bootstraps
   the .NET 8 SDK and runs the C# doc generator. SSE explicitly left open without gating
-  the cutover. Promote to Implemented (and fill `pr:`) when the branch merges to main.
+  the cutover. Cutover PR: #132. Promote to Implemented when it merges to main.
