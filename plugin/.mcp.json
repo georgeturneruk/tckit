@@ -1,8 +1,14 @@
 {
   "mcpServers": {
     "tckit": {
-      "command": "uvx",
-      "args": ["tckit", "--transport", "stdio"]
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${CLAUDE_PLUGIN_ROOT}/start-server.ps1"
+      ]
     }
   }
 }

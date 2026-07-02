@@ -1,6 +1,6 @@
 {
   "name": "tckit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for TwinCAT 3 PLC projects: read structure, write ST code, trigger builds, deploy to targets, run TcUnit tests.",
   "author": {
     "name": "George Turner",
