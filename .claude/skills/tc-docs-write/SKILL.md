@@ -14,7 +14,7 @@ A change touches user-facing behaviour, and therefore needs a docs update in the
 
 - MCP tool names, arguments, or return shapes changed
 - CLI commands or flags changed
-- Config keys changed (`config.json`, `~/.tckit/config.toml`, `.env`)
+- Config keys changed (`config.json`, `~/.tckit/permissions.json`, `.env`)
 - Install or setup steps changed
 - Ports, adapters, or the one-rule architecture statement changed
 - An ADR moved to `Implemented` for a design decision that has now shipped
