@@ -37,7 +37,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 
 **`AddVariable` semantics.** Inserts the declaration line before the matching scope's `END_VAR`. If the scope block does not exist on the target item, a new one is created at the conventional position (order: `VAR_INPUT`, `VAR_OUTPUT`, `VAR_IN_OUT`, `VAR`, `VAR CONSTANT`, `VAR_PERSISTENT`, `VAR_TEMP`). Use this instead of reading the full declaration, hand-editing the VAR block, and writing it back.
 
-**Bridge requirement.** Writer tools call out to the Windows bridge service, which talks to XAE over COM. They will not work if the bridge is down. Reader tools (used for planning the edit) read XML from disk and have no such requirement. There is no fallback for the writer side; do not work around bridge unavailability by editing `.TcPOU` / `.plcproj` directly.
+**XAE requirement.** Writer tools drive XAE over the COM Automation Interface; they will not work unless TcXaeShell is open with the solution loaded. Reader tools (used for planning the edit) read XML from disk and have no such requirement. There is no fallback for the writer side; do not work around XAE unavailability by editing `.TcPOU` / `.plcproj` directly.
 
 ## Pre-write checks (in order)
 
@@ -65,7 +65,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 - Opening `.plcproj` with `Read` or `Edit` to add or remove `<Compile Include="..."/>` entries. `AddPou` does this through XAE.
 - Calling a full-body rewrite (`UpdateMethodBody` / `UpdatePouDeclaration` / `UpdatePouImplementation`) for a one-line change. Use the matching `_patch` variant instead.
 - Reading the full FB declaration, hand-editing the VAR block, and writing it back. Use `AddVariable` instead.
-- Concluding "TcKit isn't working" because a reader tool succeeded but a writer tool failed. Writer tools require the bridge; reader tools do not. Surface the bridge error to the user rather than reaching for stock-tool edits.
+- Concluding "TcKit isn't working" because a reader tool succeeded but a writer tool failed. Writer tools require XAE open with the solution loaded; reader tools do not. Surface the COM error to the user rather than reaching for stock-tool edits.
 - Re-reading the changed item with `GetPouItem` / `GetPouDeclaration` / `Read` immediately after a successful writer call to confirm it landed. The writer already told you it succeeded. (This is about verifying the *write itself*, not about running the build / test cycle the user asked for — that's a hand-off to `tc-build-test-loop`, not a re-read.)
 
 ## Next

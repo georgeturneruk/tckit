@@ -20,9 +20,9 @@ This skill uses **only the TcKit reader tools** and the stock `Read`/`Grep`/`Glo
 - `mcp__tckit__GetGvl` — one GVL's declaration
 - `mcp__tckit__GetDut` — one DUT's declaration (struct, enum, union, alias)
 
-**Reader tools read XML directly from disk. They do NOT need the Windows bridge service.** They work whenever the TcKit MCP server is reachable, even if no PLC is connected and the bridge is down.
+**Reader tools read XML directly from disk. They do NOT need XAE or a live PLC.** They work whenever the TcKit MCP server is reachable, even with no XAE open and no PLC connected.
 
-**Do NOT call writer or build tools from this skill.** `mcp__tckit__OpenProject`, `AddPou`, `Build`, `Deploy`, `RunTests`, and similar are out of scope here. They require the Windows bridge service and have no bearing on reading. If you see one of those tools error with "bridge not reachable" or similar, that error tells you nothing about whether the reader tools work — keep using `get_*`.
+**Do NOT call writer or build tools from this skill.** `mcp__tckit__OpenProject`, `AddPou`, `Build`, `Deploy`, `RunTests`, and similar are out of scope here. They need XAE open (or a live target) and have no bearing on reading. If you see one of those tools error because XAE or the target isn't reachable, that error tells you nothing about whether the reader tools work — keep using `get_*`.
 
 Common request shapes and the one-call answer:
 

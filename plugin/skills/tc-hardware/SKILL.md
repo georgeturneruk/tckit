@@ -12,7 +12,7 @@ Three distinct lanes, each with a different transport and precondition. Pick the
 | ---- | ----- | ------------------------ |
 | **Diagnostics** (read-only) | `ListEtherCatMasters`, `GetEtherCatStatus`, `GetIpcHardware`, `ListAxes`, `GetAxisState` | ADS to a **running** target by AMS Net ID. No XAE. |
 | **Symbol I/O** | `ReadSymbols`, `WriteSymbols`, `InvokeRpc` | ADS to a target in **Run mode** by AMS Net ID. No XAE. |
-| **I/O authoring** (COM) | `ScanHardware`, `ScaffoldHardwareCode`, `AddEtherCatMaster`, `AddEtherCatBox`, `DeleteIoDevice` | XAE open with a solution loaded (the writer/bridge constraint). Reads/edits the configured project, not the physical bus. |
+| **I/O authoring** (COM) | `ScanHardware`, `ScaffoldHardwareCode`, `AddEtherCatMaster`, `AddEtherCatBox`, `DeleteIoDevice` | XAE open with a solution loaded (the writer constraint). Reads/edits the configured project, not the physical bus. |
 
 ## Where `targetAmsId` comes from
 
@@ -84,7 +84,7 @@ what to pass. Every write is **saved to that project's `.tsproj` on disk immedia
 
 - Calling `WriteSymbols` / `InvokeRpc` with `confirmed=true` without first showing the user the target and the exact write/call.
 - Using the COM authoring tools (`ScanHardware`, `Add*`) against a target by AMS Net ID — they operate on the open XAE solution, not a remote runtime. Conversely, using the ADS diagnostics tools to inspect a project that isn't running.
-- Concluding "TcKit isn't working" because a COM authoring tool failed with a bridge error while an ADS diagnostics tool worked (or vice versa) — they use different transports.
+- Concluding "TcKit isn't working" because a COM authoring tool failed (XAE not open) while an ADS diagnostics tool worked (or vice versa) — they use different transports.
 - Reporting an absent IPC module (null UPS, empty fans) as a fault. Absent ≠ failed.
 
 ## Next

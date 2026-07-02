@@ -3,7 +3,7 @@ adr: 0015
 title: C#/.NET rearchitecture (single in-process MCP server)
 status: Accepted
 created: 2026-06-28
-last_reviewed: 2026-06-28
+last_reviewed: 2026-07-02
 issue:
 pr:
 supersedes:
@@ -16,48 +16,39 @@ related: [0006, 0009, 0011, 0014]
 **Decision (live):** Rearchitect TcKit as a single C#/.NET (net8) MCP server,
 deleting both the Python package and the PowerShell COM bridge. ADS and
 hardware go through `Beckhoff.TwinCAT.Ads` + TwinSharp; the Automation
-Interface (project authoring) is hand-rolled against `TCatSysManagerLib` with
-TcUnit-Runner as the reference for COM bring-up; MCP is the official .NET SDK
-with stdio + SSE transports, and the project stays MIT. Sharp cutover on a branch, with the existing
-Python stack kept as a parity oracle until every tool matches.
+Interface (project authoring) is hand-rolled against `TCatSysManagerLib`;
+MCP is the official .NET SDK, and the project stays MIT.
 
-**Where it lives:** Committed; scaffold on `feat/csharp-rewrite`. Both off- and
-on-machine feasibility now retired against a live 4026 (see
-[finding](../bench/findings/2026-06-28-csharp-rewrite-feasibility.md)): net8 DTE
-attach + tree read + self-cleaning `add_pou` authoring, the dependency stack, and
-a real MCP stdio handshake all work. The reader lane is complete: all six readers
-(`get_structure`, `get_pou_interface`, `get_pou_declaration`, `get_pou_item`,
-`get_gvl`, `get_dut`) are ported (offline XML, `TcKit.Adapters.Reader`, sharing a
-stateful per-PLC symbol index with .plcproj mtime staleness) with xUnit coverage
-and the oracle green across the bench fixtures.
+**Where it lives:** The port is complete (every lane in
+[dotnet/PORTING.md](../dotnet/PORTING.md) checked off) and the **cutover has
+been executed** on `feat/csharp-rewrite`: the Python package, PowerShell
+bridge, and Docker mode are deleted, and the parity oracle retired with them
+(the live smoke harnesses remain in `dotnet/oracle/`). CI is
+`.github/workflows/dotnet-ci.yml` (Linux build + xUnit + skills drift check);
+the site pipeline (`scripts/build-docs.sh`) runs the C# doc generator; the
+plugin builds and launches the C# server; README and docs describe the C#
+surface. `tests/fixtures/` and `bench/fixtures/` survive the deletion because
+the xUnit suite reads them.
 
-**Config/CLI scope (2026-07-01):** the Python `init` / `config` / `doctor` CLI subcommands and the
-layered TOML+JSON config loader are deliberately not ported — most were bridge-era plumbing that the
-rearchitecture deletes, and the few runtime defaults the server needs are read from the environment.
-The one part with real behaviour, the safety stance, is ported as a small hot-reloaded permission gate
-(`IPermissionGate` → `FilePermissionGate`, `~/.tckit/permissions.json`): a read/write/execute mode plus
-allowed/blocked target NetIds, with block as an unbypassable hard guard and `GetPermissions` /
-`SetPermissions` tools for easy in-session swapping of the soft facets. See PORTING.md for the shape.
+**Safety stance:** the Python config CLI was not ported; the permission gate
+(`~/.tckit/permissions.json`: read/write/execute mode + NetId allow/block,
+block unbypassable, hot-reloaded, `GetPermissions`/`SetPermissions` tools)
+replaces it. `Deploy`/`StartRuntime`/`RunTests` are gated by mode + NetId;
+`WriteSymbols`/`InvokeRpc`/`DeleteIoDevice` additionally require
+`confirmed=true`.
 
-**Parity stance:** byte-for-byte parity is *not* a goal. The rewrite makes
-deliberate, reviewed improvements to the MCP surface where they help (e.g. a
-unified result shape); Python is a behavioural reference and the oracle a
-semantic cross-check, not a strict diff. The verification gate is the xUnit
-suite.
+**Parity stance:** byte-for-byte parity was not a goal. The shipped surface
+makes reviewed improvements: PascalCase tool names / camelCase parameters
+(snake_case output JSON), a unified `{ "error": msg }` failure shape, and
+net-new lanes (hardware diagnostics, symbol I/O, I/O authoring,
+`FindHardware`). The verification gate is the xUnit suite.
 
-**Open questions:** Narrowed after the on-machine spike. Remaining:
-- ADS symbol value read end-to-end (proven to link and route from net8; blocked
-  only on a PLC runtime in Run on the target).
-- SSE working for the separate-machines case.
-- ~~Typed `TCatSysManagerLib` interop~~ — resolved: the writer uses late-bound
-  `dynamic` behind an automation seam (`ITcSession`/`ITcSysManager`/`ITcTreeItem`)
-  with COM and in-memory-fake implementations. This keeps the solution building
-  without TwinCAT (no interop assembly) and makes the authoring logic CI-testable
-  against the fake. Typed interop is no longer pursued.
-- ~~Live on-XAE smoke of the COM wrapper~~ — done: a self-cleaning
-  OpenProject -> AddPou -> DeletePou cycle ran against a live TcXaeShell (POU
-  authored to disk and removed, both reporting success). The `ComTc*` layer is
-  proven. Per-verb live coverage beyond open/add/delete is still incremental.
+**Open questions:**
+- SSE / streamable-HTTP for the separate-machines case. Deliberately left
+  open and **not gating the cutover**; stdio is the shipped transport.
+- Formal live cross-check of the IPC hardware readings (CPU frequency units,
+  router-memory mapping). The ADS lanes have had informal live testing on the
+  bench; not CI-gated.
 
 ## Context
 
@@ -247,3 +238,11 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   mid-session. Missing file = permissive (opt-in), malformed = keep last good, typo'd mode = fall
   to read. 18 gate tests added; full suite 266 green. Remaining: a docs page (docs/content +
   tc-config skill still describe the Python config).
+- 2026-07-02: Cutover executed. All lanes in PORTING.md complete (including the net-new
+  hardware diagnostics, symbol I/O, I/O authoring, and `FindHardware` lanes); README, docs
+  site, skills, and plugin rewritten for the C# surface (plugin now builds and launches
+  `TcKit.Server` from its clone). Deleted: `tckit/`, `bridge/`, `docker/`, the Python
+  tests (fixtures kept for xUnit), `pyproject.toml`, the Python CI + PyPI release
+  workflows, and the parity-oracle `compare.ps1`. `scripts/build-docs.sh` now bootstraps
+  the .NET 8 SDK and runs the C# doc generator. SSE explicitly left open without gating
+  the cutover. Promote to Implemented (and fill `pr:`) when the branch merges to main.

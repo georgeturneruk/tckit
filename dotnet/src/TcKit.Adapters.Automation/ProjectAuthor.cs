@@ -556,8 +556,8 @@ internal static partial class ProjectAuthor
             {
                 throw new InvalidOperationException(
                     $"save_plc_as_library cold-start retry failed during warm-up build: {warmupExc.Message}. "
-                    + "Headless XAE mode is known-incompatible with cold-start save "
-                    + "(Microsoft Visual Studio Appid Stub SyncLock); use XAE_MODE=attach.");
+                    + "A headless XAE instance is known-incompatible with cold-start save "
+                    + "(Microsoft Visual Studio Appid Stub SyncLock); open the solution in TcXaeShell and retry.");
             }
 #pragma warning restore CA1031
 

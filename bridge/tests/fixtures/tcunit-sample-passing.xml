@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuites tests="2" failures="0" errors="0" time="0.08">
-  <testsuite name="FB_Adder_Suite" tests="2" failures="0" errors="0" time="0.08">
-    <testcase name="Adds_TwoPositives" classname="FB_Adder_Suite" time="0.04"/>
-    <testcase name="Adds_TwoZeros" classname="FB_Adder_Suite" time="0.04"/>
-  </testsuite>
-</testsuites>

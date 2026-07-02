@@ -12,30 +12,29 @@ reference live in [docs/content/architecture/overview.md](docs/content/architect
 
 ## What this project is
 
-TcKit is an MCP server that connects Claude Code to TwinCAT 3 PLC projects.
-Target platform: TwinCAT 3.1 Build 4026.
+TcKit is an MCP server (C#/.NET 8) that connects Claude Code to TwinCAT 3 PLC
+projects. Target platform: TwinCAT 3.1 Build 4026.
 
 ---
 
 ## Architecture: the one rule
 
-**Adapters may only import from ports and stdlib. Never from each other.**
+**Adapters reference only `TcKit.Core`. Never each other.**
 
 ```
-MCP Server → Port (abstract) → Adapter (concrete) → External tool
+MCP Server → Port (interface) → Adapter (concrete) → External tool
 ```
 
-The MCP server calls ports. Ports define interfaces. Adapters implement them.
-If you need to share logic between adapters, put it in a utility module under
-`tckit/utils/` and import that. Never import adapter-to-adapter. This is
-enforced by `scripts/check-adapter-isolation.py`, which runs in CI. Do not
-break this rule.
+The MCP server calls ports. Ports define interfaces (`TcKit.Core.Ports`).
+Adapters implement them, each in its own project. Shared logic belongs in
+`TcKit.Core`, never in a sibling adapter; the project graph enforces this.
+Do not add an adapter-to-adapter project reference.
 
 Top-level layout (full tree in [architecture/overview.md](docs/content/architecture/overview.md)):
 
 ```
-tckit/    ← Python package (ports + adapters)
-bridge/   ← Windows PowerShell COM bridge
+dotnet/   ← C# solution (TcKit.Core, TcKit.Server, TcKit.Cli, adapters, tests)
+plugin/   ← Claude Code plugin (launcher + shipped skill copies)
 docs/     ← MkDocs site
 adrs/     ← Architecture Decision Records
 ```
@@ -78,14 +77,11 @@ lives in the [tc-adr skill](.claude/skills/tc-adr/SKILL.md).
 
 ## Config and secrets
 
-- `~/.tckit/config.toml`: user-global, machine-specific values (AMS IDs, paths,
-  safety stance). Scaffold via `tckit init`.
-- `tckit/templates/config.toml.example`: committed template, shipped as package
-  data and printable via `tckit init --print`.
-- `config.json` (project-local, optional): adapter-name overrides only. Never
-  put secrets, AMS IDs, or file paths here.
-- `docker/.env`: Docker-mode env vars; gitignored. `docker/.env.example` is the
-  committed template.
+- `~/.tckit/permissions.json` (or `$TCKIT_HOME/permissions.json`): user-global
+  safety stance (mode, allowed/blocked NetIds). Hot-reloaded; template at
+  `dotnet/permissions.example.json`.
+- Runtime defaults the server needs are read from the environment; there is no
+  config CLI or project-local config file.
 
 Never commit a `.env` file or any file containing AMS IDs or absolute paths.
 
@@ -110,10 +106,10 @@ when there are none. One branch, one PR, one squash commit on main.
 
 ## What NOT to do
 
-- Do not import one adapter from another (mirrors the one rule above).
+- Do not reference one adapter from another (mirrors the one rule above).
 - Do not hardcode file paths, AMS IDs, or COM version strings.
 - Do not fetch full POUs when you need one method (cross-cutting frugality).
-- Do not put secrets in `config.json` or commit `.env` files.
+- Do not commit `.env` files or anything containing AMS IDs.
 
 Skill-owned guards (deploy gating, safety-name guard, rename guard, comment
 style, never-edit-XML-directly, test-loop iteration cap, etc.) live in the

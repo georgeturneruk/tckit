@@ -1,7 +1,6 @@
 name: .NET CI
 
-# Build + unit-test the C# rewrite (ADR-0015) on Linux. This runs alongside the Python `ci.yml`
-# for now; at the sharp cutover it replaces it. It works on ubuntu even though every project is
+# Build + unit-test TcKit on Linux. It works on ubuntu even though every project is
 # `net8.0-windows`: nothing here uses the Windows Desktop packs (WPF/WinForms/UI-Automation) — the
 # only Windows-bound code is COM + P/Invoke in the Automation adapter, which are compile-anywhere
 # externs exercised only behind in-memory fakes. EnableWindowsTargeting lets the SDK restore the
@@ -10,7 +9,7 @@ name: .NET CI
 
 on:
   push:
-    branches: [feat/csharp-rewrite]
+    branches: [main, feat/csharp-rewrite]
   pull_request:
     branches: [main]
 
@@ -42,3 +41,7 @@ jobs:
 
       - name: Test
         run: dotnet test TcKit.sln --configuration Release --no-build --verbosity normal
+
+      - name: Skills drift check (.claude/skills/ vs plugin/skills/)
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/sync-skills.py --check

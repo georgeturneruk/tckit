@@ -4,6 +4,38 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - Unreleased
+
+### Changed
+
+- **Rearchitected as a single C#/.NET 8 MCP server.** The Python package and
+  the PowerShell COM bridge are gone; one process now drives the Automation
+  Interface directly (COM) and the runtime natively (Beckhoff.TwinCAT.Ads +
+  TwinSharp). No bridge window, no `uv`, no Docker mode. The plugin builds and
+  runs the bundled server (requires the .NET 8 SDK); tool names are now
+  PascalCase.
+- **Safety stance moved to `~/.tckit/permissions.json`.** A hot-reloaded
+  permission gate (read/write/execute mode plus target NetId allow/block
+  lists) replaces `config.toml`, the `tckit init`/`config`/`doctor` CLI, and
+  the `BLOCKED_NETIDS`/`ALLOWED_NETIDS` env vars. `Deploy`/`StartRuntime`/
+  `RunTests` are gated by mode and NetId; `WriteSymbols`/`InvokeRpc`/
+  `DeleteIoDevice` additionally require `confirmed=true`.
+
+### Added
+
+- **Live symbol I/O and RPC over ADS**: `ReadSymbols`, `WriteSymbols`,
+  `InvokeRpc`.
+- **Hardware diagnostics**: EtherCAT master/slave status with CRC counters,
+  IPC health (CPU/memory/fans/UPS), NC axis state.
+- **I/O tree tools**: `ScanHardware`, `ScaffoldHardwareCode`, plus authoring
+  verbs `AddEtherCatMaster`, `AddEtherCatBox`, `DeleteIoDevice`.
+- **Hardware datasheet lookup**: `FindHardware(orderNumber)` returns the
+  infosys description and parsed technical-data table for EL/EK/EP/EPP/EJ/
+  EPI/CU families.
+- **Writer verbs**: folders, per-variable add/delete, full delete coverage,
+  library placeholders with parameter overrides.
+- **tc-hardware skill** shipped in the plugin.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added

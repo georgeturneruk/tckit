@@ -48,11 +48,6 @@ pin it as a fake-backed test so it cannot regress.
 
 ## MCP contract
 
-Byte-for-byte parity with the Python tools is **not** a goal; the port is free to
-make deliberate, reviewed improvements to the surface. The Python stack is a
-behavioural reference and the oracle a semantic cross-check (see `oracle/`), not
-a strict diff. The per-tool verification gate is the xUnit suite.
-
 The MCP surface follows our C# identifier conventions rather than the snake_case
 ecosystem default: **PascalCase tool names** (set explicitly via
 `[McpServerTool(Name = "...")]`, since the SDK would otherwise camelCase the
@@ -77,5 +72,5 @@ emitted); **failure returns `{ "error": "<message>" }`**. Never leak a raw
 
 ## Tests
 
-xUnit, `Method_Scenario_Expectation` naming. The Python golden-master oracle is a
-separate integration harness that diffs resulting project artifacts.
+xUnit, `Method_Scenario_Expectation` naming. The verification gate is the xUnit
+suite; live COM/ADS validation runs through the smoke harnesses in `oracle/`.
