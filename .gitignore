@@ -79,3 +79,6 @@ bench/fixtures/_smoke-*/
 bridge.log
 bridge.err.log
 tckit-server.log
+
+# Claude Code scheduled-tasks lock (local runtime state)
+.claude/scheduled_tasks.lock
