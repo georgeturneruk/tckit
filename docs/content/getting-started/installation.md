@@ -1,13 +1,11 @@
 # Installation
 
-Two recommended paths: the **Claude Code plugin** (easiest, drives a guided setup) and **pip** (manage the MCP server yourself). Docker exists for CI and containerised dev only; it's not a user install path.
-
 ## Requirements
 
-- [Claude Code](https://docs.claude.com/en/docs/claude-code)
-- For write, build, deploy, and test: a **Windows** host with **TwinCAT 3.1 Build 4026** and **TcXaeShell**. Reads work without it.
+- [Claude Code](https://docs.claude.com/en/docs/claude-code) (or any MCP client)
+- A Windows host with **TwinCAT 3.1 Build 4026** and **TcXaeShell**
 
-The plugin uses [`uv`](https://docs.astral.sh/uv/) under the hood. If you don't have it, `pip install uv` will do.
+Reading projects, generating docs, and searching infosys work without TwinCAT installed. Writes, builds, and hardware authoring need TcXaeShell open with the solution loaded; runtime tools (deploy, tests, symbols, diagnostics) need an ADS route to the target.
 
 ## Plugin (recommended)
 
@@ -19,54 +17,23 @@ In Claude Code:
 > Set me up for TcKit.
 ```
 
-The bundled `tc-config` skill walks you through the prompts and writes your config to `~/.tckit/config.toml`. The MCP server runs as `uvx tckit`, fetching the package from PyPI on first use; updates happen automatically.
+The bundled skills walk you through setup.
 
-Skip to [Bridge Setup](bridge-setup.md) if you need write/build/deploy/test.
+## From source
 
-## pip (without the plugin)
+With the .NET 8 SDK:
 
-If you want to manage the MCP server yourself rather than going through the plugin:
-
-```bash
-pip install tckit
-tckit init                  # write ~/.tckit/config.toml from the bundled template
-$EDITOR ~/.tckit/config.toml
-tckit doctor                # health check
+```
+dotnet build dotnet/TcKit.sln -c Release
+claude mcp add tckit -- <clone>\dotnet\src\TcKit.Server\bin\Release\net8.0-windows\TcKit.Server.exe
 ```
 
-Then register it with Claude Code:
-
-```bash
-claude mcp add tckit -- tckit
-```
-
-`tckit init --print` emits the template to stdout if you'd rather drive your own scaffolding.
-
-## Docker (CI / dev only)
-
-Docker mode is supported for CI and contributor workflows, not as a user install path. The container can't reach Windows host paths passed in from Claude Code, so it works only against projects mounted at the same path the agent will request. See [Docker Setup](docker-setup.md) for details and the [open caveat](https://github.com/georgeturneruk/tckit/issues/43).
-
-## Bridge (Windows, for write/build/deploy/test)
-
-Both install paths use the same bridge service for write operations. The bridge ships inside the `tckit` Python package; install it to `~/.tckit/bridge/` with:
-
-```powershell
-tckit bridge install
-```
-
-(`tckit doctor` will offer to run this for you when it spots that the bridge is down and not yet installed.) Then, in a separate PowerShell window with TcXaeShell open:
-
-```powershell
-~/.tckit/bridge/Start-Bridge.ps1
-```
-
-See [Bridge Setup](bridge-setup.md) for firewall and XAE-mode details.
+The server speaks MCP over stdio; any MCP client can register the built exe the same way.
 
 ## Verify
 
-```bash
-tckit doctor        # config + bridge health check
-tckit --help        # available subcommands and flags
-```
+Ask your MCP client to call `Ping`, then `GetStructure` against a TwinCAT project path.
 
-To verify end-to-end, ask Claude Code (or any MCP client) to call a TcKit tool, for example `get_structure` against a TwinCAT project path.
+## Next
+
+Set the [safety stance](permissions.md) before pointing TcKit at a live PLC.

@@ -4,69 +4,41 @@
 
 # TcKit
 
-An MCP server that gives AI agents a precise, structured view of a TwinCAT 3 project, and the tools to change, build, and test it.
+TwinCAT MCP server.
+
+What can it do?
+
+ - Read and write structured text code, and deploy it to a runtime
+ - Read and write live variables over ADS
+ - Write and run tests with TcUnit
+ - More: see the [full tool reference](https://tckit.org/architecture/overview/)
 
 **[tckit.org](https://tckit.org)** for full documentation.
 
 ---
 
-> [!WARNING]
-> **TcKit is in active development and not yet production-ready.** Expect breaking changes between minor versions, rough edges, and missing features.
-
----
-
 ## Why TcKit
 
-LLMs get worse as their context fills up. Anthropic call this [context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents). TwinCAT's file format makes it worse: a `.TcPOU` is XML wrapped around code, easily thousands of lines for one function block. That XML contaminates context the moment it's loaded.
+TwinCAT programming isn't like other software development. Code is stored in a proprietary format and there's no command line runner. Everything has to go through the Windows-based XAE.
 
-TcKit is the layer in between. It groups six MCP capabilities around three ideas: just-in-time retrieval for reads, a single source of truth for writes, and structured results from builds and tests.
+Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer goes through Beckhoff's Automation Interface. It avoids manual edits. Instead it uses the exact same mechanism as the XAE.
 
-Wired together, the model runs that loop without an engineer walking each cycle: write a method, build, test, fix the failure, build again.
+The reader is more efficient than having an agent manually sift through large amounts of XML (the format of TwinCAT files). [Context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) kills performance. TcKit prevents that.
 
-## Capabilities
-
-| Port | Purpose |
-|---|---|
-| **ProjectReader** | Layered reads: project structure → POU interface → single method/property |
-| **ProjectWriter** | Structural writes via the IDE so GUIDs and cross-refs stay consistent |
-| **BuildRunner** | Build, deploy, and runtime control with parsed `{file, line, message, severity}` diagnostics |
-| **TestRunner** | Run TcUnit suites and return parsed pass/fail trees |
-| **DocGenerator** | Render navigable HTML docs from comments in the ST source |
-| **DocsSearcher** | Fetch the one relevant Beckhoff infosys page on demand, no manual pre-loading |
-
-Each port is a stable contract; adapters are swappable. See [tckit.org](https://tckit.org) for method tables and rationale.
-
-## Benchmarks
-
-Head-to-head writer-task runs of TcKit-equipped Claude vs vanilla Claude:
-
-| Task | Tokens | Wall time | Tool calls |
-|---|---|---|---|
-| Add a `VAR_INPUT` to an FB | **2.4× fewer** (1,653 → 691) | **1.27× faster** (27.5s → 21.7s) | 5 → 3 |
-| Add a method to an FB | **2.4× fewer** (1,236 → 508) | **1.69× faster** (26.2s → 15.5s) | 5 → 2 |
-
-N=1 per cell. See [`bench/findings/`](https://github.com/georgeturneruk/tckit/tree/main/bench/findings) for full methodology and a record of the harness gotchas behind the numbers.
+And some of it simply isn't possible without extra tooling: reading live variables over ADS, EtherCAT diagnostics, running TcUnit suites and getting parsed results back.
 
 ## See it in action
 
-The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published live at **[tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/)**. Navigate the function block hierarchy, search the API, drill into a method, all rendered from TcUnit's source code. Under the hood, the same understanding of TwinCAT's XML powers ProjectReader: an agent reads a project the way you would, never loading more than the question needs.
-
-## Architecture
-
-```
-AI agent (MCP client) → TcKit MCP Server → Port (ABC) → Adapter → TwinCAT XAE / PLC
-```
-
-The server only calls ports. Adapters may only import from ports and stdlib, never from each other. CI enforces it. Full diagram at [tckit.org/architecture/overview/](https://tckit.org/architecture/overview/).
+The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is published at **[tckit.org/examples/tcunit/](https://tckit.org/examples/tcunit/)**. Under the hood, the same understanding of TwinCAT's XML powers the reader: an agent navigates a project the way you would, never loading more than the question needs.
 
 ## Quick Start
 
 > [!CAUTION]
-> The `deploy` and `start_runtime` tools write to and restart a running PLC. They require explicit `confirmed=True` by default. Always verify the target NetId. Set `BLOCKED_NETIDS=<netid>,...` to permanently block targets (e.g. a production PLC).
+> `Deploy`, `StartRuntime`, `RunTests`, `WriteSymbols`, and `InvokeRpc` act on a live PLC. Always verify the target NetId. The safety stance lives in `~/.tckit/permissions.json`: set `mode` (`read` / `write` / `execute`), and list targets in `blocked_net_ids` to permanently block them (e.g. a production PLC). Live writes additionally require explicit `confirmed=true`.
 
-Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host (only for write/build/deploy/test; reads work without it).
+Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host.
 
-**Plugin (recommended).** Needs [`uv`](https://docs.astral.sh/uv/). In Claude Code:
+**Plugin (recommended).** In Claude Code:
 
 ```
 /plugin marketplace add georgeturneruk/tckit
@@ -74,21 +46,14 @@ Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host
 > Set me up for TcKit.
 ```
 
-The bundled `tc-config` skill walks you through setup. The MCP server runs as `uvx tckit`.
+The bundled skills walk you through setup.
 
-**pip.** If you'd rather manage the MCP server yourself: `pip install tckit`, then `tckit init` to scaffold `~/.tckit/config.toml`, then `claude mcp add tckit -- tckit`.
+**From source.** With the .NET 8 SDK:
 
-**Docker.** CI / containerised dev only. See [tckit.org/getting-started/docker-setup/](https://tckit.org/getting-started/docker-setup/) for the caveats.
-
-**Bridge.** For write/build/deploy/test, run the bridge in a separate PowerShell window with TcXaeShell open:
-
-```powershell
-.\bridge\Start-Bridge.ps1
 ```
-
-## Status
-
-All six capabilities are implemented and shipping. See [releases](https://github.com/georgeturneruk/tckit/releases) for version history.
+dotnet build dotnet/TcKit.sln -c Release
+claude mcp add tckit -- <clone>\dotnet\src\TcKit.Server\bin\Release\net8.0-windows\TcKit.Server.exe
+```
 
 ## Contributing
 

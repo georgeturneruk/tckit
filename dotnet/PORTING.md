@@ -194,7 +194,7 @@ hot-reloaded permission gate instead:
   stays ungated by design — the gate guards the agent-facing MCP surface.
 
 - [x] permission gate + GetPermissions / SetPermissions — CI-tested (`FilePermissionGateTests`)
-- [ ] docs page for the safety stance (docs/content + tc-config skill still describe the Python config)
+- [x] docs page for the safety stance — `docs/content/getting-started/permissions.md`; tc-config skill updated to match
 
 ## Authoring (Automation Interface; port last)
 

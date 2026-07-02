@@ -1,30 +1,52 @@
-# TestRunner
+# Testing
 
-**File:** `tckit/ports/test_runner.py`
-**Purpose:** Run unit tests on the PLC runtime and return parsed results.
+Runtime control and TcUnit test orchestration over ADS. These target a runtime by AMS Net ID; no XAE needed.
 
-| Method | Returns |
-|--------|---------|
-| `run_tests(target_ams_id, *, plc_name=None)` | `Result` |
-| `get_results(target_ams_id, *, plc_name=None)` | `TestResults` |
+| Tool | Purpose |
+|---|---|
+| `StartRuntime(targetAmsId)` | Restart the target into Run mode and wait until it's reached |
+| `RunTests(targetAmsId, waitForResults?, timeoutSeconds?, plcName?)` | Run the TcUnit suites to completion; inlines failures-only results |
+| `GetTestResults(targetAmsId, plcName?, xmlPath?)` | Parse the full results (passes included) from the published xUnit XML |
 
-`run_tests` blocks until the suites finish or the bridge's timeout fires.
-`get_results` returns the parsed XML the run wrote — call it after
-`run_tests` has succeeded.
+`StartRuntime` and `RunTests` act on a live target: execute-class, gated by the [safety stance](../../getting-started/permissions.md). `GetTestResults` only parses XML.
 
-`target_ams_id` and `plc_name` mirror the IDE workflow: you pick both
-the target route and the test PLC project before running tests. Both
-are explicit on every call so an MCP session can't accidentally run on
-the wrong target through implicit state.
+## Requirements
 
-`TestResults` is a parsed suite/test tree with pass/fail and assertion
-detail (expected / actual / line) — not a console scrape.
+- The [TcUnit library](https://github.com/tcunit/TcUnit) installed (distributor `www.tcunit.org`), referenced via a placeholder.
+- TcUnit's xUnit publisher enabled, or no XML is ever written:
+
+```
+SetPlaceholderParameters("TcUnit", '{"GVL_Param_TcUnit": {"xUnitEnablePublish": "TRUE"}}')
+```
+
+The XML lands at TcUnit's default path under the boot directory. If the project overrides `xUnitFilePath`, pass the resolved path to `GetTestResults` via `xmlPath`.
+
+## Result shape
+
+A parsed suite/test tree, not a console scrape:
+
+```json
+{
+  "suites": [
+    {
+      "name": "FB_Adder_Suite",
+      "tests": [
+        {
+          "name": "Subtracts_TwoPositives",
+          "passed": false,
+          "failures": [
+            { "message": "AssertEquals_INT failed", "expected": "1", "actual": "2", "line": 42 }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": { "suites": 1, "tests": 2, "failures": 1, "errors": 0 }
+}
+```
+
+`expected` / `actual` / `line` are extracted from TcUnit's assertion messages on a best-effort basis; the full failure text is always in `message`.
 
 ## Why this shape
 
-The point of a test loop is feedback the model can act on without
-re-reading everything. A structured result tree lets it locate the one
-failing assertion and jump straight to that POU item via
-[ProjectReader](../project-reader/overview.md). Same
-[tool-design principle](https://www.anthropic.com/engineering/writing-tools-for-agents)
-as BuildRunner: parsed beats raw.
+The point of a test loop is feedback the model can act on without re-reading everything. A structured result tree lets it locate the one failing assertion and jump straight to that POU item via the [reader](../project-reader/overview.md).
