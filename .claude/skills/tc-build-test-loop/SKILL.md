@@ -1,6 +1,6 @@
 ---
 name: tc-build-test-loop
-description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (Build, Deploy, StartRuntime, RunTests, GetTestResults). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, the awaiting_confirmation handshake for deploy and StartRuntime, and the save+install rule for multi-PLC solutions with library references. Do NOT use for the initial code write itself (that is tc-write-st).
+description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (Build, Deploy, StartRuntime, RunTests, GetTestResults). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, the permission-gate rules for Deploy and StartRuntime (surface denials, never self-elevate), and the save+install rule for multi-PLC solutions with library references. Do NOT use for the initial code write itself (that is tc-write-st).
 allowed-tools: mcp__tckit__Build, mcp__tckit__Deploy, mcp__tckit__StartRuntime, mcp__tckit__RunTests, mcp__tckit__GetTestResults, mcp__tckit__UpdateMethodBody, mcp__tckit__UpdateMethodBodyPatch, mcp__tckit__UpdatePouImplementation, mcp__tckit__UpdatePouImplementationPatch, mcp__tckit__GetPouItem, mcp__tckit__GetPouInterface, mcp__tckit__SavePlcAsLibrary
 ---
 
@@ -16,25 +16,25 @@ allowed-tools: mcp__tckit__Build, mcp__tckit__Deploy, mcp__tckit__StartRuntime, 
 4. Rebuild. Do not batch fixes across files.
 5. **Two-strikes rule.** If the same error message on the same file/line persists after a second fix attempt, STOP. Present the error, your two attempts, your hypothesis, and ask the user.
 
-## Where `target_ams_id` comes from
+## Where `targetAmsId` comes from
 
-`Deploy`, `StartRuntime`, and `RunTests` default `target_ams_id` from the `TARGET_AMS_ID` env var or the same field in `~/.tckit/config.toml`. If neither is set the tool returns a clear "target_ams_id is required" error — ask the user for the target rather than guessing or hunting through the filesystem.
+`Deploy`, `StartRuntime`, and `RunTests` take a required `targetAmsId` parameter; there is no env-var or config-file default. If you don't know the target, ask the user rather than guessing or hunting through the filesystem.
 
-## Deploy and StartRuntime — the safety-gate handshake
+## Deploy and StartRuntime — the permission gate
 
-`Deploy(target_ams_id, confirmed=False)` and `StartRuntime(target_ams_id, confirmed=False)` are gated server-side. The first call without `confirmed=True` returns an `awaiting_confirmation` JSON payload describing the action and target.
+`Deploy`, `StartRuntime`, and `RunTests` are execute-class tools, gated server-side by the permission file at `~/.tckit/permissions.json` (or `$TCKIT_HOME/permissions.json`), hot-reloaded on every call. The gate has two axes:
 
-When you receive `awaiting_confirmation`:
+- **mode** — `read` < `write` < `execute`. `Build` needs `write`; the three execute-class tools need `execute`. A call above the current mode returns `{"error": "Permission denied: ..."}`.
+- **Target NetIds** (execute-class only) — `blocked_net_ids` is a hard "never touch this target" guard (block always wins); a non-empty `allowed_net_ids` is an allowlist.
 
-1. Treat it as a normal control-flow signal, not an error. Do not retry blindly.
-2. Surface the `warning` text and the `target_ams_id` to the user verbatim, including the override hint about ALLOWED_NETIDS / SAFETY_CONFIRMATIONS so the user knows their options.
-3. Wait for explicit approval in chat ("yes", "go ahead", "confirmed").
-4. Only then call again with `confirmed=True`.
-5. Never auto-confirm. ALLOWED_NETIDS and SAFETY_CONFIRMATIONS are the user's env config — do not assume them, do not edit `.env` to bypass the gate.
+When a call returns a `Permission denied` error:
 
-**When the gate doesn't fire.** If `Deploy` or `StartRuntime` returns a plain success with no `awaiting_confirmation` status, the server-side gate was bypassed because the target is in `ALLOWED_NETIDS` or `SAFETY_CONFIRMATIONS=false`. That is the user's standing pre-authorisation for this target — treat it as cleared and continue the cycle (StartRuntime, RunTests) rather than handing off. You are not auto-confirming; the user already did when they configured the bypass.
+1. Treat it as a normal control-flow signal, not a fault. Do not retry the same call.
+2. Surface the error text to the user verbatim — it names the missing mode or the offending NetId and how to change it.
+3. **Never self-elevate.** Do not call `SetPermissions` or edit `permissions.json` to raise the mode or extend the allowlist unless the user explicitly asks for that change in chat. The stance is the user's standing configuration, not an obstacle to route around.
+4. If the denial says the target is in `blocked_net_ids`, that is the hard guard: `SetPermissions` cannot lift it and you must not edit the file to lift it. Do not retry — surface the error and stop.
 
-If the response is `error` mentioning BLOCKED_NETIDS, the target is permanently blacklisted. Do not retry — surface the error to the user.
+**When the gate clears.** A plain success means the current mode allows execute and the target passed the NetId rules. That is the user's standing pre-authorisation for this target — continue the cycle (StartRuntime, RunTests) rather than pausing for a fresh confirmation; there is no per-call confirmed handshake on these tools. (`WriteSymbols`, `InvokeRpc`, and `DeleteIoDevice` do carry a `confirmed` handshake on top of the gate, but those belong to the tc-hardware skill, not this loop.)
 
 ## Build-before-deploy
 
@@ -51,7 +51,7 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 ## Test loop
 
 1. Build → must succeed.
-2. Deploy (with the safety-gate handshake above; if the gate doesn't fire, proceed directly).
+2. Deploy (subject to the permission gate above; on a denial, stop and surface it).
 3. `RunTests()`. The response carries `summary` (totals for the whole run) and `failures` (one entry per failed test with `suite_name`, `test_name`, `message`) inline by default. **Do not** call `GetTestResults()` on the happy path — it is for the full per-test list including passes, which you only need when the inline failure detail is insufficient.
 4. If `summary.failures == 0` you're done.
 5. For each failed test, read its body via `GetPouItem`, understand the assertion, fix the code under test (not the test, unless the test is wrong and the user agrees).
@@ -67,6 +67,6 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 ## Never
 
 - Deploy without a green build.
-- Auto-confirm a deploy or StartRuntime that returned `awaiting_confirmation` without explicit user approval in chat. (A plain success means the gate was bypassed by the user's config — that's not auto-confirming.)
+- Raise the permission mode or extend the NetId allowlist yourself to get a denied Deploy or StartRuntime through. Stance changes happen only when the user explicitly asks. (A plain success means the gate cleared under the user's standing configuration — proceeding on that is fine.)
 - Continue past test iteration 5.
 - Modify safety-critical code in a fix loop without escalating to `tc-write-st` for the human-review check.
