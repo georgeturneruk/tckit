@@ -11,8 +11,9 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 - **Rearchitected as a single C#/.NET 8 MCP server.** The Python package and
   the PowerShell COM bridge are gone; one process now drives the Automation
   Interface directly (COM) and the runtime natively (Beckhoff.TwinCAT.Ads +
-  TwinSharp). No bridge window, no `uv`, no Docker mode. The plugin builds and
-  runs the bundled server (requires the .NET 8 SDK); tool names are now
+  TwinSharp). No bridge window, no `uv`, no Docker mode. The plugin builds the
+  server from source when the .NET 8 SDK is present and otherwise downloads a
+  self-contained prebuilt server, so no SDK is required; tool names are now
   PascalCase.
 - **Safety stance moved to `~/.tckit/permissions.json`.** A hot-reloaded
   permission gate (read/write/execute mode plus target NetId allow/block
@@ -35,6 +36,10 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 - **Writer verbs**: folders, per-variable add/delete, full delete coverage,
   library placeholders with parameter overrides.
 - **tc-hardware skill** shipped in the plugin.
+- **Self-contained Windows release**: a `v*` tag publishes a single-file
+  `tckit-server-win-x64.exe` (no .NET runtime or SDK dependency) as a GitHub
+  Release asset. The plugin launcher fetches it on machines without the SDK;
+  `TCKIT_SERVER_EXE` overrides the resolved server path.
 
 ## [0.3.0] - 2026-05-27
 

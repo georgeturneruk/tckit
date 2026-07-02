@@ -3,7 +3,7 @@ adr: 0015
 title: C#/.NET rearchitecture (single in-process MCP server)
 status: Accepted
 created: 2026-06-28
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-03
 issue:
 pr: 132
 supersedes:
@@ -26,8 +26,10 @@ bridge, and Docker mode are deleted, and the parity oracle retired with them
 (the live smoke harnesses remain in `dotnet/oracle/`). CI is
 `.github/workflows/dotnet-ci.yml` (Linux build + xUnit + skills drift check);
 the site pipeline (`scripts/build-docs.sh`) runs the C# doc generator; the
-plugin builds and launches the C# server; README and docs describe the C#
-surface. `tests/fixtures/` and `bench/fixtures/` survive the deletion because
+plugin launcher runs a self-contained `tckit-server-win-x64.exe` (published to
+a `v*` GitHub Release by `.github/workflows/release.yml` on a Windows runner)
+or builds from source when the .NET 8 SDK is present, so end users need no
+SDK; README and docs describe the C# surface. `tests/fixtures/` and `bench/fixtures/` survive the deletion because
 the xUnit suite reads them.
 
 **Safety stance:** the Python config CLI was not ported; the permission gate
@@ -246,3 +248,15 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   workflows, and the parity-oracle `compare.ps1`. `scripts/build-docs.sh` now bootstraps
   the .NET 8 SDK and runs the C# doc generator. SSE explicitly left open without gating
   the cutover. Cutover PR: #132. Promote to Implemented when it merges to main.
+- 2026-07-03: #132 merged to main. Distribution model settled (replaces the
+  deleted PyPI release): a `v*` tag runs `.github/workflows/release.yml` on a
+  Windows runner to `dotnet publish` a self-contained, single-file
+  `tckit-server-win-x64.exe` (win-x64, ~74 MB, no .NET runtime/SDK dependency;
+  single-file + COM interop validated locally) and attach it, plus a SHA256, to
+  a GitHub Release. The plugin launcher resolves the server as: `TCKIT_SERVER_EXE`
+  override → cached prebuilt → build-from-source if the SDK is present → download
+  the release exe (checksum-verified, cached per version). Auto-download is the
+  no-SDK fallback rather than the primary path, so the 74 MB fetch never fires on
+  OT/air-gapped machines that have the SDK or a pre-placed exe. Landing via a
+  follow-up PR off main; full trim-on-promotion of this ADR deferred to that
+  promotion.

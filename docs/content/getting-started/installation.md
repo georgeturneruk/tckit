@@ -17,7 +17,17 @@ In Claude Code:
 > Set me up for TcKit.
 ```
 
-The bundled skills walk you through setup.
+The bundled skills walk you through setup. No .NET SDK is required: if the SDK is present the plugin builds the server from source, otherwise it downloads a self-contained server (~74 MB, cached per version) from the [releases page](https://github.com/georgeturneruk/tckit/releases).
+
+## Prebuilt binary
+
+For MCP clients other than the plugin, or for offline and locked-down machines, download `tckit-server-win-x64.exe` from the [releases page](https://github.com/georgeturneruk/tckit/releases). It is a self-contained Windows x64 build with no .NET runtime or SDK dependency.
+
+```
+claude mcp add tckit -- <path>\tckit-server-win-x64.exe
+```
+
+To point the plugin launcher at a pre-placed copy instead of letting it download, set the `TCKIT_SERVER_EXE` environment variable to the exe's full path.
 
 ## From source
 
