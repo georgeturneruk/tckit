@@ -7,6 +7,7 @@ using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
 using TcKit.Adapters.Reader;
 using TcKit.Core.Ports;
+using TcKit.Core.Security;
 
 // TcKit MCP server host. stdio transport for the local case; SSE is wired in a
 // later phase for the separate-machines requirement (ADR-0015). Tools are
@@ -16,6 +17,9 @@ var builder = Host.CreateApplicationBuilder(args);
 // On the stdio transport, stdout IS the JSON-RPC channel; any log written there
 // corrupts the protocol stream. Route all logs to stderr.
 builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+
+// The safety gate is read by every mutating tool; a singleton so its hot-reload mtime cache is shared.
+builder.Services.AddSingleton<IPermissionGate>(_ => new FilePermissionGate());
 
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
 builder.Services.AddSingleton<IProjectWriter, AutomationProjectWriter>();

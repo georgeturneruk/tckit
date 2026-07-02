@@ -31,6 +31,14 @@ a real MCP stdio handshake all work. The reader lane is complete: all six reader
 stateful per-PLC symbol index with .plcproj mtime staleness) with xUnit coverage
 and the oracle green across the bench fixtures.
 
+**Config/CLI scope (2026-07-01):** the Python `init` / `config` / `doctor` CLI subcommands and the
+layered TOML+JSON config loader are deliberately not ported — most were bridge-era plumbing that the
+rearchitecture deletes, and the few runtime defaults the server needs are read from the environment.
+The one part with real behaviour, the safety stance, is ported as a small hot-reloaded permission gate
+(`IPermissionGate` → `FilePermissionGate`, `~/.tckit/permissions.json`): a read/write/execute mode plus
+allowed/blocked target NetIds, with block as an unbypassable hard guard and `GetPermissions` /
+`SetPermissions` tools for easy in-session swapping of the soft facets. See PORTING.md for the shape.
+
 **Parity stance:** byte-for-byte parity is *not* a goal. The rewrite makes
 deliberate, reviewed improvements to the MCP surface where they help (e.g. a
 unified result shape); Python is a behavioural reference and the oracle a
@@ -228,3 +236,14 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
   path/kind before navigating (TwinCAT AI invalidates a handle once you navigate
   away, which had made DeletePou report a spurious "invalidated" error). 61 fake
   tests green; the ComTc* layer is now live-proven.
+- 2026-07-01: Config/CLI lane scoped down and the safety stance ported. Decided not to
+  port the `init` / `config` / `doctor` subcommands or the layered TOML+JSON loader (mostly
+  bridge-era knobs the rewrite deletes; remaining runtime defaults read from the environment).
+  Ported the safety stance as a hot-reloaded permission gate instead: `IPermissionGate` →
+  `FilePermissionGate` over `~/.tckit/permissions.json`, with a read/write/execute mode
+  (every mutating tool declares its level) and allowed/blocked target NetIds gating execute-class
+  calls (Deploy, StartRuntime, RunTests, WriteSymbols, InvokeRpc). Block is a hard guard (never
+  lifted by a tool); `GetPermissions` / `SetPermissions` make the soft facets easy to swap
+  mid-session. Missing file = permissive (opt-in), malformed = keep last good, typo'd mode = fall
+  to read. 18 gate tests added; full suite 266 green. Remaining: a docs page (docs/content +
+  tc-config skill still describe the Python config).

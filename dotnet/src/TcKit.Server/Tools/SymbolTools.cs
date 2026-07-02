@@ -2,17 +2,19 @@ using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
 using TcKit.Core.Ports;
+using TcKit.Core.Security;
 using TcKit.Core.Serialization;
 
 namespace TcKit.Server.Tools;
 
 /// <summary>
 /// Symbol-level ADS tools: read symbols, write symbols, and invoke RPC methods on a running runtime.
-/// They target a runtime by AMS Net ID (no XAE). write_symbols and invoke_rpc mutate / execute live
-/// PLC state, so they gate on confirmed=true (the Python safety-confirmation contract).
+/// They target a runtime by AMS Net ID (no XAE). ReadSymbols is read-class. write_symbols and
+/// invoke_rpc mutate / execute live PLC state, so they are execute-class (permission + NetId gated)
+/// and additionally require confirmed=true (the safety-confirmation contract).
 /// </summary>
 [McpServerToolType]
-public sealed class SymbolTools(ISymbolIo symbols)
+public sealed class SymbolTools(ISymbolIo symbols, IPermissionGate gate)
 {
     [McpServerTool(Name = "ReadSymbols")]
     [Description("Read PLC symbols by instance path on a running runtime (port 851). Best-effort: an "
@@ -20,7 +22,7 @@ public sealed class SymbolTools(ISymbolIo symbols)
         + "paths is the list of symbol instance paths (e.g. ['MAIN.nCounter', 'GVL.bEnable']).")]
     public Task<string> ReadSymbols(
         string targetAmsId, string[] paths, CancellationToken cancellationToken = default)
-        => Run(async () =>
+        => Run(PermissionLevel.Read, null, async () =>
         {
             var values = await symbols.ReadSymbolsAsync(targetAmsId, paths ?? [], cancellationToken).ConfigureAwait(false);
             return new { success = true, values };
@@ -33,11 +35,11 @@ public sealed class SymbolTools(ISymbolIo symbols)
         + "details.errors; success is true only when every write succeeded.")]
     public Task<string> WriteSymbols(
         string targetAmsId, string writesJson, bool confirmed = false, CancellationToken cancellationToken = default)
-        => Run(() =>
+        => Run(PermissionLevel.Execute, targetAmsId, () =>
         {
             if (!confirmed)
             {
-                return Task.FromResult<object>(Gate("write_symbols"));
+                return Task.FromResult<object>(NeedsConfirm("write_symbols"));
             }
 
             var writes = ParseObject(writesJson);
@@ -57,18 +59,18 @@ public sealed class SymbolTools(ISymbolIo symbols)
     public Task<string> InvokeRpc(
         string targetAmsId, string symbolPath, string methodName, string paramsJson = "[]",
         bool confirmed = false, CancellationToken cancellationToken = default)
-        => Run(() =>
+        => Run(PermissionLevel.Execute, targetAmsId, () =>
         {
             if (!confirmed)
             {
-                return Task.FromResult<object>(Gate("invoke_rpc"));
+                return Task.FromResult<object>(NeedsConfirm("invoke_rpc"));
             }
 
             var parameters = ParseArray(paramsJson);
             return Box(symbols.InvokeRpcAsync(targetAmsId, symbolPath, methodName, parameters, cancellationToken));
         });
 
-    private static object Gate(string tool) => new
+    private static object NeedsConfirm(string tool) => new
     {
         success = false,
         error = $"{tool} requires confirmed=true. Verify the target and values, then retry with confirmed=true.",
@@ -100,8 +102,14 @@ public sealed class SymbolTools(ISymbolIo symbols)
         return parsed.Select(e => (object?)e).ToList();
     }
 
-    private static async Task<string> Run(Func<Task<object>> call)
+    private async Task<string> Run(PermissionLevel level, string? targetAmsId, Func<Task<object>> call)
     {
+        var denied = gate.Deny(level, targetAmsId);
+        if (denied is not null)
+        {
+            return TckitJson.Serialize(new { success = false, error = denied });
+        }
+
         try
         {
             return TckitJson.Serialize(await call().ConfigureAwait(false));

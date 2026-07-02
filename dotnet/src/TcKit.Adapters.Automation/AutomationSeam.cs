@@ -71,6 +71,10 @@ internal interface ITcTreeItem
 /// <summary>One TwinCAT project's system manager: resolves tree items by '^'-delimited path.</summary>
 internal interface ITcSysManager
 {
+    /// <summary>The owning TwinCAT project's display name (the EnvDTE project name), used to target one
+    /// project's I/O tree in a multi-project solution.</summary>
+    string ProjectName { get; }
+
     /// <summary>Resolve a tree item by path (e.g. "TIPC^Plc^Plc Project^POUs"); throws if absent.</summary>
     ITcTreeItem LookupTreeItem(string path);
 
@@ -79,6 +83,10 @@ internal interface ITcSysManager
 
     /// <summary>Activate the configuration on the set target (puts TwinCAT into Run, downloads the bootapp).</summary>
     void ActivateConfiguration();
+
+    /// <summary>Persist just this TwinCAT project (EnvDTE <c>Project.Save()</c>) so I/O-tree edits hit the
+    /// <c>.tsproj</c> on disk immediately, rather than waiting for a Build's Save-All.</summary>
+    void Save();
 }
 
 /// <summary>One IDE Error List diagnostic row (raw; severity/code decoding happens in the builder).</summary>

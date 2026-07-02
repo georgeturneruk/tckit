@@ -37,7 +37,7 @@ public sealed class HardwareScanTests
     {
         var session = BuildSession(out _);
 
-        var topology = ProjectAuthor.ScanHardware(session);
+        var topology = ProjectAuthor.ScanHardware(session, null);
 
         var segment = Assert.Single(topology.Segments);
         Assert.Equal("Device 1 (EtherCAT)", segment.MasterName);
@@ -53,7 +53,7 @@ public sealed class HardwareScanTests
     {
         var session = new FakeSession();
 
-        Assert.Throws<InvalidOperationException>(() => ProjectAuthor.ScanHardware(session));
+        Assert.Throws<InvalidOperationException>(() => ProjectAuthor.ScanHardware(session, null));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public sealed class HardwareScanTests
     public void GenerateGvl_DeclaresKnownChannels_AndCommentsUnknowns()
     {
         var session = BuildSession(out _);
-        var topology = ProjectAuthor.ScanHardware(session);
+        var topology = ProjectAuthor.ScanHardware(session, null);
 
         var (code, scaffolded, unknown) = HardwareScaffold.GenerateGvl(topology);
 
@@ -88,7 +88,7 @@ public sealed class HardwareScanTests
     {
         var session = BuildSession(out var pous);
 
-        var result = ProjectAuthor.ScaffoldHardwareCode(session, "HardwareIO", "", "Plc");
+        var result = ProjectAuthor.ScaffoldHardwareCode(session, "HardwareIO", "", "Plc", null);
 
         Assert.True(result.Success);
         Assert.Equal(2, result.Details["terminals_scaffolded"]);

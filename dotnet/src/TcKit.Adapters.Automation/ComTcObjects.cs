@@ -70,9 +70,12 @@ internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
 }
 
 /// <summary>COM-backed <see cref="ITcSysManager"/> over a late-bound ITcSysManager.</summary>
-internal sealed class ComTcSysManager(dynamic sysManager) : ITcSysManager
+internal sealed class ComTcSysManager(string projectName, dynamic sysManager, dynamic dteProject) : ITcSysManager
 {
     private readonly dynamic _sm = sysManager;
+    private readonly dynamic _project = dteProject;
+
+    public string ProjectName { get; } = projectName;
 
     public ITcTreeItem LookupTreeItem(string path)
         => new ComTcTreeItem(ComRetry.Invoke<object>(() => _sm.LookupTreeItem(path)));
@@ -80,6 +83,9 @@ internal sealed class ComTcSysManager(dynamic sysManager) : ITcSysManager
     public void SetTargetNetId(string amsNetId) => ComRetry.Invoke(() => { _sm.SetTargetNetId(amsNetId); });
 
     public void ActivateConfiguration() => ComRetry.Invoke(() => { _sm.ActivateConfiguration(); });
+
+    // EnvDTE Project.Save() flushes this project's .tsproj (incl. the System/I-O structure) to disk.
+    public void Save() => ComRetry.Invoke(() => { _project.Save(); });
 }
 
 /// <summary>
@@ -119,7 +125,9 @@ internal sealed class ComTcSession : ITcSession
     }
 
     public IReadOnlyList<ITcSysManager> GetSysManagers()
-        => ProbeSysManagers().Select(sm => (ITcSysManager)new ComTcSysManager(sm)).ToList();
+        => ProbeSysManagers()
+            .Select(p => (ITcSysManager)new ComTcSysManager((string)p.Name, p.Object, p))
+            .ToList();
 
     public void Save()
     {
@@ -343,10 +351,12 @@ internal sealed class ComTcSession : ITcSession
                 var found = new List<dynamic>();
                 for (var i = 1; i <= count; i++)
                 {
-                    dynamic obj;
+                    // Keep the EnvDTE project object (not just its .Object sys manager): it carries the
+                    // project Name (to target one project) and Save() (to flush that .tsproj).
+                    dynamic project = projects.Item(i);
                     try
                     {
-                        obj = projects.Item(i).Object;
+                        dynamic obj = project.Object;
                         if (obj is null)
                         {
                             continue;
@@ -359,7 +369,7 @@ internal sealed class ComTcSession : ITcSession
                         continue;
                     }
 
-                    found.Add(obj);
+                    found.Add(project);
                 }
 
                 if (found.Count > 0)
@@ -391,7 +401,7 @@ internal sealed class ComTcSession : ITcSession
             return;
         }
 
-        dynamic sm = managers[0];
+        dynamic sm = managers[0].Object;   // ProbeSysManagers now returns EnvDTE projects; .Object is the sys manager
         dynamic tipc = ComRetry.Invoke<object>(() => sm.LookupTreeItem("TIPC"));
         var plcNames = new List<string>();
         for (var i = 1; i <= (int)tipc.ChildCount; i++)

@@ -112,20 +112,37 @@ section with a polite delay); the result is cached, so subsequent lookups are lo
 
 `find_hardware(orderNumber)` looks up a Beckhoff hardware product by order number and returns its
 terminal page description plus the parsed "Technical data" table. The order number is matched to one
-of the curated hardware doc sections (`InfosysNavigator.HardwareSections`, sourced from the infosys
-menu tree) by an x-wildcard matcher (`SectionCoversOrder`), then resolved by targeted navigation:
-section overview -> terminal page -> menu-expand -> "&lt;order&gt; - Technical data" page. The matcher,
-the technical-data table parser, the anchor-by-text resolver, and the full navigation are CI-tested
-against the fake seam; live-smoked against real infosys (EL3004, EPP1008). Pairs with scan_hardware
-and the EtherCAT authoring verbs, which deal in the same order numbers. Coverage: EtherCAT
-terminals/boxes/measurement modules (EL/EK/EP/ELM/EM) and EtherCAT P boxes (EPP).
+of the hardware doc sections (`InfosysNavigator.HardwareSections`) by an x-wildcard matcher
+(`SectionCoversOrder`, which also drops a `-00xx` variant suffix from the slug so order-specific slugs
+like `epp7342-0002` resolve from the bare order), then resolved by navigation. Two resolution paths:
+the **fast path** scans the section overview for an inline anchor naming the order (most EL/EP/EPP);
+the **fallback** is a bounded, product-branch-first walk of the menu.php tree (`FindOrderNodeAsync`)
+for sections that nest the product several levels down (couplers, boxes: overview -> product overview
+-> connection type -> "&lt;order&gt;" -> "Technical data"). The walk only accepts an order-named node
+that owns a "Technical data" child, so an order-named aspect page (e.g. "Diagnostic LEDs &gt; EK1100")
+is not mistaken for the product. The most specific matching section (fewest wildcards) is tried first,
+so a catch-all (`erxxxx`, `eppxxxx-x7xx`) never shadows an exact section. The anchor resolver
+(`FindLinkByOrder`) is wildcard-aware and prefers an exact match over a group heading, so "EP3174-0002"
+wins over "EP31xx-xxxx" while coupler overviews that list ranges ("EK110x-00xx, EK15xx") still resolve.
+Matcher, parser, anchor resolver, and the menu-tree walk are CI-tested against the fake seam;
+live-smoked against real infosys, one order per family, all returning a technical-data table: EL3004,
+ELM3504, EK1100, CU1128, EP3174, EPP6228, EPP3504, EJ1100, EPI1008.
 
-Not covered: the AX servo drives (AX5000/AX8000). Their documentation is not in the
-`/content/1033/<section>/` tree that the menu.php navigator walks, so find_hardware cannot reach it
-without a different fetch strategy. The motion/drives *programming* side is covered via `tc2_mc2` on
-the find_fb path.
+`HardwareSections` is enumerated from the infosys fieldbus menu tree by
+[`oracle/regen-hardware-sections.ps1`](oracle/regen-hardware-sections.ps1) (one seed page per family);
+re-run it to refresh when Beckhoff adds products. Coverage now spans EtherCAT Terminals (EL/EM/ELM/ED),
+couplers (EK/EKM), EtherCAT Box (EP) + rugged (ER) + 24 V (EQ), EtherCAT P Box (EPP), plug-in modules
+(EJ), IO-Link boxes (EPI/ERI) and infrastructure/switches (CU).
 
-- [x] find_hardware — matcher + nav + technical-data parser CI-tested (fake) + live-smoked
+Known limitation: the pure catch-all sections `erxxxx` (rugged) and `eqxxxx` (stainless) have no
+per-order documentation page in infosys at all (they are a single generic doc; ER/EQ boxes are the EP
+equivalents in a different housing), so find_hardware returns the family page description and URL with
+an empty `technical_data`. EP data is not substituted, since the housing/protection specs differ. Not
+covered at all: the AX servo drives (AX5000/AX8000) — their docs are not in the
+`/content/1033/<section>/` tree the menu.php navigator walks. The motion/drives *programming* side is
+covered via `tc2_mc2` on the find_fb path.
+
+- [x] find_hardware — matcher + anchor resolver + menu-tree walk + table parser CI-tested (fake) + live-smoked (per-family)
 
 The doc *generator* lane (`generate_docs`, `get_doc_status`) is a separate port (it parses local ST
 comments, not infosys) and is not part of the searcher port. It lives in `TcKit.Adapters.DocGen`
@@ -149,6 +166,35 @@ and MCP tools.
 
 - [x] open_project — CI-tested + live-validated (XAE)
 - [x] create_project — CI-tested (fake) + live-validated (writer smoke)
+
+### Safety stance (permission gate)
+
+The Python `init` / `config` / `doctor` CLI subcommands and the layered TOML+JSON config loader are
+**deliberately not ported** (most of it was bridge-era plumbing: `BRIDGE_URL`, `XAE_MODE`, adapter
+overrides). Runtime defaults the C# server needs (e.g. `COM_VERSION`) are read straight from the
+environment. The one piece with real behaviour behind it — the safety stance — is ported as a small,
+hot-reloaded permission gate instead:
+
+- `IPermissionGate` (`TcKit.Core.Ports`) → `FilePermissionGate` (`TcKit.Core.Security`), reading
+  `~/.tckit/permissions.json` (or `$TCKIT_HOME/permissions.json`), hot-reloaded on mtime so an
+  in-session edit (or a `SetPermissions` call) takes effect on the next tool call with no reconnect.
+- Two axes. **mode** = `read` (inspect only) < `write` (author on disk) < `execute` (act on a live
+  target); every mutating tool declares its level and the gate short-circuits with an error when the
+  mode is below it. **NetId allow/block** gates execute-class calls by target: `blocked_net_ids` is a
+  hard, unbypassable "never touch production" guard (block always wins); a non-empty `allowed_net_ids`
+  is an allowlist. Execute-class = exactly the NetId-gated set (Deploy, StartRuntime, RunTests,
+  WriteSymbols, InvokeRpc).
+- `GetPermissions` / `SetPermissions` MCP tools make the soft facets (mode, allowlist) easy to swap
+  mid-session; `SetPermissions` can *append* a blocked NetId but never remove one (the hard guard is
+  lifted only by editing the file). Both tools are callable in any mode.
+- Failure stances: missing file = permissive (opt-in); unparseable file = keep last good (no brick,
+  no silent widening); valid file with a typo'd `mode` = fall to `read` (safe side).
+- Fully CI-tested (`FilePermissionGateTests`, 18 cases: mode tiering, allow/block semantics, block-wins,
+  hot-reload, append-only blocklist, failure stances). The dev/oracle CLI drives adapters directly and
+  stays ungated by design — the gate guards the agent-facing MCP surface.
+
+- [x] permission gate + GetPermissions / SetPermissions — CI-tested (`FilePermissionGateTests`)
+- [ ] docs page for the safety stance (docs/content + tc-config skill still describe the Python config)
 
 ## Authoring (Automation Interface; port last)
 

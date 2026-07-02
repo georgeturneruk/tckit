@@ -70,6 +70,18 @@ public sealed class BeckhoffInfosysSearcherTests
     }
 
     [Fact]
+    public async Task FindFb_BudgetExhausted_ThrowsInformativeTimeout()
+    {
+        // Zero budget: the crawl never runs, so FindFb reports "still indexing, retry" rather than a
+        // definitive not-found — the contract that keeps a real slow crawl under the MCP tool timeout.
+        var searcher = new BeckhoffInfosysSearcher(
+            FbScenarioClient(), TempCache(), TimeSpan.Zero, findFbBudget: TimeSpan.Zero);
+
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() => searcher.FindFbAsync("FB_MemSet", default));
+        Assert.Contains("resume", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Search_UsesCachedIndexAfterFindFb()
     {
         var cache = TempCache();

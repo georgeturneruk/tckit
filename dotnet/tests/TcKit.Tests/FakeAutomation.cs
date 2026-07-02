@@ -185,7 +185,14 @@ internal sealed class FakeSysManager : ITcSysManager
 
     /// <summary>The TIPC tree is the primary root; pass extra roots (e.g. a "TIID" I/O tree) to model them.</summary>
     public FakeSysManager(FakeTreeItem tipc, params FakeTreeItem[] extraRoots)
+        : this("TwinCAT Project", tipc, extraRoots)
     {
+    }
+
+    /// <summary>Named overload to model a multi-project solution (each project targets its own I/O tree).</summary>
+    public FakeSysManager(string projectName, FakeTreeItem tipc, params FakeTreeItem[] extraRoots)
+    {
+        ProjectName = projectName;
         Tipc = tipc;
         _roots[tipc.Name] = tipc;
         foreach (var root in extraRoots)
@@ -196,12 +203,19 @@ internal sealed class FakeSysManager : ITcSysManager
 
     public FakeTreeItem Tipc { get; }
 
+    public string ProjectName { get; }
+
     public string? TargetNetId { get; private set; }
     public bool Activated { get; private set; }
+
+    /// <summary>Per-project save count (mirrors the live ComTcSysManager.Save() -> Project.Save()).</summary>
+    public int SaveCount { get; private set; }
 
     public void SetTargetNetId(string amsNetId) => TargetNetId = amsNetId;
 
     public void ActivateConfiguration() => Activated = true;
+
+    public void Save() => SaveCount++;
 
     public ITcTreeItem LookupTreeItem(string path)
     {

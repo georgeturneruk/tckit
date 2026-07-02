@@ -12,16 +12,18 @@ public sealed class AutomationHardwareConfigurer : IHardwareConfigurer, IDisposa
 {
     private readonly StaExecutor _sta = new();
 
-    public Task<Result> AddEtherCatMasterAsync(string deviceName, CancellationToken cancellationToken)
-        => RunAsync(cancellationToken, session => ProjectAuthor.AddEtherCatMaster(session, deviceName));
+    public Task<Result> AddEtherCatMasterAsync(string deviceName, string? projectName, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.AddEtherCatMaster(session, deviceName, projectName));
 
     public Task<Result> AddEtherCatBoxAsync(
-        string parentName, string boxName, string orderNumber, string before, CancellationToken cancellationToken)
+        string parentName, string boxName, string orderNumber, string before, string? projectName,
+        CancellationToken cancellationToken)
         => RunAsync(cancellationToken, session =>
-            ProjectAuthor.AddEtherCatBox(session, parentName, boxName, orderNumber, before));
+            ProjectAuthor.AddEtherCatBox(session, parentName, boxName, orderNumber, before, projectName));
 
-    public Task<Result> DeleteIoDeviceAsync(string name, CancellationToken cancellationToken)
-        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteIoDevice(session, name));
+    public Task<Result> DeleteIoDeviceAsync(
+        string target, string? projectName, bool confirmed, CancellationToken cancellationToken)
+        => RunAsync(cancellationToken, session => ProjectAuthor.DeleteIoDevice(session, target, projectName, confirmed));
 
     private Task<Result> RunAsync(CancellationToken cancellationToken, Func<ITcSession, Result> author)
     {
