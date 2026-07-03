@@ -46,7 +46,7 @@ Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host
 > Set me up for TcKit.
 ```
 
-The bundled skills walk you through setup.
+The bundled skills walk you through setup. No .NET SDK required: if the SDK is present the plugin builds the server from source, otherwise it downloads a self-contained prebuilt server (~74 MB, cached per version).
 
 **From source.** With the .NET 8 SDK:
 

@@ -1,0 +1,81 @@
+name: Release
+
+# Publish a self-contained, single-file Windows x64 build of the MCP server as
+# a GitHub Release asset. The server targets net8.0-windows and drives the COM
+# Automation Interface + ADS, so the release is Windows-x64 only and is built
+# on a Windows runner. The plugin launcher downloads this asset when no .NET
+# SDK is present (see plugin/start-server.ps1).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.4.0). Created from the current commit if it does not exist."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish self-contained Windows exe
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish self-contained single-file exe
+        shell: pwsh
+        run: |
+          dotnet publish dotnet/src/TcKit.Server/TcKit.Server.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -o publish --nologo
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+
+      - name: Stage artifact + checksum
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item publish/TcKit.Server.exe dist/tckit-server-win-x64.exe
+          $hash = (Get-FileHash dist/tckit-server-win-x64.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  tckit-server-win-x64.exe" | Out-File -Encoding ascii dist/tckit-server-win-x64.exe.sha256
+          Write-Host "SHA256: $hash"
+
+      - name: Resolve tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+          } else {
+            $tag = '${{ inputs.tag }}'
+          }
+          if (-not $tag) { throw "no tag resolved" }
+          "tag=$tag" | Out-File -Append -Encoding ascii $env:GITHUB_OUTPUT
+
+      - name: Create or update the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag `
+              dist/tckit-server-win-x64.exe dist/tckit-server-win-x64.exe.sha256 --clobber
+          } else {
+            gh release create $tag `
+              dist/tckit-server-win-x64.exe dist/tckit-server-win-x64.exe.sha256 `
+              --title $tag --generate-notes
+          }
