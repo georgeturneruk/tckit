@@ -351,25 +351,30 @@ internal sealed class ComTcSession : ITcSession
                 var found = new List<dynamic>();
                 for (var i = 1; i <= count; i++)
                 {
-                    // Keep the EnvDTE project object (not just its .Object sys manager): it carries the
-                    // project Name (to target one project) and Save() (to flush that .tsproj).
-                    dynamic project = projects.Item(i);
+#pragma warning disable CA1031 // A non-XAE project (Drive Manager, measurement, solution folder) that
+                    // doesn't behave like an ITcSysManager must be skipped, not abort the whole probe.
                     try
                     {
+                        // Keep the EnvDTE project object (not just its .Object sys manager): it carries the
+                        // project Name (to target one project) and Save() (to flush that .tsproj).
+                        dynamic project = projects.Item(i);
                         dynamic obj = project.Object;
                         if (obj is null)
                         {
                             continue;
                         }
 
+                        // Probe: only a TwinCAT XAE system-manager project answers LookupTreeItem("TIPC").
+                        // A Drive Manager project's .Object exposes no such member and throws here (as a
+                        // COMException or an DLR RuntimeBinderException) -> skip it and keep enumerating.
                         obj.LookupTreeItem("TIPC");
+                        found.Add(project);
                     }
-                    catch (COMException)
+                    catch (Exception)
                     {
                         continue;
                     }
-
-                    found.Add(project);
+#pragma warning restore CA1031
                 }
 
                 if (found.Count > 0)
