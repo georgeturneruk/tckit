@@ -24,71 +24,29 @@ internal sealed class AdsSystemService(string netId) : IAdsSystem
     }
 }
 
-/// <summary>Symbolic reads on a PLC runtime port via variable handles. Best-effort: missing symbols return false.</summary>
-internal sealed class AdsPlcSymbols : IPlcSymbols
+/// <summary>
+/// Symbolic reads on a PLC runtime port, delegated to the TcKit.Ads session (cached handles with
+/// the stale-handle policy). Best-effort: missing symbols return false.
+/// </summary>
+internal sealed class AdsPlcSymbols(string netId, int port) : IPlcSymbols
 {
-    private readonly AdsClient _client;
+    private readonly TcKit.Ads.AdsSymbolSession _session = new(netId, port);
 
-    public AdsPlcSymbols(string netId, int port)
-    {
-        _client = new AdsClient();
-        _client.Connect(AmsNetId.Parse(netId), port);
-    }
-
-    public bool TryReadBool(string symbolPath, out bool value)
-    {
-        value = false;
-        if (TryReadAny(symbolPath, typeof(bool)) is bool b)
-        {
-            value = b;
-            return true;
-        }
-
-        return false;
-    }
+    public bool TryReadBool(string symbolPath, out bool value) => _session.TryRead(symbolPath, out value);
 
     public bool TryReadInt(string symbolPath, out int value)
     {
-        value = 0;
-        var raw = TryReadAny(symbolPath, typeof(int));
-        if (raw is null)
-        {
-            return false;
-        }
-
-        value = Convert.ToInt32(raw, CultureInfo.InvariantCulture);
-        return true;
-    }
-
-#pragma warning disable CA1031 // Best-effort symbolic read: a missing/unresolvable symbol maps to null.
-    private object? TryReadAny(string symbolPath, Type type)
-    {
-        uint handle = 0;
         try
         {
-            handle = _client.CreateVariableHandle(symbolPath);
-            return _client.ReadAny(handle, type);
+            value = (int)_session.ReadInteger(symbolPath);
+            return true;
         }
-        catch (Exception)
+        catch (TcSymbolException)
         {
-            return null;
-        }
-        finally
-        {
-            if (handle != 0)
-            {
-                try
-                {
-                    _client.DeleteVariableHandle(handle);
-                }
-                catch (Exception)
-                {
-                    // Handle already gone; nothing to release.
-                }
-            }
+            value = 0;
+            return false;
         }
     }
-#pragma warning restore CA1031
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose() => _session.Dispose();
 }

@@ -1,14 +1,12 @@
-using System.Globalization;
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
-using TwinCAT.Ads;
 
 namespace TcKit.Adapters.Ads;
 
 /// <summary>
 /// ADS <see cref="ISymbolIo"/>: symbol read/write and RPC invocation on a running PLC runtime. Thin
 /// shell over <see cref="SymbolOperations"/> (seam-driven, unit-tested against a fake); failures map
-/// to the Result error contract. The live ADS specifics live in <see cref="AdsSymbolSession"/>.
+/// to the Result error contract. The live ADS specifics live in <see cref="LiveSymbolSession"/>.
 /// </summary>
 public sealed class AdsSymbolIo : ISymbolIo
 {
@@ -51,46 +49,29 @@ public sealed class AdsSymbolIo : ISymbolIo
     }
 }
 
-/// <summary>Native ADS session factory over Beckhoff.TwinCAT.Ads.</summary>
+/// <summary>Native session factory over the TcKit.Ads library.</summary>
 internal sealed class AdsSymbolSessionFactory : ISymbolSessionFactory
 {
-    public ISymbolSession Open(string netId, int port) => new AdsSymbolSession(netId, port);
+    public ISymbolSession Open(string netId, int port) => new LiveSymbolSession(netId, port);
 }
 
 /// <summary>
-/// A live AdsClient on a PLC runtime port. ReadValue/WriteValue resolve and marshal the symbol's
-/// declared type from ADS; InvokeRpcMethod calls a {attribute 'TcRpcEnable'} method positionally.
+/// A live TcKit.Ads symbol session on a PLC runtime port: rendered reads via the symbolic lane,
+/// enum-aware writes, and positional {attribute 'TcRpcEnable'} invocation.
 /// </summary>
-internal sealed class AdsSymbolSession : ISymbolSession
+internal sealed class LiveSymbolSession(string netId, int port) : ISymbolSession
 {
-    private readonly AdsClient _client;
+    private readonly TcKit.Ads.AdsSymbolSession _session = new(netId, port);
 
-    public AdsSymbolSession(string netId, int port)
-    {
-        _client = new AdsClient();
-        _client.Connect(AmsNetId.Parse(netId), port);
-    }
+    public string ReadValue(string path) => _session.ReadRendered(path);
 
-    public string ReadValue(string path) => Render(_client.ReadValue(path));
-
-    public void WriteValue(string path, object? value)
-        => _client.WriteValue(path, value ?? throw new ArgumentNullException(nameof(value), "Cannot write a null value."));
+    public void WriteValue(string path, object? value) => _session.Write(path, value);
 
     public RpcOutcome InvokeRpc(string symbolPath, string methodName, object?[] parameters)
     {
-        var result = _client.InvokeRpcMethod(symbolPath, methodName, parameters!);
-        return result is null
-            ? new RpcOutcome(false, null, null)
-            : new RpcOutcome(true, Render(result), result.GetType().Name);
+        var result = _session.InvokeRpc(symbolPath, methodName, parameters);
+        return new RpcOutcome(result.HasReturn, result.Value, result.TypeName);
     }
 
-    public void Dispose() => _client.Dispose();
-
-    private static string Render(object? value) => value switch
-    {
-        null => string.Empty,
-        bool b => b ? "True" : "False",
-        IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
-        _ => value.ToString() ?? string.Empty,
-    };
+    public void Dispose() => _session.Dispose();
 }
