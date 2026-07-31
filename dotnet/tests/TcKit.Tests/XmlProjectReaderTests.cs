@@ -101,6 +101,47 @@ public class XmlProjectReaderTests
         Assert.Equal(viaDir.Plcs.Keys.OrderBy(k => k), viaSln.Plcs.Keys.OrderBy(k => k));
     }
 
+    // --- deploy-style .sln referencing projects outside its directory --------
+
+    [Fact]
+    public async Task GetStructure_DeploySln_FollowsExternalProjectReferences()
+    {
+        var structure = await Read(DeploySln);
+
+        // The referenced PLC lives under ..\src, outside the solution directory; without
+        // following the .sln references the reader would synthesise an empty "deploy" PLC.
+        var plc = Assert.Single(structure.Plcs).Value;
+        Assert.Equal("Machine_Plc", plc.Name);
+        Assert.EndsWith("Machine_Plc.plcproj", plc.PlcprojPath);
+        Assert.Single(plc.Pous, p => p.Name == "FB_Remote");
+    }
+
+    [Fact]
+    public async Task GetStructure_DeploySln_MergesTasksFromInternalAndExternalTsprojs()
+    {
+        var tasks = (await Read(DeploySln)).Tasks;
+
+        Assert.Contains(tasks, t => t.Name == "ShellTask");
+        Assert.Contains(tasks, t => t.Name == "MachineTask");
+    }
+
+    [Fact]
+    public async Task GetStructure_DeploySln_SolutionPathIsThePassedSln()
+    {
+        var structure = await Read(DeploySln);
+
+        Assert.Equal(Path.GetFullPath(DeploySln), structure.SolutionPath);
+    }
+
+    [Fact]
+    public async Task GetStructure_DeploySln_ExternalSymbolsResolveAfterIndexing()
+    {
+        await Read(DeploySln);
+        var pou = await s_reader.GetPouInterfaceAsync("FB_Remote", null, CancellationToken.None);
+
+        Assert.Contains("FUNCTION_BLOCK FB_Remote", pou.Declaration);
+    }
+
     // --- nested folders + plc_name filter ------------------------------------
 
     [Fact]
@@ -138,6 +179,9 @@ public class XmlProjectReaderTests
     private static string SampleProject => Path.Combine(RepoRoot(), "tests", "fixtures", "sample_project");
 
     private static string MultiProject => Path.Combine(RepoRoot(), "tests", "fixtures", "multi_project_sln");
+
+    private static string DeploySln => Path.Combine(
+        RepoRoot(), "tests", "fixtures", "deploy_sln", "deploy", "DeploySolution.sln");
 
     private static string T3Solution => Path.Combine(
         RepoRoot(), "bench", "fixtures", "bug-hunting", "T3-tckit-utils", "T3TckitUtils.sln");
