@@ -40,7 +40,7 @@ internal static class RuntimeOperations
 
     public static TestRunResult RunTests(
         IAdsFactory factory, string targetAmsId, string? plcName, bool waitForResults, int timeoutSeconds,
-        int pollIntervalMs = 500, string? xmlPathOverride = null)
+        int pollIntervalMs = 500, string? xmlPathOverride = null, int xmlFreshTimeoutMs = XmlFreshTimeoutMs)
     {
         if (string.IsNullOrEmpty(targetAmsId))
         {
@@ -87,7 +87,7 @@ internal static class RuntimeOperations
         }
 
         // The publisher only writes XML when xUnitEnablePublish is overridden TRUE; tolerate its absence.
-        var xmlPublished = WaitFileFresh(xmlPath, start, XmlFreshTimeoutMs);
+        var xmlPublished = WaitFileFresh(xmlPath, start, xmlFreshTimeoutMs);
         var suiteCount = plc.TryReadInt(SuiteCountSymbol, out var suites) ? suites : 0;
 
         var summary = new TestSummary { Suites = suiteCount, DurationSeconds = stopwatch.Elapsed.TotalSeconds };
@@ -107,9 +107,16 @@ internal static class RuntimeOperations
             }
         }
 
+        // Waiting was requested but nothing parseable arrived: the outcome is a fail, not an unknown,
+        // so CI can't go green on a run whose assertions it never saw.
+        bool? testsPassed = waitForResults
+            ? resultsIncluded && summary.Failures == 0 && summary.Errors == 0
+            : null;
+
         return new TestRunResult
         {
             Success = true,
+            TestsPassed = testsPassed,
             DurationSeconds = stopwatch.Elapsed.TotalSeconds,
             Summary = summary,
             XmlPath = xmlPath,
@@ -128,6 +135,7 @@ internal static class RuntimeOperations
         return new TestResults
         {
             Success = parsed.Success,
+            TestsPassed = parsed.Success ? parsed.Summary.Failures == 0 && parsed.Summary.Errors == 0 : null,
             Suites = parsed.Suites,
             Summary = parsed.Summary,
             Failures = parsed.Failures,

@@ -41,6 +41,12 @@ public sealed record FlatFailure(string SuiteName, string TestName, string Messa
 public sealed record TestResults
 {
     public required bool Success { get; init; }
+
+    /// <summary>
+    /// Test outcome, distinct from <see cref="Success"/> (which is "the XML was found and parsed").
+    /// True = zero failures and zero errors; false = at least one; null = unknown (parse failed).
+    /// </summary>
+    public bool? TestsPassed { get; init; }
     public IReadOnlyList<TestSuiteResult> Suites { get; init; } = [];
     public TestSummary Summary { get; init; } = new();
     public IReadOnlyList<FlatFailure> Failures { get; init; } = [];
@@ -57,6 +63,14 @@ public sealed record TestResults
 public sealed record TestRunResult
 {
     public required bool Success { get; init; }
+
+    /// <summary>
+    /// Test outcome, distinct from <see cref="Success"/> (which is "the run infrastructure worked":
+    /// Run mode reached, suites finished). True = results parsed with zero failures and zero errors;
+    /// false = assertion failures/errors, or results were expected but the XML was never published or
+    /// didn't parse; null = outcome not determined (waitForResults was false).
+    /// </summary>
+    public bool? TestsPassed { get; init; }
     public double DurationSeconds { get; init; }
     public TestSummary Summary { get; init; } = new();
     public string XmlPath { get; init; } = "";

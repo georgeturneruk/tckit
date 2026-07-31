@@ -116,7 +116,7 @@ async Task<int> RunBuildTestVerb()
             var result = await new TcUnitTestRunner()
                 .RunTestsAsync(pos[0], Opt("plc"), !Flag("no-wait"), timeout, ct)
                 .ConfigureAwait(false);
-            return EmitObj(result, result.Success);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
         }
 
         case "get-test-results" when pos.Length >= 1:
@@ -124,7 +124,7 @@ async Task<int> RunBuildTestVerb()
             var result = await new TcUnitTestRunner()
                 .GetResultsAsync(pos[0], Opt("plc"), Opt("xml"), ct)
                 .ConfigureAwait(false);
-            return EmitObj(result, result.Success);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
         }
 
         case "read-symbols" when pos.Length >= 1:
@@ -376,6 +376,15 @@ static int EmitObj<T>(T value, bool success)
     return success ? 0 : 1;
 }
 
+// Test-verb exit codes: 0 = ran and passed (or outcome not requested), 1 = infrastructure
+// failure (runtime/timeout/parse), 3 = run completed but tests failed or expected results
+// never appeared. 2 stays the usage error, so CI can tell the three apart.
+static int EmitTestOutcome<T>(T value, bool infrastructureOk, bool? testsPassed)
+{
+    Console.WriteLine(TckitJson.Serialize(value));
+    return !infrastructureOk ? 1 : testsPassed == false ? 3 : 0;
+}
+
 static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(string[] args)
 {
     var positionals = new List<string>();
@@ -504,6 +513,8 @@ static void PrintUsage()
     Console.WriteLine("  start-runtime <targetAmsId>");
     Console.WriteLine("  run-tests <targetAmsId> [--plc <name>] [--no-wait] [--timeout 120]");
     Console.WriteLine("  get-test-results <targetAmsId> [--plc <name>] [--xml <path>]");
+    Console.WriteLine("    exit codes: 0 tests passed (or --no-wait), 1 run/parse failure,");
+    Console.WriteLine("                3 tests failed or expected results missing");
     Console.WriteLine("symbol I/O verbs (ADS; target must be in Run mode):");
     Console.WriteLine("  read-symbols <targetAmsId> <path> [<path> ...]");
     Console.WriteLine("  write-symbols <targetAmsId> <writesJson|@file>");

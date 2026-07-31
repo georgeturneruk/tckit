@@ -21,6 +21,16 @@ public sealed class RuntimeOperationsTests : IDisposable
         </testsuites>
         """;
 
+    private const string SampleAllPass =
+        """
+        <testsuites tests="2" failures="0" errors="0" time="0.4">
+          <testsuite name="PRG_Suite" tests="2" failures="0" errors="0" time="0.4">
+            <testcase name="Test_A" time="0.1" />
+            <testcase name="Test_B" time="0.3" />
+          </testsuite>
+        </testsuites>
+        """;
+
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "tckit-runtime-" + Guid.NewGuid().ToString("N"));
 
     public RuntimeOperationsTests() => Directory.CreateDirectory(_dir);
@@ -91,7 +101,65 @@ public sealed class RuntimeOperationsTests : IDisposable
         Assert.True(result.ResultsIncluded);
         Assert.Single(result.Failures);
         Assert.Equal("Test_Fail", result.Failures[0].TestName);
+        Assert.False(result.TestsPassed); // run infrastructure succeeded, but an assertion failed
         Assert.True(plc.Disposed);
+    }
+
+    [Fact]
+    public void RunTests_AllPass_ReportsTestsPassed()
+    {
+        var xmlPath = Path.Combine(_dir, "results.xml");
+        var plc = new FakePlcSymbols(
+            bools: new() { [FinishedSymbol] = true },
+            ints: new() { [SuiteCountSymbol] = 1 })
+        {
+            OnFinished = () =>
+            {
+                File.WriteAllText(xmlPath, SampleAllPass);
+                File.SetLastWriteTimeUtc(xmlPath, DateTime.UtcNow.AddSeconds(2));
+            },
+        };
+        var factory = new FakeAdsFactory(plc);
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: true, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: xmlPath);
+
+        Assert.True(result.Success);
+        Assert.True(result.TestsPassed);
+    }
+
+    [Fact]
+    public void RunTests_NoWait_LeavesOutcomeUnknown()
+    {
+        var plc = new FakePlcSymbols(
+            bools: new() { [FinishedSymbol] = true },
+            ints: new() { [SuiteCountSymbol] = 1 });
+        var factory = new FakeAdsFactory(plc);
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: false, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: Path.Combine(_dir, "unpublished.xml"), xmlFreshTimeoutMs: 10);
+
+        Assert.True(result.Success);
+        Assert.Null(result.TestsPassed);
+    }
+
+    [Fact]
+    public void RunTests_ResultsExpectedButNeverPublished_FailsOutcome()
+    {
+        var plc = new FakePlcSymbols(
+            bools: new() { [FinishedSymbol] = true },
+            ints: new() { [SuiteCountSymbol] = 1 });
+        var factory = new FakeAdsFactory(plc);
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: true, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: Path.Combine(_dir, "never-written.xml"), xmlFreshTimeoutMs: 10);
+
+        Assert.True(result.Success);
+        Assert.False(result.XmlPublished);
+        Assert.False(result.TestsPassed);
     }
 
     [Fact]
@@ -134,6 +202,19 @@ public sealed class RuntimeOperationsTests : IDisposable
         var suite = Assert.Single(results.Suites);
         Assert.Equal(2, suite.Tests.Count); // passes included
         Assert.Equal(1, results.Summary.Failures);
+        Assert.False(results.TestsPassed);
+    }
+
+    [Fact]
+    public void GetResults_AllPass_ReportsTestsPassed()
+    {
+        var xmlPath = Path.Combine(_dir, "pass.xml");
+        File.WriteAllText(xmlPath, SampleAllPass);
+
+        var results = RuntimeOperations.GetResults(plcName: null, xmlPath);
+
+        Assert.True(results.Success);
+        Assert.True(results.TestsPassed);
     }
 
     [Fact]
@@ -143,5 +224,6 @@ public sealed class RuntimeOperationsTests : IDisposable
 
         Assert.False(results.Success);
         Assert.Contains("not found", results.Error);
+        Assert.Null(results.TestsPassed);
     }
 }
