@@ -8,10 +8,19 @@
     <InternalsVisibleTo Include="TcKit.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- UseWPF drops System.IO from the implicit usings (Shapes.Path collision guard); this
+         project uses no WPF namespaces, so restore it. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- System.Windows.Automation (the UIA client) ships with the WPF profile of the Windows
+         Desktop framework; needed for the Express-edition Error List read (ADR-0014). -->
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
 </Project>

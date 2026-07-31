@@ -3,7 +3,7 @@ adr: 0014
 title: Build diagnostics source and the TcXaeShell Express limitation
 status: Accepted
 created: 2026-06-14
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-31
 issue: 110
 pr: 123
 related: [10]
@@ -33,17 +33,20 @@ compiler code (e.g. `C0046`) is a compile diagnostic — an error when
 stays honest, while TwinCAT messages are still surfaced as infos. Tier 2 only
 runs on failure or `-ForceLog`, so a clean build never reads the noisy list.
 
-**Where it lives:** `bridge/harness/Invoke-TcBuild.ps1` (Tier 1
-`CheckAllObjects` for pass/fail; Tier 2 prefers `Read-TcErrorList`, then
-`Read-TcErrorListUia` on Express, then the `/out` parse); `Read-TcErrorList` /
-`Read-TcErrorListUia` / `ConvertTo-TcErrorRow` / `Read-TcBuildOutput` in
-`bridge/harness/_TcDte.psm1`; `ConvertTo-TcErrorRow` unit-tested in
-`bridge/tests/ConvertTo-TcErrorRow.Tests.ps1`; `code`/`project` on `BuildError`
-and `infos` on `BuildResult` in `tckit/ports/types.py`. Original ErrorList read
-shipped in PR #123; the Express UIA read added this session. Verified live
-against TcXaeShell Express on `C:\tckitdemo\T3TckitUtils.sln`: a deliberate
-undefined-symbol POU returned `C0018` + `C0046` with file and line; a clean
-build returned a fast pass with no errors.
+**Where it lives (C# rewrite):** `ProjectBuilder.Build` (Tier 1
+`CheckAllObjects` for pass/fail; Tier 2 tries `ITcSession.ReadErrorList`
+(EnvDTE), then `ReadErrorListUia`) and `ErrorListUia.cs`, both in
+`dotnet/src/TcKit.Adapters.Automation/`. The UIA read was LOST in the ADR-0015
+rewrite (it lived in the deleted PowerShell bridge) and restored 2026-07-31
+with two hardenings learned live: (1) the Error List's own severity toggles
+filter runtime message rows before the read — ADSLOGSTR output floods the
+list with thousands of rows on a logging target, burying the compile
+diagnostics beyond any row cap; (2) rows are read by walking the realised
+ListItems page by page (their descendant Text elements arrive in column
+order), NOT via `GridPattern.GetItem`, which hands back recycled containers
+with stale text after a refilter. Verified live against TcXaeShell on the
+GuardCheck scratch solution: a deliberate undefined symbol returned `C0046` +
+`C0032` with file/line/project; a clean build passed with no errors.
 
 **Open questions:**
 - A configurable DTE ProgID to attach to `VisualStudio.DTE.<ver>` (full VS) is
@@ -172,3 +175,13 @@ existing callers and the fallback path stay compatible.
   `C:\tckitdemo\T3TckitUtils.sln`: an undefined-symbol POU returned `C0018` +
   `C0046` with file + line + project; a clean build was a fast pass with no
   errors and no list read (Tier 2 runs only on failure / `-ForceLog`).
+- 2026-07-31: The UIA read had been lost in the ADR-0015 C# rewrite (it lived
+  in the deleted PowerShell bridge), silently degrading Express builds back to
+  the honest-message fallback. Ported to `ErrorListUia.cs` with two hardenings
+  found live on a target that had been logging for hours: the severity toggle
+  buttons ("N Errors / N Warnings / N Messages") filter runtime message rows
+  before the read (thousands of ADSLOGSTR rows otherwise bury the diagnostics
+  past any row cap), and the rows are read from the realised ListItems
+  (descendant Text elements in column order) rather than GridPattern.GetItem,
+  which returns recycled containers with stale text after a refilter. Current
+  state updated in the same edit.

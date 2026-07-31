@@ -273,6 +273,9 @@ internal sealed class ComTcSession : ITcSession
         return rows;
     }
 
+    public IReadOnlyList<ComErrorItem>? ReadErrorListUia(bool compileSucceeded)
+        => ErrorListUia.Read(SolutionPath, compileSucceeded);
+
     private static string? TryGetActiveConfigName(dynamic solutionBuild)
     {
         var active = TryGet(() => solutionBuild.ActiveConfiguration);
@@ -340,53 +343,102 @@ internal sealed class ComTcSession : ITcSession
         }
     }
 
+    // EnvDTE80.ProjectKinds.vsProjectKindSolutionFolder (late-bound, so no EnvDTE80 reference).
+    private const string SolutionFolderKind = "{66A26720-8FB5-11D2-AA7E-00C04F688DDE}";
+
     private List<dynamic> ProbeSysManagers(int maxAttempts = 8, int delayMs = 250)
     {
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            dynamic projects = _dte.Solution.Projects;
-            var count = (int)projects.Count;
-            if (count > 0)
+            var found = new List<dynamic>();
+            foreach (var project in EnumerateSolutionProjects())
             {
-                var found = new List<dynamic>();
-                for (var i = 1; i <= count; i++)
+#pragma warning disable CA1031 // A non-XAE project (Drive Manager, measurement) that doesn't
+                // behave like an ITcSysManager must be skipped, not abort the whole probe.
+                try
                 {
-#pragma warning disable CA1031 // A non-XAE project (Drive Manager, measurement, solution folder) that
-                    // doesn't behave like an ITcSysManager must be skipped, not abort the whole probe.
-                    try
-                    {
-                        // Keep the EnvDTE project object (not just its .Object sys manager): it carries the
-                        // project Name (to target one project) and Save() (to flush that .tsproj).
-                        dynamic project = projects.Item(i);
-                        dynamic obj = project.Object;
-                        if (obj is null)
-                        {
-                            continue;
-                        }
-
-                        // Probe: only a TwinCAT XAE system-manager project answers LookupTreeItem("TIPC").
-                        // A Drive Manager project's .Object exposes no such member and throws here (as a
-                        // COMException or an DLR RuntimeBinderException) -> skip it and keep enumerating.
-                        obj.LookupTreeItem("TIPC");
-                        found.Add(project);
-                    }
-                    catch (Exception)
+                    // Keep the EnvDTE project object (not just its .Object sys manager): it carries the
+                    // project Name (to target one project) and Save() (to flush that .tsproj).
+                    dynamic obj = project.Object;
+                    if (obj is null)
                     {
                         continue;
                     }
-#pragma warning restore CA1031
-                }
 
-                if (found.Count > 0)
-                {
-                    return found;
+                    // Probe: only a TwinCAT XAE system-manager project answers LookupTreeItem("TIPC").
+                    // A Drive Manager project's .Object exposes no such member and throws here (as a
+                    // COMException or an DLR RuntimeBinderException) -> skip it and keep enumerating.
+                    obj.LookupTreeItem("TIPC");
+                    found.Add(project);
                 }
+                catch (Exception)
+                {
+                    continue;
+                }
+#pragma warning restore CA1031
+            }
+
+            if (found.Count > 0)
+            {
+                return found;
             }
 
             Thread.Sleep(delayMs);
         }
 
         throw new InvalidOperationException("No TwinCAT project (ITcSysManager) found in solution.");
+    }
+
+    /// <summary>
+    /// Flattens <c>Solution.Projects</c> into real projects. DTE lists solution folders as
+    /// top-level Project objects and hides the projects inside them behind
+    /// <c>ProjectItems[i].SubProject</c>, so a plain walk misses every project nested in a
+    /// folder; recurse through folders instead.
+    /// </summary>
+    private List<dynamic> EnumerateSolutionProjects()
+    {
+        var result = new List<dynamic>();
+        dynamic projects = _dte.Solution.Projects;
+        var count = TryGetInt(() => (int)projects.Count);
+        for (var i = 1; i <= count; i++)
+        {
+            var captured = i;
+            dynamic? project = TryGet(() => projects.Item(captured));
+            if (project is not null)
+            {
+                CollectProject(project, result);
+            }
+        }
+
+        return result;
+    }
+
+    private static void CollectProject(dynamic project, List<dynamic> result)
+    {
+        var kind = TryGetStr(() => (string)project.Kind);
+        if (!kind.Equals(SolutionFolderKind, StringComparison.OrdinalIgnoreCase))
+        {
+            result.Add(project);
+            return;
+        }
+
+        dynamic? items = TryGet(() => project.ProjectItems);
+        if (items is null)
+        {
+            return;
+        }
+
+        var count = TryGetInt(() => (int)items.Count);
+        for (var i = 1; i <= count; i++)
+        {
+            var captured = i;
+            // SubProject is null for solution items (loose files) inside the folder.
+            dynamic? sub = TryGet(() => items.Item(captured).SubProject);
+            if (sub is not null)
+            {
+                CollectProject(sub, result);
+            }
+        }
     }
 
     private void WaitPlcProjectsLoaded(int maxAttempts = 12, int delayMs = 250)
