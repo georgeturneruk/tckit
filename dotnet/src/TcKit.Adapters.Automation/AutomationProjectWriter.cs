@@ -112,9 +112,11 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
         => RunAsync(cancellationToken, session => ProjectAuthor.AddPlcProject(session, solutionPath, plcName, projectType));
 
     public Task<Result> AddLibraryReferenceAsync(
-        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken)
+        string? plcName, string libraryName, string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters,
+        CancellationToken cancellationToken)
         => RunAsync(cancellationToken, session =>
-            ProjectAuthor.AddLibraryReference(session, plcName, libraryName, version, distributor));
+            ProjectAuthor.AddLibraryReference(session, plcName, libraryName, version, distributor, parameters));
 
     public Task<Result> DeleteLibraryReferenceAsync(
         string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken)
@@ -150,7 +152,16 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
             return Task.FromResult(_sta.Run(() =>
             {
                 using var session = new ComTcSession();
-                return author(session);
+                var result = author(session);
+                // Any verb's save can silently drop spliced library-parameter blocks from the
+                // .plcproj (XAE's in-memory model never learns them); re-check and restore here so
+                // the overrides are back on disk (and re-loaded) before anything builds.
+                if (result.Success)
+                {
+                    ParameterGuard.VerifyOrRestore(session);
+                }
+
+                return result;
             }));
         }
 #pragma warning disable CA1031 // The writer boundary funnels every failure into the Result error contract.

@@ -333,7 +333,8 @@ async Task<int> RunWriteVerb()
 
         case "add-library-reference" when pos.Length >= 1:
             return EmitResult(await writer.AddLibraryReferenceAsync(
-                Opt("plc"), pos[0], OptOr("version", "*"), OptOr("distributor", "Tc3 Project"), ct).ConfigureAwait(false));
+                Opt("plc"), pos[0], OptOr("version", "*"), OptOr("distributor", "Tc3 Project"),
+                ParseParameters(Opt("params")), ct).ConfigureAwait(false));
 
         case "delete-library-reference" when pos.Length >= 1:
             return EmitResult(await writer.DeleteLibraryReferenceAsync(
@@ -518,7 +519,8 @@ static void PrintUsage()
     Console.WriteLine("  delete-method | delete-property <pou> <name> [--plc <name>]");
     Console.WriteLine("  delete-folder <name> [--parent <p>] [--recursive] [--plc <name>]");
     Console.WriteLine("  delete-variable <pou> <name> [--item <m>] [--plc <name>]");
-    Console.WriteLine("  add-library-reference | delete-library-reference <lib> [--version *] [--distributor <d>] [--plc]");
+    Console.WriteLine("  add-library-reference <lib> [--version *] [--distributor <d>] [--params <json>] [--plc]");
+    Console.WriteLine("  delete-library-reference <lib> [--version *] [--distributor <d>] [--plc]");
     Console.WriteLine("  add-library-placeholder <name> <defaultLib> [--version *] [--distributor <d>] [--params <json>] [--plc]");
     Console.WriteLine("  set-placeholder-parameters <name> <paramsJson> [--plc <name>]");
     Console.WriteLine("  delete-placeholder <name> [--plc <name>]");

@@ -183,11 +183,14 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
     [McpServerTool(Name = "AddLibraryReference")]
     [Description("Add a library reference to a consumer PLC project. The library must already be "
         + "installed (use SavePlcAsLibrary with install=true for an in-solution library first). "
-        + "version '*' means latest; distributor defaults to 'Tc3 Project'.")]
+        + "version '*' means latest; distributor defaults to 'Tc3 Project'. parametersJson "
+        + "optionally sets library parameter overrides as a JSON object "
+        + "{ \"GVL_Param_List\": { \"Key\": \"Value\" } } (TwinCAT booleans need 'TRUE'/'FALSE').")]
     public Task<string> AddLibraryReference(
         string libraryName, string version = "*", string distributor = "Tc3 Project",
-        string plcName = "", CancellationToken cancellationToken = default)
-        => Run(() => writer.AddLibraryReferenceAsync(Optional(plcName), libraryName, version, distributor, cancellationToken));
+        string parametersJson = "", string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.AddLibraryReferenceAsync(
+            Optional(plcName), libraryName, version, distributor, ParseParameters(parametersJson), cancellationToken));
 
     [McpServerTool(Name = "DeleteLibraryReference")]
     [Description("Remove a library reference from a consumer PLC project. version '*' resolves to the "

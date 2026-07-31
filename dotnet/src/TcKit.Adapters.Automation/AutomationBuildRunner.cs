@@ -30,6 +30,9 @@ public sealed class AutomationBuildRunner : IBuildRunner, IDisposable
             return Task.FromResult(_sta.Run(() =>
             {
                 using var session = new ComTcSession();
+                // The compile reads XAE's in-memory model, so spliced library-parameter blocks
+                // must be on disk AND loaded before anything builds; restore any a save dropped.
+                ParameterGuard.VerifyOrRestore(session);
                 return op(session);
             }));
         }
