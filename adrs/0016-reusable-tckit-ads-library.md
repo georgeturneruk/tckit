@@ -1,7 +1,7 @@
 ---
 adr: 0016
 title: Reusable TcKit.Ads class library
-status: Proposed
+status: Accepted
 created: 2026-07-31
 last_reviewed: 2026-07-31
 issue:
@@ -21,18 +21,30 @@ licence inventory reading (ADS port 30), a TwinCAT message-log stream reader
 (logger port 100), and TcUnit results resolution + parsing. Distribution is a
 local folder feed nupkg, SemVer from day one.
 
-**Where it lives:** Not yet implemented. Donor implementations for the log
-stream reader and licence reader come from a downstream consumer and are
-generalised on the way in (nothing consumer-specific enters this repo).
+**Where it lives:** `dotnet/src/TcKit.Ads/` (`AdsSymbolSession` + channel
+seam, `AdsRuntimeState`, `TcLicenses`, `TcLogStream` + `AdsLogEntry`,
+`TcUnitResults`); adapter delegation in `dotnet/src/TcKit.Adapters.Ads/`
+(`AdsNative.cs`, `AdsSymbolIo.cs`, `RuntimeOperations.cs`, `TcUnitMap.cs`);
+packing via `dotnet/pack-tckit-ads.ps1` (default feed `C:\nuget-local`,
+version from the csproj `<Version>`). Implemented on branch, pre-PR.
+
+**Settled during implementation:**
+
+- Restart detection: every handle-lane operation reads the target's 1-byte
+  symbol version (IG 0xF008) and drops the cache when it moved; a failed
+  operation re-resolves its handle once and retries; still-failing surfaces
+  as `TcSymbolException`. No notification subscription needed.
+- Licence diagnosis keys on expiry, not the 0x254 trial status bit: real
+  trials were observed reporting status 0 with an expiry set.
+- Preflight wired into `StartRuntime`/`RunTests` failure paths only (fires
+  when the final state is Config). `Deploy` reports success in this failure
+  mode anyway, so it has nothing to append to.
 
 **Open questions:**
 
-- Restart detection for the stale-handle policy: read-failure + reconnect
-  invalidation is the floor; whether to also subscribe to symbol-version
-  notifications is open until proven needed.
-- Whether the licence preflight wires into `Deploy` failure paths as well as
-  `StartRuntime`/`RunTests` (task 6 says all three; start with the two
-  runtime verbs).
+- Whether the log stream deserves an MCP tool surface (library-only today).
+- A `tckit doctor --target` verb composing state + licence + boot-project +
+  route checks (TASKS task 6 "consider").
 
 ## Context
 
@@ -151,3 +163,9 @@ project-specific symbol paths), the COM/XAE lane, and MCP/CLI concerns.
   failures, expired-trial diagnosis). Donor implementations for the log
   stream and licence readers identified in that consumer; they are
   generalised on the way in.
+- 2026-07-31: Implemented in the same session and promoted to Accepted. The
+  stale-handle policy proved out as symbol-version check + retry-once (no
+  notification subscription); the licence diagnosis switched from the trial
+  status bit to expiry after live UmRT licences showed status 0 with expiry.
+  All lanes verified live against UmRT_Default (state, licences, handle-lane
+  symbol read, log subscription). Promote to Implemented when the PR merges.
