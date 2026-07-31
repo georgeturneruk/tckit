@@ -5,8 +5,9 @@ namespace TcKit.Adapters.Ads;
 
 /// <summary>
 /// ADS <see cref="ITestRunner"/>: runs a TcUnit cycle (ensure Run mode, poll the runner, wait for
-/// the xUnit XML) and parses results. Thin shell over <see cref="RuntimeOperations"/> + <see cref="TcUnitXml"/>
-/// (both unit-tested without a live runtime); failures map to the result error contracts.
+/// the xUnit XML) and parses results. Thin shell over <see cref="RuntimeOperations"/> + the
+/// TcKit.Ads <see cref="TcKit.Ads.TcUnitResults"/> (both unit-tested without a live runtime);
+/// failures map to the result error contracts.
 /// </summary>
 public sealed class TcUnitTestRunner : ITestRunner
 {

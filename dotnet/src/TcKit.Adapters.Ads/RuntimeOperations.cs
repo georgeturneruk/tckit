@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using TcKit.Ads;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Ads;
@@ -64,7 +65,7 @@ internal static class RuntimeOperations
             return FailedRun($"Runtime did not reach Run mode: final state '{runState.Final}'.", xmlPath, resolveWarning);
         }
 
-        using var plc = factory.OpenPlc(targetAmsId, TcUnitPaths.DefaultPlcPort);
+        using var plc = factory.OpenPlc(targetAmsId, TcUnitResults.DefaultPlcPort);
 
         var deadline = TimeSpan.FromSeconds(timeoutSeconds);
         var finished = false;
@@ -97,12 +98,12 @@ internal static class RuntimeOperations
 
         if (waitForResults && xmlPublished)
         {
-            var parsed = TcUnitXml.Parse(xmlPath, failuresOnly: true);
+            var parsed = TcUnitResults.Parse(xmlPath, failuresOnly: true);
             if (parsed.Success)
             {
-                summary = parsed.Summary with { DurationSeconds = stopwatch.Elapsed.TotalSeconds };
-                suitesOut = parsed.Suites;
-                failuresOut = parsed.Failures;
+                summary = parsed.Summary.ToModel() with { DurationSeconds = stopwatch.Elapsed.TotalSeconds };
+                suitesOut = parsed.Suites.Select(TcUnitMap.ToModel).ToList();
+                failuresOut = parsed.Failures.Select(TcUnitMap.ToModel).ToList();
                 resultsIncluded = true;
             }
         }
@@ -131,14 +132,14 @@ internal static class RuntimeOperations
     public static TestResults GetResults(string? plcName, string? xmlPath, string? targetAmsId = null)
     {
         var (resolvedPath, resolveWarning) = ResolvePath(xmlPath, targetAmsId);
-        var parsed = TcUnitXml.Parse(resolvedPath, failuresOnly: false);
+        var parsed = TcUnitResults.Parse(resolvedPath, failuresOnly: false);
         return new TestResults
         {
             Success = parsed.Success,
             TestsPassed = parsed.Success ? parsed.Summary.Failures == 0 && parsed.Summary.Errors == 0 : null,
-            Suites = parsed.Suites,
-            Summary = parsed.Summary,
-            Failures = parsed.Failures,
+            Suites = parsed.Suites.Select(TcUnitMap.ToModel).ToList(),
+            Summary = parsed.Summary.ToModel(),
+            Failures = parsed.Failures.Select(TcUnitMap.ToModel).ToList(),
             XmlPath = parsed.XmlPath,
             ResolveWarning = resolveWarning,
             Error = parsed.Error,
@@ -146,7 +147,9 @@ internal static class RuntimeOperations
     }
 
     private static (string Path, string Warning) ResolvePath(string? xmlPathOverride, string? targetAmsId)
-        => string.IsNullOrEmpty(xmlPathOverride) ? TcUnitPaths.ResolveDefault(targetAmsId) : (xmlPathOverride, "");
+        => string.IsNullOrEmpty(xmlPathOverride)
+            ? TcUnitResults.ResolveDefaultPath(targetAmsId)
+            : (xmlPathOverride, "");
 
     private static bool WaitFileFresh(string path, DateTime after, int timeoutMs)
     {

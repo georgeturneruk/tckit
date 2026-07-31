@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Standalone reusable library (ADR-0016): plain net8.0 (nothing here is
+         Windows-specific), sole dependency Beckhoff.TwinCAT.Ads, no TcKit.Core.
+         SemVer from day one; packed to a local folder feed. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>0.1.0</Version>
+    <Description>Reusable TwinCAT ADS client layer: symbol sessions with a stale-handle policy, typed symbol I/O, runtime state operations, licence inventory, message-log streaming, and TcUnit results resolution and parsing.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TcKit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Beckhoff.TwinCAT.Ads" Version="7.0.172" />
+  </ItemGroup>
+
+</Project>

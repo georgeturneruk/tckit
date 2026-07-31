@@ -1,13 +1,13 @@
-using TcKit.Adapters.Ads;
+using TcKit.Ads;
 
 namespace TcKit.Tests;
 
 /// <summary>The TcUnit JUnit XML parser against fixtures: summary totals, suite/case tree, failure detail extraction.</summary>
-public sealed class TcUnitXmlTests : IDisposable
+public sealed class TcUnitParseTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "tckit-tcunit-" + Guid.NewGuid().ToString("N"));
 
-    public TcUnitXmlTests() => Directory.CreateDirectory(_dir);
+    public TcUnitParseTests() => Directory.CreateDirectory(_dir);
 
     public void Dispose()
     {
@@ -47,7 +47,7 @@ public sealed class TcUnitXmlTests : IDisposable
     [Fact]
     public void Parse_FullTree_BuildsSuitesAndSummary()
     {
-        var parsed = TcUnitXml.Parse(WriteXml(), failuresOnly: false);
+        var parsed = TcUnitResults.Parse(WriteXml(), failuresOnly: false);
 
         Assert.True(parsed.Success);
         Assert.Equal(2, parsed.Suites.Count);
@@ -65,7 +65,7 @@ public sealed class TcUnitXmlTests : IDisposable
     [Fact]
     public void Parse_ExtractsExpectedActualLine()
     {
-        var parsed = TcUnitXml.Parse(WriteXml(), failuresOnly: false);
+        var parsed = TcUnitResults.Parse(WriteXml(), failuresOnly: false);
 
         var failing = parsed.Suites.Single(s => s.Name == "PRG_Suite1").Tests.Single(t => !t.Passed);
         var detail = Assert.Single(failing.Failures);
@@ -77,7 +77,7 @@ public sealed class TcUnitXmlTests : IDisposable
     [Fact]
     public void Parse_FailuresOnly_NarrowsSuitesButKeepsSummary()
     {
-        var parsed = TcUnitXml.Parse(WriteXml(), failuresOnly: true);
+        var parsed = TcUnitResults.Parse(WriteXml(), failuresOnly: true);
 
         var suite = Assert.Single(parsed.Suites);
         Assert.Equal("PRG_Suite1", suite.Name);
@@ -90,7 +90,7 @@ public sealed class TcUnitXmlTests : IDisposable
     [Fact]
     public void Parse_MissingFile_ReturnsError()
     {
-        var parsed = TcUnitXml.Parse(Path.Combine(_dir, "absent.xml"), failuresOnly: false);
+        var parsed = TcUnitResults.Parse(Path.Combine(_dir, "absent.xml"), failuresOnly: false);
 
         Assert.False(parsed.Success);
         Assert.Contains("not found", parsed.Error);
@@ -100,7 +100,7 @@ public sealed class TcUnitXmlTests : IDisposable
     public void Parse_UnexpectedRoot_ReturnsError()
     {
         var path = WriteXml("<root/>");
-        var parsed = TcUnitXml.Parse(path, failuresOnly: false);
+        var parsed = TcUnitResults.Parse(path, failuresOnly: false);
 
         Assert.False(parsed.Success);
         Assert.Contains("Unexpected root", parsed.Error);

@@ -1,4 +1,4 @@
-using TcKit.Adapters.Ads;
+using TcKit.Ads;
 
 namespace TcKit.Tests;
 
@@ -7,7 +7,7 @@ namespace TcKit.Tests;
 /// registry match (including stale-kernel-file precedence), kernel candidates, and the freshest
 /// UmRT heuristic fallback.
 /// </summary>
-public sealed class TcUnitPathsTests : IDisposable
+public sealed class TcUnitPathResolutionTests : IDisposable
 {
     private const string XmlFileName = "tcunit_xunit_testresults.xml";
 
@@ -15,7 +15,7 @@ public sealed class TcUnitPathsTests : IDisposable
     private readonly string _kernelBoot;
     private readonly string _runtimesRoot;
 
-    public TcUnitPathsTests()
+    public TcUnitPathResolutionTests()
     {
         _kernelBoot = Path.Combine(_dir, "TwinCAT", "3.1", "Boot");
         _runtimesRoot = Path.Combine(_dir, "ProgramData", "Runtimes");
@@ -63,7 +63,7 @@ public sealed class TcUnitPathsTests : IDisposable
     [Fact]
     public void EnvOverride_Wins()
     {
-        var (path, warning) = TcUnitPaths.ResolveDefault(
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
             "10.40.3.240.1.1", 851, envOverride: @"D:\custom\results.xml", _kernelBoot, _runtimesRoot);
 
         Assert.Equal(@"D:\custom\results.xml", path);
@@ -76,7 +76,7 @@ public sealed class TcUnitPathsTests : IDisposable
         // 0A2803F00101 = 10.40.3.240.1.1
         var bootDir = AddRuntime("UmRT_Default", "0A2803F00101");
 
-        var (path, warning) = TcUnitPaths.ResolveDefault(
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
             "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
@@ -92,7 +92,7 @@ public sealed class TcUnitPathsTests : IDisposable
         File.WriteAllText(Path.Combine(kernelPortDir, XmlFileName), "<stale/>");
         var bootDir = AddRuntime("UmRT_Default", "0A2803F00101");
 
-        var (path, _) = TcUnitPaths.ResolveDefault(
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
             "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
@@ -106,7 +106,7 @@ public sealed class TcUnitPathsTests : IDisposable
         var doubled = versionDir + @"\\Boot\";
         AddRuntime("UmRT_Default", "0A2803F00101", bootDirValue: doubled);
 
-        var (path, _) = TcUnitPaths.ResolveDefault(
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
             "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(versionDir, "Boot", XmlFileName), path);
@@ -121,7 +121,7 @@ public sealed class TcUnitPathsTests : IDisposable
         var kernelFile = Path.Combine(kernelPortDir, XmlFileName);
         File.WriteAllText(kernelFile, "<results/>");
 
-        var (path, _) = TcUnitPaths.ResolveDefault(
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
             "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(kernelFile, path);
@@ -133,7 +133,7 @@ public sealed class TcUnitPathsTests : IDisposable
         var kernelFile = Path.Combine(_kernelBoot, XmlFileName);
         File.WriteAllText(kernelFile, "<results/>");
 
-        var (path, _) = TcUnitPaths.ResolveDefault(
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
             "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(kernelFile, path);
@@ -146,7 +146,7 @@ public sealed class TcUnitPathsTests : IDisposable
         var umrtFile = Path.Combine(bootDir, XmlFileName);
         File.WriteAllText(umrtFile, "<results/>");
 
-        var (path, warning) = TcUnitPaths.ResolveDefault(
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
             targetAmsId: null, 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(umrtFile, path);
@@ -165,7 +165,7 @@ public sealed class TcUnitPathsTests : IDisposable
         File.SetLastWriteTimeUtc(oldFile, DateTime.UtcNow.AddHours(-1));
         File.SetLastWriteTimeUtc(newFile, DateTime.UtcNow);
 
-        var (path, warning) = TcUnitPaths.ResolveDefault(
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
             targetAmsId: null, 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(newFile, path);
@@ -176,7 +176,7 @@ public sealed class TcUnitPathsTests : IDisposable
     [Fact]
     public void NothingFound_FallsBackToKernelPortPath()
     {
-        var (path, warning) = TcUnitPaths.ResolveDefault(
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
             "192.168.0.9.1.1", 852, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(_kernelBoot, "Plc", "Port_852", XmlFileName), path);
