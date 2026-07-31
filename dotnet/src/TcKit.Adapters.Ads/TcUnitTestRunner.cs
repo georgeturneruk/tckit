@@ -45,7 +45,7 @@ public sealed class TcUnitTestRunner : ITestRunner
             {
                 try
                 {
-                    return RuntimeOperations.GetResults(plcName, xmlPath);
+                    return RuntimeOperations.GetResults(plcName, xmlPath, targetAmsId);
                 }
 #pragma warning disable CA1031 // The test boundary funnels every failure into the result error contract.
                 catch (Exception ex)

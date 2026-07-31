@@ -35,8 +35,10 @@ public sealed class RuntimeTestTools(IRuntimeControl runtime, ITestRunner tests,
             () => tests.RunTestsAsync(targetAmsId, Optional(plcName), waitForResults, timeoutSeconds, cancellationToken));
 
     [McpServerTool(Name = "GetTestResults")]
-    [Description("Parse the full TcUnit results (passes included) from the published xUnit XML. "
-        + "xmlPath overrides the resolved default (set it when the project overrides xUnitFilePath).")]
+    [Description("Parse the full TcUnit results (passes included) from the published xUnit XML. The "
+        + "default path resolves from targetAmsId: a user-mode runtime declaring that Net ID owns "
+        + "its boot-folder XML. xmlPath overrides the resolved default (set it when the project "
+        + "overrides xUnitFilePath).")]
     public Task<string> GetTestResults(
         string targetAmsId, string plcName = "", string xmlPath = "", CancellationToken cancellationToken = default)
         => Run(PermissionLevel.Read, null, () => tests.GetResultsAsync(targetAmsId, Optional(plcName), Optional(xmlPath), cancellationToken));

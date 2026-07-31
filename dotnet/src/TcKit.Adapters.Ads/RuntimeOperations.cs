@@ -47,7 +47,7 @@ internal static class RuntimeOperations
             throw new ArgumentException("TargetAmsId required.");
         }
 
-        var (xmlPath, resolveWarning) = ResolvePath(xmlPathOverride);
+        var (xmlPath, resolveWarning) = ResolvePath(xmlPathOverride, targetAmsId);
 
         // Stale-XML mitigation: delete the prior file and record the start so we can detect the new write.
         if (File.Exists(xmlPath))
@@ -128,9 +128,9 @@ internal static class RuntimeOperations
         };
     }
 
-    public static TestResults GetResults(string? plcName, string? xmlPath)
+    public static TestResults GetResults(string? plcName, string? xmlPath, string? targetAmsId = null)
     {
-        var (resolvedPath, resolveWarning) = ResolvePath(xmlPath);
+        var (resolvedPath, resolveWarning) = ResolvePath(xmlPath, targetAmsId);
         var parsed = TcUnitXml.Parse(resolvedPath, failuresOnly: false);
         return new TestResults
         {
@@ -145,8 +145,8 @@ internal static class RuntimeOperations
         };
     }
 
-    private static (string Path, string Warning) ResolvePath(string? xmlPathOverride)
-        => string.IsNullOrEmpty(xmlPathOverride) ? TcUnitPaths.ResolveDefault() : (xmlPathOverride, "");
+    private static (string Path, string Warning) ResolvePath(string? xmlPathOverride, string? targetAmsId)
+        => string.IsNullOrEmpty(xmlPathOverride) ? TcUnitPaths.ResolveDefault(targetAmsId) : (xmlPathOverride, "");
 
     private static bool WaitFileFresh(string path, DateTime after, int timeoutMs)
     {
