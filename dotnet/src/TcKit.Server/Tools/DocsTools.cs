@@ -22,8 +22,10 @@ public sealed class DocsTools(IDocsSearcher searcher)
 
     [McpServerTool(Name = "SearchDocs")]
     [Description("Search Beckhoff infosys documentation for a term. section optionally scopes the "
-        + "search to one infosys section (e.g. tcplclib_tc2_ethercat); leave empty to search the "
-        + "known sections. Sections must have been indexed by a prior FindFb call.")]
+        + "search to one infosys section (e.g. tcplclib_tc2_ethercat or tf5430_tc3_xplanar); leave "
+        + "empty to search the known sections. Multi-word queries match every word in any order. "
+        + "Sections are crawled and cached on demand, so the first search into a new section is slower "
+        + "and repeat searches are fast.")]
     public Task<string> SearchDocs(
         string query, string section = "", CancellationToken cancellationToken = default)
         => RunAsync(() => searcher.SearchAsync(query, Optional(section), cancellationToken));

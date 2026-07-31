@@ -43,6 +43,56 @@ public sealed class InfosysNavigatorTests
     }
 
     [Fact]
+    public void SearchIndex_MultiWordQueryRanksByTokenMatchCount()
+    {
+        var index = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["fb_eccoesdoread"] = "u-read",       // coe + sdo + read = 3
+            ["fb_eccoesdowrite"] = "u-write",     // coe + sdo = 2
+            ["fb_ecgetmasterstate"] = "u-state",  // none -> excluded
+        };
+
+        // Natural phrase: tokens appear scattered and out of order; the best-covered title wins.
+        var results = InfosysNavigator.SearchIndex(index, "coe sdo read");
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal(("fb_eccoesdoread", "u-read"), results[0]);   // most tokens matched, first
+        Assert.Equal(("fb_eccoesdowrite", "u-write"), results[1]);
+    }
+
+    [Fact]
+    public void SearchIndex_MultiWordQueryDropsSingleTokenNoise()
+    {
+        var index = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["fb_eccoesdoread"] = "u-read",       // coe + sdo + read = 3
+            ["ethercat state machine"] = "u-esm", // ethercat only = 1 -> below the 2-token floor
+            ["fb_memread"] = "u-mem",             // read only = 1 -> below the floor
+        };
+
+        var results = InfosysNavigator.SearchIndex(index, "ethercat coe sdo read");
+
+        Assert.Single(results);
+        Assert.Equal(("fb_eccoesdoread", "u-read"), results[0]);
+    }
+
+    [Fact]
+    public void SearchIndex_ContiguousPhraseRanksAboveScatteredTokens()
+    {
+        var index = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["machine reset state"] = "u-scattered", // has both tokens, not adjacent or in order
+            ["ethercat state machine"] = "u-phrase",  // contains the query as a contiguous substring
+        };
+
+        var results = InfosysNavigator.SearchIndex(index, "state machine");
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal(("ethercat state machine", "u-phrase"), results[0]);
+        Assert.Equal(("machine reset state", "u-scattered"), results[1]);
+    }
+
+    [Fact]
     public async Task BuildSectionIndex_CrawlsMenuTreeAndChildPages()
     {
         var client = new FakeInfosysClient();
@@ -110,13 +160,30 @@ public sealed class InfosysNavigatorTests
         Assert.Contains($"{Host}/content/1033/{Section}/200.html", full.Visited);
     }
 
-    [Fact]
-    public void KnownSections_IncludeMotionAndIoLinkLibraries()
-    {
-        Assert.Contains("tcplclib_tc2_mc2", InfosysNavigator.KnownSections);
-        Assert.Contains("tcplclib_tc2_mc2_drive", InfosysNavigator.KnownSections);
-        Assert.Contains("tcplclib_tc3_iolink", InfosysNavigator.KnownSections);
-    }
+    [Theory]
+    [InlineData("tcplclib_tc2_mc2")]                     // motion
+    [InlineData("tcplclib_tc2_mc2_drive")]
+    [InlineData("tcplclib_tc3_iolink")]                  // IO-Link
+    [InlineData("tf5430_tc3_xplanar")]                   // XPlanar PLC API
+    [InlineData("tf6000_tc3_ads_commlib")]               // ADS
+    [InlineData("tf6100_tc3_opcua_server")]              // OPC UA
+    [InlineData("tf6250_tc3_modbus_tcp")]                // Modbus TCP
+    [InlineData("tf6310_tc3_tcpip")]                     // TCP/IP
+    [InlineData("tf7xxx_tc3_vision")]                    // Vision
+    [InlineData("tf3600_tc3_condition_monitoring")]      // analytics
+    [InlineData("tctwinsafe")]                           // TwinSAFE Logic FBs
+    [InlineData("tc3_safety_intro")]                     // Safety PLC
+    public void KnownSections_CoverEveryLibraryFamily(string section)
+        => Assert.Contains(section, InfosysNavigator.KnownSections);
+
+    [Theory]
+    [InlineData("tcplclib_tc3_math")]   // no such section; TC3 uses Tc2_Math
+    [InlineData("tcplclib_tc3_string")] // no such section
+    [InlineData("tf6100_tc3_opcua")]    // renamed to _server/_client/_configurator/_gateway
+    [InlineData("tf6300_tc3_tcp")]      // tf6300 is FTP; TCP/IP is tf6310
+    [InlineData("tf6xxx_tc3_ads")]      // renamed to tf6000_tc3_ads_commlib
+    public void KnownSections_ExcludeDeadSlugs(string section)
+        => Assert.DoesNotContain(section, InfosysNavigator.KnownSections);
 
     [Fact]
     public void HardwareSections_IncludeEtherCatPBoxes()

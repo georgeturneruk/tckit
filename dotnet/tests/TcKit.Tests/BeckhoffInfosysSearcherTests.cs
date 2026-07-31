@@ -96,13 +96,29 @@ public sealed class BeckhoffInfosysSearcherTests
     }
 
     [Fact]
-    public async Task Search_NoCachedIndex_ReturnsEmpty()
+    public async Task Search_UnreachableSections_ReturnsEmpty()
     {
+        // Every section is unreachable (the fake serves nothing), so the on-demand crawl yields no
+        // index and the search comes back empty rather than throwing.
         var searcher = NewSearcher(new FakeInfosysClient());
 
         var results = await searcher.SearchAsync("MemSet", null, default);
 
         Assert.Empty(results.Results);
+    }
+
+    [Fact]
+    public async Task Search_CrawlsUncachedSectionOnDemand()
+    {
+        // No FindFb primes the cache first: SearchDocs must crawl the section itself and still find the
+        // page. This is the cold-cache path that previously returned nothing.
+        var searcher = NewSearcher(FbScenarioClient());
+
+        var results = await searcher.SearchAsync("MemSet", Section, default);
+
+        Assert.NotEmpty(results.Results);
+        Assert.Equal(FbUrl, results.Results[0].Url);
+        Assert.Equal("FB_MemSet", results.Results[0].Title);
     }
 
     [Fact]
