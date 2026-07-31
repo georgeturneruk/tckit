@@ -1,10 +1,10 @@
-using System.Diagnostics;
 using System.Globalization;
+using TcKit.Ads;
 using TwinCAT.Ads;
 
 namespace TcKit.Adapters.Ads;
 
-/// <summary>Native ADS implementation of the runtime seam over Beckhoff.TwinCAT.Ads.</summary>
+/// <summary>Native ADS implementation of the runtime seam over the TcKit.Ads library.</summary>
 internal sealed class AdsFactory : IAdsFactory
 {
     public IAdsSystem OpenSystem(string netId) => new AdsSystemService(netId);
@@ -12,65 +12,16 @@ internal sealed class AdsFactory : IAdsFactory
     public IPlcSymbols OpenPlc(string netId, int port) => new AdsPlcSymbols(netId, port);
 }
 
-/// <summary>
-/// Drives the TwinCAT system run/config transition via WriteControl on the system service (port
-/// 10000): Reset -> Run, Reconfig -> Config (mirrors TcXaeMgmt's Restart-TwinCAT). The system
-/// restarts, so polling reconnects on each cycle until the target state is read back.
-/// </summary>
+/// <summary>The system run/config transition, delegated to <see cref="AdsRuntimeState"/>.</summary>
 internal sealed class AdsSystemService(string netId) : IAdsSystem
 {
-    private const int SystemServicePort = 10000;
-    private const int PollIntervalMs = 500;
-
     public SystemStateResult SetState(TcSystemState target, int waitTimeoutMs)
     {
-        var (command, expected) = target == TcSystemState.Run
-            ? (AdsState.Reset, AdsState.Run)
-            : (AdsState.Reconfig, AdsState.Config);
-
-        var stopwatch = Stopwatch.StartNew();
-
-        var original = TryReadState() ?? AdsState.Invalid;
-        using (var client = new AdsClient())
-        {
-            client.Connect(AmsNetId.Parse(netId), SystemServicePort);
-            client.WriteControl(new StateInfo(command, 0));
-        }
-
-        var reached = AdsState.Invalid;
-        while (stopwatch.ElapsedMilliseconds < waitTimeoutMs)
-        {
-            Thread.Sleep(PollIntervalMs);
-            var state = TryReadState();
-            if (state.HasValue)
-            {
-                reached = state.Value;
-                if (reached == expected)
-                {
-                    break;
-                }
-            }
-        }
-
+        var transition = new AdsRuntimeState(netId).SetState(
+            target == TcSystemState.Run ? TcTargetState.Run : TcTargetState.Config, waitTimeoutMs);
         return new SystemStateResult(
-            reached == expected, target.ToString(), reached.ToString(), original.ToString(), stopwatch.ElapsedMilliseconds);
+            transition.Reached, transition.Target, transition.Final, transition.Original, transition.LatencyMs);
     }
-
-#pragma warning disable CA1031 // Best-effort state read on a restarting system: any ADS failure means "not yet".
-    private AdsState? TryReadState()
-    {
-        try
-        {
-            using var client = new AdsClient();
-            client.Connect(AmsNetId.Parse(netId), SystemServicePort);
-            return client.ReadState().AdsState;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-#pragma warning restore CA1031
 }
 
 /// <summary>Symbolic reads on a PLC runtime port via variable handles. Best-effort: missing symbols return false.</summary>
