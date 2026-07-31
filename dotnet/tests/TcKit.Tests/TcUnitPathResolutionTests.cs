@@ -64,7 +64,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     public void EnvOverride_Wins()
     {
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            "10.40.3.240.1.1", 851, envOverride: @"D:\custom\results.xml", _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: @"D:\custom\results.xml", _kernelBoot, _runtimesRoot);
 
         Assert.Equal(@"D:\custom\results.xml", path);
         Assert.Equal("", warning);
@@ -73,11 +73,11 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     [Fact]
     public void TargetMatchesRuntimeRegistry_ReturnsItsBootPath_EvenWithoutFile()
     {
-        // 0A2803F00101 = 10.40.3.240.1.1
-        var bootDir = AddRuntime("UmRT_Default", "0A2803F00101");
+        // C0A801140101 = 192.168.1.20.1.1
+        var bootDir = AddRuntime("UmRT_Default", "C0A801140101");
 
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
         Assert.Equal("", warning);
@@ -90,10 +90,10 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         var kernelPortDir = Path.Combine(_kernelBoot, "Plc", "Port_851");
         Directory.CreateDirectory(kernelPortDir);
         File.WriteAllText(Path.Combine(kernelPortDir, XmlFileName), "<stale/>");
-        var bootDir = AddRuntime("UmRT_Default", "0A2803F00101");
+        var bootDir = AddRuntime("UmRT_Default", "C0A801140101");
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
     }
@@ -104,10 +104,10 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         // The real TcRegistry.xml writes BootDir with a doubled separator ('...\3.1\\Boot\').
         var versionDir = Path.Combine(_runtimesRoot, "UmRT_Default", "3.1");
         var doubled = versionDir + @"\\Boot\";
-        AddRuntime("UmRT_Default", "0A2803F00101", bootDirValue: doubled);
+        AddRuntime("UmRT_Default", "C0A801140101", bootDirValue: doubled);
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "10.40.3.240.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(versionDir, "Boot", XmlFileName), path);
     }
@@ -115,7 +115,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     [Fact]
     public void NoTargetMatch_ExistingKernelPortFile_Wins()
     {
-        AddRuntime("UmRT_Default", "0A2803F00101");
+        AddRuntime("UmRT_Default", "C0A801140101");
         var kernelPortDir = Path.Combine(_kernelBoot, "Plc", "Port_851");
         Directory.CreateDirectory(kernelPortDir);
         var kernelFile = Path.Combine(kernelPortDir, XmlFileName);
@@ -142,7 +142,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     [Fact]
     public void NoKernelFile_SingleUmRtCandidate_Wins()
     {
-        var bootDir = AddRuntime("UmRT_Default", "0A2803F00101");
+        var bootDir = AddRuntime("UmRT_Default", "C0A801140101");
         var umrtFile = Path.Combine(bootDir, XmlFileName);
         File.WriteAllText(umrtFile, "<results/>");
 
@@ -156,8 +156,8 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     [Fact]
     public void MultipleUmRtCandidates_FreshestWinsWithWarning()
     {
-        var oldBoot = AddRuntime("UmRT_Old", "0A2803F00101");
-        var newBoot = AddRuntime("UmRT_New", "0A2803F00201");
+        var oldBoot = AddRuntime("UmRT_Old", "C0A801140101");
+        var newBoot = AddRuntime("UmRT_New", "C0A801150101");
         var oldFile = Path.Combine(oldBoot, XmlFileName);
         var newFile = Path.Combine(newBoot, XmlFileName);
         File.WriteAllText(oldFile, "<results/>");
