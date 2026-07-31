@@ -116,6 +116,24 @@ async Task<int> RunBuildTestVerb()
             return EmitResult(result);
         }
 
+        case "test" when pos.Length >= 1:
+        {
+            var target = Opt("target");
+            if (string.IsNullOrEmpty(target))
+            {
+                Console.WriteLine(TckitJson.Serialize(new { error = "test requires --target <netid>." }));
+                return 2;
+            }
+
+            var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
+            using var testWriter = new AutomationProjectWriter();
+            using var buildRunner = new AutomationBuildRunner();
+            var result = await TcKit.Core.Workflows.TestWorkflow.RunAsync(
+                testWriter, buildRunner, new TcUnitTestRunner(),
+                pos[0], Opt("plc"), target, timeout, Opt("junit"), ct).ConfigureAwait(false);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
+        }
+
         case "run-tests" when pos.Length >= 1:
         {
             var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
@@ -531,6 +549,8 @@ static void PrintUsage()
     Console.WriteLine("  add-ethercat-box <parentName> <boxName> <orderNumber> [--before <sibling>] [--project <tcProject>]");
     Console.WriteLine("  delete-io-device <name|^path> [--project <tcProject>] [--confirmed]");
     Console.WriteLine("build / test / deploy verbs:");
+    Console.WriteLine("  test <sln> --target <netid> [--plc <name>] [--timeout 120] [--junit <out.xml>]");
+    Console.WriteLine("    composite CI verb: open -> build -> deploy -> run tests -> copy results");
     Console.WriteLine("  build [--plc <name>] [--force-log]");
     Console.WriteLine("  deploy <targetAmsId> [--plc <name>] [--no-autostart]");
     Console.WriteLine("  start-runtime <targetAmsId>");
