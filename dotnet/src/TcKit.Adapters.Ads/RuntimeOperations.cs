@@ -26,7 +26,8 @@ internal static class RuntimeOperations
         var state = factory.OpenSystem(targetAmsId).SetState(TcSystemState.Run, RunModeTimeoutMs);
         if (!state.Reached)
         {
-            return Result.Fail($"Runtime did not reach Run mode on {targetAmsId} (final state '{state.Final}').");
+            var error = $"Runtime did not reach Run mode on {targetAmsId} (final state '{state.Final}').";
+            return Result.Fail(WithLicenceDiagnosis(factory, targetAmsId, state.Final, error));
         }
 
         return Result.Ok(new Dictionary<string, object?>
@@ -62,7 +63,9 @@ internal static class RuntimeOperations
         var runState = factory.OpenSystem(targetAmsId).SetState(TcSystemState.Run, RunModeTimeoutMs);
         if (!runState.Reached)
         {
-            return FailedRun($"Runtime did not reach Run mode: final state '{runState.Final}'.", xmlPath, resolveWarning);
+            var error = $"Runtime did not reach Run mode: final state '{runState.Final}'.";
+            return FailedRun(
+                WithLicenceDiagnosis(factory, targetAmsId, runState.Final, error), xmlPath, resolveWarning);
         }
 
         using var plc = factory.OpenPlc(targetAmsId, TcUnitResults.DefaultPlcPort);
@@ -165,6 +168,22 @@ internal static class RuntimeOperations
         }
 
         return File.Exists(path) && File.GetLastWriteTimeUtc(path) > after;
+    }
+
+    /// <summary>
+    /// A target that bounces back to Config with no stated reason is the expired-licence failure
+    /// mode (TASKS task 6): the licence preflight names it when it can.
+    /// </summary>
+    private static string WithLicenceDiagnosis(
+        IAdsFactory factory, string targetAmsId, string finalState, string error)
+    {
+        if (finalState != nameof(TcSystemState.Config))
+        {
+            return error;
+        }
+
+        var diagnosis = factory.DiagnoseStuckInConfig(targetAmsId);
+        return diagnosis is null ? error : $"{error} {diagnosis}";
     }
 
     private static TestRunResult FailedRun(string error, string xmlPath, string resolveWarning) => new()

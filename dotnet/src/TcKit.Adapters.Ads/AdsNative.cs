@@ -10,6 +10,8 @@ internal sealed class AdsFactory : IAdsFactory
     public IAdsSystem OpenSystem(string netId) => new AdsSystemService(netId);
 
     public IPlcSymbols OpenPlc(string netId, int port) => new AdsPlcSymbols(netId, port);
+
+    public string? DiagnoseStuckInConfig(string netId) => TcLicenses.DiagnoseStuckInConfig(netId);
 }
 
 /// <summary>The system run/config transition, delegated to <see cref="AdsRuntimeState"/>.</summary>

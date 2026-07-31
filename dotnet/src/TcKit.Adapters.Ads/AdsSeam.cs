@@ -31,4 +31,10 @@ internal interface IAdsFactory
     IAdsSystem OpenSystem(string netId);
 
     IPlcSymbols OpenPlc(string netId, int port);
+
+    /// <summary>
+    /// One-line licence diagnosis when the target is stuck in Config (expired trial); null when
+    /// the licences don't explain it. Never throws.
+    /// </summary>
+    string? DiagnoseStuckInConfig(string netId);
 }

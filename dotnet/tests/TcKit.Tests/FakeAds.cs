@@ -10,12 +10,16 @@ namespace TcKit.Tests;
 internal sealed class FakeAdsSystem : IAdsSystem
 {
     public bool Reachable { get; set; } = true;
+
+    /// <summary>The state reported when the transition fails ("Config" simulates the licence case).</summary>
+    public string FinalOnFailure { get; set; } = "Stop";
+
     public TcSystemState? Requested { get; private set; }
 
     public SystemStateResult SetState(TcSystemState target, int waitTimeoutMs)
     {
         Requested = target;
-        var final = Reachable ? target.ToString() : "Stop";
+        var final = Reachable ? target.ToString() : FinalOnFailure;
         return new SystemStateResult(Reachable, target.ToString(), final, "Config", 10);
     }
 }
@@ -66,7 +70,12 @@ internal sealed class FakeAdsFactory : IAdsFactory
     public FakeAdsSystem System { get; } = new();
     public FakePlcSymbols Plc { get; }
 
+    /// <summary>The licence diagnosis returned when a transition ends in Config; null = no finding.</summary>
+    public string? LicenceDiagnosis { get; set; }
+
     public IAdsSystem OpenSystem(string netId) => System;
 
     public IPlcSymbols OpenPlc(string netId, int port) => Plc;
+
+    public string? DiagnoseStuckInConfig(string netId) => LicenceDiagnosis;
 }

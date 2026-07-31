@@ -76,6 +76,35 @@ public sealed class RuntimeOperationsTests : IDisposable
         => Assert.Throws<ArgumentException>(() => RuntimeOperations.StartRuntime(new FakeAdsFactory(), ""));
 
     [Fact]
+    public void StartRuntime_StuckInConfig_AppendsLicenceDiagnosis()
+    {
+        var factory = new FakeAdsFactory
+        {
+            LicenceDiagnosis = "The target's trial licence 'TC1200' expired on 2026-06-30.",
+        };
+        factory.System.Reachable = false;
+        factory.System.FinalOnFailure = "Config";
+
+        var result = RuntimeOperations.StartRuntime(factory, "1.2.3.4.1.1");
+
+        Assert.False(result.Success);
+        Assert.Contains("Run mode", result.Error);
+        Assert.Contains("trial licence 'TC1200' expired", result.Error);
+    }
+
+    [Fact]
+    public void StartRuntime_StuckElsewhere_NoLicenceLookup()
+    {
+        var factory = new FakeAdsFactory { LicenceDiagnosis = "should not appear" };
+        factory.System.Reachable = false; // FinalOnFailure defaults to "Stop"
+
+        var result = RuntimeOperations.StartRuntime(factory, "1.2.3.4.1.1");
+
+        Assert.False(result.Success);
+        Assert.DoesNotContain("should not appear", result.Error);
+    }
+
+    [Fact]
     public void RunTests_FinishedAndPublished_InlinesFailures()
     {
         var xmlPath = Path.Combine(_dir, "results.xml");
@@ -188,6 +217,21 @@ public sealed class RuntimeOperationsTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("Run mode", result.Error);
+    }
+
+    [Fact]
+    public void RunTests_StuckInConfig_AppendsLicenceDiagnosis()
+    {
+        var factory = new FakeAdsFactory { LicenceDiagnosis = "expired trial licence" };
+        factory.System.Reachable = false;
+        factory.System.FinalOnFailure = "Config";
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: true, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: Path.Combine(_dir, "none.xml"));
+
+        Assert.False(result.Success);
+        Assert.Contains("expired trial licence", result.Error);
     }
 
     [Fact]
