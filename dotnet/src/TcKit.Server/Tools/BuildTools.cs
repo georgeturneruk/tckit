@@ -18,7 +18,8 @@ public sealed class BuildTools(IBuildRunner builder, IPermissionGate gate)
     [McpServerTool(Name = "Build")]
     [Description("Build the open TwinCAT project (CheckAllObjects) and return structured errors, "
         + "warnings, and infos. forceLog also reads the Error List on a clean build (for warnings). "
-        + "plcName scopes a multi-PLC solution.")]
+        + "plcName scopes a multi-PLC solution. Long-running on large projects: a client timeout "
+        + "does not mean failure, and re-running is safe (a build is idempotent).")]
     public Task<string> Build(bool forceLog = false, string plcName = "", CancellationToken cancellationToken = default)
         => Run(PermissionLevel.Write, null, () => builder.BuildAsync(Optional(plcName), forceLog, cancellationToken));
 

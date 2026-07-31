@@ -12,9 +12,28 @@ namespace TcKit.Adapters.Automation;
 public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
 {
     private readonly StaExecutor _sta = new();
+    private readonly object _busySync = new();
+    private (string Verb, DateTime StartedUtc)? _inFlight;
 
     public Task<Result> OpenProjectAsync(string solutionPath, CancellationToken cancellationToken)
-        => RunAsync(cancellationToken, session => ProjectAuthor.OpenProject(session, solutionPath));
+    {
+        // A cold open of a large solution can outlive the MCP client's request timeout while the
+        // underlying XAE operation keeps going. A blind retry would then queue a second open behind
+        // the first; answer "still loading" immediately instead, so the caller can poll safely.
+        lock (_busySync)
+        {
+            if (_inFlight is { } busy)
+            {
+                var seconds = (int)(DateTime.UtcNow - busy.StartedUtc).TotalSeconds;
+                return Task.FromResult(Result.Fail(
+                    $"XAE is busy: {busy.Verb} has been running for {seconds}s (a large solution can take "
+                    + "minutes to open). This request was not started; retry once the current operation "
+                    + "completes."));
+            }
+        }
+
+        return RunAsync(cancellationToken, session => ProjectAuthor.OpenProject(session, solutionPath));
+    }
 
     public Task<Result> AddPouAsync(
         string name, PouType pouType, string code, string parentFolder, string? plcName,
@@ -144,9 +163,16 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
         => RunAsync(cancellationToken, session =>
             ProjectAuthor.SavePlcAsLibrary(session, plcName, outputPath, install, repository, overwrite));
 
-    private Task<Result> RunAsync(CancellationToken cancellationToken, Func<ITcSession, Result> author)
+    private Task<Result> RunAsync(
+        CancellationToken cancellationToken, Func<ITcSession, Result> author,
+        [System.Runtime.CompilerServices.CallerMemberName] string verb = "")
     {
         cancellationToken.ThrowIfCancellationRequested();
+        lock (_busySync)
+        {
+            _inFlight = (verb.Replace("Async", "", StringComparison.Ordinal), DateTime.UtcNow);
+        }
+
         try
         {
             return Task.FromResult(_sta.Run(() =>
@@ -170,6 +196,13 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
             return Task.FromResult(Result.Fail(ex.Message));
         }
 #pragma warning restore CA1031
+        finally
+        {
+            lock (_busySync)
+            {
+                _inFlight = null;
+            }
+        }
     }
 
     public void Dispose() => _sta.Dispose();
