@@ -22,6 +22,12 @@ if (args.Length == 0)
     return 0;
 }
 
+if (args[0] is "--version" or "version")
+{
+    Console.WriteLine(VersionString());
+    return 0;
+}
+
 var reader = new XmlProjectReader();
 var ct = CancellationToken.None;
 var (pos, opt) = ParseArgs(args);
@@ -463,9 +469,24 @@ static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? ParsePa
         list => list.Key, list => (IReadOnlyDictionary<string, string>)list.Value, StringComparer.Ordinal);
 }
 
+static string VersionString()
+{
+    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+    var informational = assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), inherit: false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+        .FirstOrDefault()?.InformationalVersion;
+    // Drop the '+<commit>' source-revision suffix the SDK appends to the informational version.
+    var version = informational?.Split('+')[0];
+    return string.IsNullOrEmpty(version)
+        ? assembly.GetName().Version?.ToString() ?? "unknown"
+        : version;
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("tckit (C# rewrite) - CLI scaffold");
+    Console.WriteLine("  version | --version");
     Console.WriteLine("read verbs:");
     Console.WriteLine("  get-structure <path> [--plc <name>]");
     Console.WriteLine("  get-pou-interface | get-pou-declaration <path> <pou> [--plc <name>]");
