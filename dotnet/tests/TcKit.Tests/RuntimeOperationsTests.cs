@@ -192,6 +192,72 @@ public sealed class RuntimeOperationsTests : IDisposable
     }
 
     [Fact]
+    public void RunTests_SequenceMode_FreshXmlCompletesWithoutFinishedFlag()
+    {
+        // RUN_IN_SEQUENCE: AllTestSuitesFinished stays false forever, but the publisher
+        // writes the xUnit XML once the last suite completes.
+        var xmlPath = Path.Combine(_dir, "sequence.xml");
+        var polls = 0;
+        var plc = new FakePlcSymbols(
+            bools: new() { [FinishedSymbol] = false },
+            ints: new() { [SuiteCountSymbol] = 1 });
+        plc.OnPoll = () =>
+        {
+            polls++;
+            if (polls == 2)
+            {
+                File.WriteAllText(xmlPath, SampleAllPass);
+                File.SetLastWriteTimeUtc(xmlPath, DateTime.UtcNow.AddSeconds(2));
+            }
+        };
+        var factory = new FakeAdsFactory(plc);
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: true, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: xmlPath);
+
+        Assert.True(result.Success);
+        Assert.True(result.XmlPublished);
+        Assert.True(result.ResultsIncluded);
+        Assert.True(result.TestsPassed);
+    }
+
+    [Fact]
+    public void RunTests_SequenceMode_WaitsForXmlSizeToSettle()
+    {
+        // The first sighting of the file is mid-write (growing); completion must only
+        // trigger once the size holds across two polls.
+        var xmlPath = Path.Combine(_dir, "settle.xml");
+        var polls = 0;
+        var plc = new FakePlcSymbols(
+            bools: new() { [FinishedSymbol] = false },
+            ints: new() { [SuiteCountSymbol] = 1 });
+        plc.OnPoll = () =>
+        {
+            polls++;
+            if (polls == 2)
+            {
+                File.WriteAllText(xmlPath, SampleAllPass[..20]);
+                File.SetLastWriteTimeUtc(xmlPath, DateTime.UtcNow.AddSeconds(2));
+            }
+            else if (polls == 3)
+            {
+                File.WriteAllText(xmlPath, SampleAllPass);
+                File.SetLastWriteTimeUtc(xmlPath, DateTime.UtcNow.AddSeconds(2));
+            }
+        };
+        var factory = new FakeAdsFactory(plc);
+
+        var result = RuntimeOperations.RunTests(
+            factory, "1.2.3.4.1.1", plcName: null, waitForResults: true, timeoutSeconds: 5,
+            pollIntervalMs: 1, xmlPathOverride: xmlPath);
+
+        Assert.True(result.Success);
+        Assert.True(result.ResultsIncluded);
+        Assert.True(result.TestsPassed);
+    }
+
+    [Fact]
     public void RunTests_Timeout_WhenSuitesNeverFinish()
     {
         var plc = new FakePlcSymbols(bools: new() { [FinishedSymbol] = false });
