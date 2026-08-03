@@ -1,9 +1,9 @@
 ---
 adr: 0011
 title: TcUnit results path resolution, run_tests inline failures, placeholder idempotency, save_plc_as_library cold-start retry
-status: Accepted
+status: Implemented
 created: 2026-05-17
-last_reviewed: 2026-05-18
+last_reviewed: 2026-08-03
 issue:
 pr:
 related: [0006, 0007, 0009, 0010]
@@ -11,27 +11,30 @@ related: [0006, 0007, 0009, 0010]
 
 ## Current state
 
-**Decision (live):** Six fixes on `feat/tcunit-self-validation`:
-(1) `Get-TcUnitDefaultXmlPath` fallback ladder (env override -> kernel -> UmRT
-glob with mtime tiebreak); (2) `run_tests` returns `summary` + `failures`
-inline via `wait_for_results=True` (passing tests omitted; full per-test list
-still on `get_test_results`); (3) `add_library_placeholder` probes
-`.plcproj` and skips COM `AddPlaceholder` when already present;
-(4) `save_plc_as_library` catches `PlaceholderReference/EffectiveResolution`
-and retries after `CheckAllObjects`; (5) `tckit doctor` TcUnit section via
-new `/tcunit-xml-resolve` route; (6) dedicated `set_placeholder_parameters`
-verb. Headless-mode cold-start retry is deferred (SyncLock wedge).
+**Decision (live):** The six fixes shipped in the Python/bridge era and
+carried into the C# rewrite (ADR-0015, PR #132), with post-rewrite
+deviations: (1) results-path resolution now lives in `TcKit.Ads.TcUnitResults`
+and is **target-aware** — the UmRT whose `TcRegistry.xml` declares the target
+AMS Net ID owns the path, ahead of the kernel/freshest-candidate ladder
+(PR #134, superseding the mtime-first heuristic); (2) `RunTests` returns
+`summary` + failures-only inline, plus `tests_passed` distinct from
+infrastructure `success` (PR #134); (3) placeholder idempotency probe and
+(6) `SetPlaceholderParameters` survive as C# verbs, now backed by the
+ParameterGuard (PR #134); (4) the `SavePlcAsLibrary` cold-start retry is in
+`ProjectAuthor`; (5) the `tckit doctor` TcUnit section did **not** survive —
+the doctor CLI was not ported in the rewrite. Headless cold-start stays
+deferred (ADR-0014/0015 territory).
 
-**Where it lives:** Branch `feat/tcunit-self-validation`. Validated by
-`bench/findings/2026-05-17-adr-0011-impl-and-t1-rebench.md` and
-`bench/findings/2026-05-18-t1-friction-fixes-and-skill-nudges.md`.
+**Where it lives:** `dotnet/src/TcKit.Ads/TcUnitResults.cs`,
+`dotnet/src/TcKit.Adapters.Ads/RuntimeOperations.cs`,
+`dotnet/src/TcKit.Adapters.Automation/ProjectAuthor.cs`. Original validation
+in `bench/findings/2026-05-17-adr-0011-impl-and-t1-rebench.md` and
+`bench/findings/2026-05-18-t1-friction-fixes-and-skill-nudges.md`; the
+resolver and parameter lanes were re-verified live against a UmRT in PR #134.
 
 **Open questions:**
-- Promote to `Implemented` once the T1 re-bench cycle is fully closed (the
-  hand-off vs self-validate variance is characterised in the 2026-05-18
-  finding; an N=3 sweep would confirm).
-- Headless-mode cold-start: deferred pending a Visual Studio Appid Stub
-  SyncLock workaround.
+- The N=3 T1 re-bench sweep was never run; the 2026-05-18 finding's variance
+  characterisation stands unconfirmed. Rerun only if bench work resumes.
 
 ## Context
 
@@ -248,3 +251,10 @@ reliable on-host disambiguation.
   pending (expected: tckit arm call count drops from 49 toward
   vanilla's 7 once the UmRT auto-detect + inline failures land
   together).
+- 2026-08-03: Promoted to Implemented. All six fixes had long shipped and
+  survived the C# rewrite except the doctor TcUnit section (doctor CLI not
+  ported); the resolver was superseded by target-aware resolution and the
+  parameter verbs hardened by the ParameterGuard in PR #134, which also
+  re-verified the lane live against a UmRT. The T1 re-bench sweep that
+  originally gated promotion never ran; promotion proceeds on shipped-and-
+  re-verified grounds instead.
