@@ -4,6 +4,17 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`RunTests` completion under `RUN_IN_SEQUENCE`.** TcUnit's sequential
+  runner never raises `GVL_TcUnit.TcUnitRunner.AllTestSuitesFinished`, so the
+  poll always burned the full timeout even though the run had finished and
+  published. The poll now also accepts a freshly written xUnit results file
+  (mtime after the run started, size stable across two polls) as the
+  completion signal. Affects `RunTests` and the composite `test` CI verb.
+
 ## [0.4.0] - Unreleased
 
 ### Changed

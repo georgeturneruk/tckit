@@ -72,6 +72,7 @@ internal static class RuntimeOperations
 
         var deadline = TimeSpan.FromSeconds(timeoutSeconds);
         var finished = false;
+        long lastXmlSize = -1;
         while (stopwatch.Elapsed < deadline)
         {
             if (plc.TryReadBool(FinishedSymbol, out var done) && done)
@@ -80,13 +81,29 @@ internal static class RuntimeOperations
                 break;
             }
 
+            // RUN_IN_SEQUENCE never raises AllTestSuitesFinished even though the run completes
+            // and publishes, so a freshly written xUnit file is an equally terminal signal: the
+            // publisher only writes after the last suite finishes. Require the size to hold
+            // across two polls so a file still being streamed out isn't parsed half-written.
+            if (File.Exists(xmlPath) && File.GetLastWriteTimeUtc(xmlPath) > start)
+            {
+                var size = new FileInfo(xmlPath).Length;
+                if (size > 0 && size == lastXmlSize)
+                {
+                    finished = true;
+                    break;
+                }
+
+                lastXmlSize = size;
+            }
+
             Thread.Sleep(pollIntervalMs);
         }
 
         if (!finished)
         {
             return FailedRun(
-                $"Tests did not finish within {timeoutSeconds}s (AllTestSuitesFinished still false).",
+                $"Tests did not finish within {timeoutSeconds}s (AllTestSuitesFinished still false and no fresh xUnit XML).",
                 xmlPath, resolveWarning);
         }
 

@@ -39,10 +39,21 @@ internal sealed class FakePlcSymbols : IPlcSymbols
     /// <summary>Fired once when AllTestSuitesFinished is first read as true (simulates the XML publisher).</summary>
     public Action? OnFinished { get; set; }
 
+    /// <summary>
+    /// Fired on every finished-flag read regardless of value (simulates RUN_IN_SEQUENCE, where the
+    /// publisher writes its XML while AllTestSuitesFinished stays false).
+    /// </summary>
+    public Action? OnPoll { get; set; }
+
     public bool Disposed { get; private set; }
 
     public bool TryReadBool(string symbolPath, out bool value)
     {
+        if (symbolPath.Contains("AllTestSuitesFinished", StringComparison.Ordinal))
+        {
+            OnPoll?.Invoke();
+        }
+
         if (_bools.TryGetValue(symbolPath, out value))
         {
             if (value && symbolPath.Contains("AllTestSuitesFinished", StringComparison.Ordinal) && !_firedFinished)
