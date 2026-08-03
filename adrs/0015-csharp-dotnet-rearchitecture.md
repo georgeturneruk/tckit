@@ -1,9 +1,9 @@
 ---
 adr: 0015
 title: C#/.NET rearchitecture (single in-process MCP server)
-status: Accepted
+status: Implemented
 created: 2026-06-28
-last_reviewed: 2026-07-03
+last_reviewed: 2026-08-03
 issue:
 pr: 132
 supersedes:
@@ -20,9 +20,10 @@ Interface (project authoring) is hand-rolled against `TCatSysManagerLib`;
 MCP is the official .NET SDK, and the project stays MIT.
 
 **Where it lives:** The port is complete (every lane in
-[dotnet/PORTING.md](../dotnet/PORTING.md) checked off) and the **cutover has
-been executed** on `feat/csharp-rewrite`: the Python package, PowerShell
-bridge, and Docker mode are deleted, and the parity oracle retired with them
+[dotnet/PORTING.md](../dotnet/PORTING.md) checked off) and the cutover
+**merged to main in PR #132** (distribution follow-up in #133): the Python
+package, PowerShell bridge, and Docker mode are deleted, and the parity
+oracle retired with them
 (the live smoke harnesses remain in `dotnet/oracle/`). CI is
 `.github/workflows/dotnet-ci.yml` (Linux build + xUnit + skills drift check);
 the site pipeline (`scripts/build-docs.sh`) runs the C# doc generator; the
@@ -169,94 +170,16 @@ language-agnostic. The port/adapter pattern maps to C# interfaces + DI. CI's
 
 ## Status notes
 
-- 2026-06-28: Drafted as `Proposed`. Direction crystallised from an ecosystem
-  survey (`Beckhoff.TwinCAT.Ads`, TwinSharp, TcAutomation, TcOpen's CI
-  pipelines, TcUnit-Runner). Phase 0 spike plus the Python parity oracle gate
-  the commitment before any code lands.
-- 2026-06-28: Off-machine feasibility spike (see
-  [finding](../bench/findings/2026-06-28-csharp-rewrite-feasibility.md)). COM
-  Automation Interface drives from C#/net8 with bridge-parity behaviour, and
-  `Beckhoff.TwinCAT.Ads` 7.0.172 + `TwinSharp.Core` 1.2.0 +
-  `ModelContextProtocol` 2.0.0-preview.1 build together on net8 with no
-  conflict. Language/platform/dependency risk retired; DTE-attach `add_pou`,
-  ADS `read_symbols`, typed interop, and SSE remain for the on-machine spike.
-- 2026-06-28: Promoted to `Accepted`. The rewrite is committed; the on-machine
-  Phase 0 spike is now the first execution step (confirmation of DTE-attach
-  authoring, ADS reads, and SSE), not a go/no-go that could shelve the work.
-- 2026-06-28: On-machine spike passed against a live 4026 (see finding). net8 DTE
-  attach (via a `GetActiveObject` P/Invoke, since `Marshal.GetActiveObject` is
-  gone from .NET Core/8), tree read, and self-cleaning `add_pou` authoring all
-  work against the open solution; ADS links and routes from net8; the MCP server
-  completes a real stdio handshake. The highest-risk lane (COM authoring) is
-  proven; scaffold committed on `feat/csharp-rewrite`.
-- 2026-06-28: Dropped byte-for-byte parity as a goal. The rewrite may make
-  deliberate, reviewed breaking improvements to the MCP surface; Python is a
-  behavioural reference and the oracle a semantic cross-check (not a strict diff),
-  with the xUnit suite as the per-tool gate. First reader `get_structure` ported
-  on `feat/csharp-readers-get-structure` (offline XML in `TcKit.Adapters.Reader`,
-  shared snake_case JSON contract, unified `{ "error": msg }` failure shape);
-  oracle green on the sample, multi-PLC, and nested-folder bench fixtures.
-- 2026-06-28: Reader lane completed on the same branch: `get_pou_interface`,
-  `get_pou_declaration`, `get_pou_item` (methods/actions/property `.Get`/`.Set`),
-  `get_gvl`, `get_dut` (kind + alias base_type). They share a stateful symbol index
-  built by `get_structure` (per-PLC name -> path, .plcproj mtime staleness, ADR-0005);
-  index hydration from the open-XAE solution is deferred to the COM lane. Exercising
-  the breaking-changes latitude, the MCP surface now follows C# identifier
-  conventions instead of the snake_case ecosystem default: PascalCase tool names
-  (`GetStructure`, `GetPouInterface`, ...) and camelCase parameters; output JSON
-  keys stay snake_case as the data contract. 20 xUnit tests pass; oracle green
-  across all readers on the sample, multi-PLC, and T3 fixtures.
-- 2026-06-28: Writer lane started behind an automation seam
-  (`ITcSession`/`ITcSysManager`/`ITcTreeItem`): `ProjectAuthor` holds the COM-free
-  authoring logic, `ComTc*` the live late-bound implementation, and an in-memory
-  fake encodes AI behaviour for CI. Create family done (OpenProject, AddPou,
-  AddFolder, AddGvl, AddDut, AddMethod, AddProperty), logic CI-tested against the
-  fake (46 tests total). Resolves the typed-interop open question (dynamic + seam,
-  not typed); the live COM wrapper still needs an on-XAE smoke against a
-  throwaway/demo solution. update / delete / library verbs next.
-- 2026-06-28: update + delete verbs added on the seam: update_pou_declaration /
-  _implementation / _method_body and the three anchored _patch variants; delete_pou
-  (with a file-side .TcTTO task-binding refusal for PROGRAMs), delete_method,
-  delete_property (accessor cascade), delete_gvl, delete_dut, delete_folder
-  (recursive + kind validation). 61 tests pass against the fake. Remaining writer
-  verbs: add_variable / delete_variable, library refs/placeholders, add_plc_project,
-  save_plc_as_library, create_project; then the live COM smoke.
-- 2026-06-28: Live COM smoke passed against a real 4026 (throwaway temp solution):
-  OpenProject -> AddPou (authored FB_TcKitSmoke.TcPOU to disk) -> DeletePou (removed
-  it), both success. Two fixes the smoke surfaced and that are now in: an
-  `IOleMessageFilter` registered on the STA thread (resolves RPC_E_CALL_REJECTED
-  when XAE is busy, the canonical VS-automation fix) and capturing tree-item
-  path/kind before navigating (TwinCAT AI invalidates a handle once you navigate
-  away, which had made DeletePou report a spurious "invalidated" error). 61 fake
-  tests green; the ComTc* layer is now live-proven.
-- 2026-07-01: Config/CLI lane scoped down and the safety stance ported. Decided not to
-  port the `init` / `config` / `doctor` subcommands or the layered TOML+JSON loader (mostly
-  bridge-era knobs the rewrite deletes; remaining runtime defaults read from the environment).
-  Ported the safety stance as a hot-reloaded permission gate instead: `IPermissionGate` →
-  `FilePermissionGate` over `~/.tckit/permissions.json`, with a read/write/execute mode
-  (every mutating tool declares its level) and allowed/blocked target NetIds gating execute-class
-  calls (Deploy, StartRuntime, RunTests, WriteSymbols, InvokeRpc). Block is a hard guard (never
-  lifted by a tool); `GetPermissions` / `SetPermissions` make the soft facets easy to swap
-  mid-session. Missing file = permissive (opt-in), malformed = keep last good, typo'd mode = fall
-  to read. 18 gate tests added; full suite 266 green. Remaining: a docs page (docs/content +
-  tc-config skill still describe the Python config).
-- 2026-07-02: Cutover executed. All lanes in PORTING.md complete (including the net-new
-  hardware diagnostics, symbol I/O, I/O authoring, and `FindHardware` lanes); README, docs
-  site, skills, and plugin rewritten for the C# surface (plugin now builds and launches
-  `TcKit.Server` from its clone). Deleted: `tckit/`, `bridge/`, `docker/`, the Python
-  tests (fixtures kept for xUnit), `pyproject.toml`, the Python CI + PyPI release
-  workflows, and the parity-oracle `compare.ps1`. `scripts/build-docs.sh` now bootstraps
-  the .NET 8 SDK and runs the C# doc generator. SSE explicitly left open without gating
-  the cutover. Cutover PR: #132. Promote to Implemented when it merges to main.
-- 2026-07-03: #132 merged to main. Distribution model settled (replaces the
-  deleted PyPI release): a `v*` tag runs `.github/workflows/release.yml` on a
-  Windows runner to `dotnet publish` a self-contained, single-file
-  `tckit-server-win-x64.exe` (win-x64, ~74 MB, no .NET runtime/SDK dependency;
-  single-file + COM interop validated locally) and attach it, plus a SHA256, to
-  a GitHub Release. The plugin launcher resolves the server as: `TCKIT_SERVER_EXE`
-  override → cached prebuilt → build-from-source if the SDK is present → download
-  the release exe (checksum-verified, cached per version). Auto-download is the
-  no-SDK fallback rather than the primary path, so the 74 MB fetch never fires on
-  OT/air-gapped machines that have the SDK or a pre-placed exe. Landing via a
-  follow-up PR off main; full trim-on-promotion of this ADR deferred to that
-  promotion.
+- 2026-08-03: Implementation outcome (compacted; the dated walk-through lives
+  in git history). Drafted, spiked (off-machine + on-machine against a live
+  4026), and Accepted on 2026-06-28; ported lane by lane with the Python
+  parity oracle as a semantic cross-check; cutover PR #132 merged 2026-07-03,
+  deleting the Python package, PowerShell bridge, Docker mode, and PyPI
+  pipeline. Distribution landed in #133: a `v*` tag publishes a
+  self-contained `tckit-server-win-x64.exe` (+SHA256) and the plugin launcher
+  resolves override -> cache -> build-from-source -> checksum-verified
+  download. Deviations that matter: byte-for-byte parity dropped in favour of
+  reviewed improvements (PascalCase tools / camelCase params, unified error
+  shape, net-new hardware/symbol/I-O lanes); the Python config CLI was not
+  ported — the hot-reloaded `permissions.json` gate replaces it; SSE left
+  open, non-gating, stdio is the shipped transport.

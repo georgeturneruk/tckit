@@ -1,11 +1,11 @@
 ---
 adr: 0016
 title: Reusable TcKit.Ads class library
-status: Accepted
+status: Implemented
 created: 2026-07-31
-last_reviewed: 2026-07-31
+last_reviewed: 2026-08-03
 issue:
-pr:
+pr: 134
 related: [0006, 0011, 0015]
 ---
 
@@ -26,7 +26,7 @@ seam, `AdsRuntimeState`, `TcLicenses`, `TcLogStream` + `AdsLogEntry`,
 `TcUnitResults`); adapter delegation in `dotnet/src/TcKit.Adapters.Ads/`
 (`AdsNative.cs`, `AdsSymbolIo.cs`, `RuntimeOperations.cs`, `TcUnitMap.cs`);
 packing via `dotnet/pack-tckit-ads.ps1` (default feed `C:\nuget-local`,
-version from the csproj `<Version>`). Implemented on branch, pre-PR.
+version from the csproj `<Version>`). Merged to main in PR #134.
 
 **Settled during implementation:**
 
@@ -130,19 +130,11 @@ project-specific symbol paths), the COM/XAE lane, and MCP/CLI concerns.
 
 ## Alternatives considered
 
-- **Make `TcKit.Adapters.Ads` itself public and pack it.** Rejected: it
-  depends on `TcKit.Core` (port interfaces, Result contracts) and TwinSharp,
-  so consumers would drag in TcKit's whole contract surface; and the
-  adapter-references-only-Core rule makes it the wrong home for a
-  shared library.
-- **Separate repo for the library.** Rejected for now: same-repo keeps the
-  adapter refactor and the library in one PR cycle; the local folder feed
-  gives consumers version pinning without repo surgery. Revisit if external
-  consumers appear.
-- **Session-per-call (no handle cache), sidestepping staleness.** Rejected:
-  that is today's adapter behaviour; the downstream consumers poll at rates
-  where per-call symbol resolution is measurable, and the point of the
-  library is to own the hard policy once.
+- Pack `TcKit.Adapters.Ads` itself — rejected: drags in TcKit.Core + TwinSharp.
+- Separate repo — rejected for now: same-repo keeps refactor + library in one
+  PR cycle; revisit if external consumers appear.
+- Session-per-call (no handle cache) — rejected: measurable at polling rates;
+  the point is to own the hard policy once.
 
 ## Consequences
 
@@ -158,14 +150,11 @@ project-specific symbol paths), the COM/XAE lane, and MCP/CLI concerns.
 
 ## Status notes
 
-- 2026-07-31: Drafted as Proposed, from TASKS.md tasks 1 and 6 plus evidence
-  from a downstream consumer session (stale-handle misreads, enum write
-  failures, expired-trial diagnosis). Donor implementations for the log
-  stream and licence readers identified in that consumer; they are
-  generalised on the way in.
-- 2026-07-31: Implemented in the same session and promoted to Accepted. The
-  stale-handle policy proved out as symbol-version check + retry-once (no
-  notification subscription); the licence diagnosis switched from the trial
-  status bit to expiry after live UmRT licences showed status 0 with expiry.
-  All lanes verified live against UmRT_Default (state, licences, handle-lane
-  symbol read, log subscription). Promote to Implemented when the PR merges.
+- 2026-08-03: Implementation outcome. Drafted, implemented, and live-verified
+  in one session (2026-07-31); merged in PR #134. Deviations that matter:
+  the stale-handle policy settled as symbol-version check + retry-once (no
+  notification subscription needed); the licence diagnosis keys on expiry,
+  not the 0x254 trial bit (real trials report status 0 with expiry); the
+  preflight wires into StartRuntime/RunTests only (Deploy reports success in
+  that failure mode). All lanes verified live against a UmRT (state,
+  licences, handle-lane symbol read, log subscription).
