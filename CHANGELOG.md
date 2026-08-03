@@ -4,7 +4,7 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.1] - 2026-08-03
 
 ### Fixed
 
