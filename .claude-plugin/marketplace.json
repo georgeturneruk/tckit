@@ -9,7 +9,7 @@
       "name": "tckit",
       "source": "./plugin",
       "description": "MCP server + skills for TwinCAT 3 PLC projects: read structure, write ST, build, deploy, run TcUnit tests.",
-      "version": "0.4.0"
+      "version": "0.5.1"
     }
   ]
 }
