@@ -18,7 +18,11 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
 {
     [McpServerTool(Name = "OpenProject")]
     [Description("Open (or confirm open) a TwinCAT solution in XAE. Idempotent; rarely needed if "
-        + "the project is already open. solutionPath is the absolute path to the .sln.")]
+        + "the project is already open. solutionPath is the absolute path to the .sln. A cold open "
+        + "of a large solution can exceed the client request timeout while XAE keeps loading: a "
+        + "timeout does NOT mean failure, and re-issuing this call is safe (while the open is still "
+        + "in progress it returns an explicit 'XAE is busy' error instead of starting a second one; "
+        + "poll until it succeeds).")]
     public Task<string> OpenProject(string solutionPath, CancellationToken cancellationToken = default)
         => Run(() => writer.OpenProjectAsync(solutionPath, cancellationToken));
 
@@ -183,11 +187,16 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
     [McpServerTool(Name = "AddLibraryReference")]
     [Description("Add a library reference to a consumer PLC project. The library must already be "
         + "installed (use SavePlcAsLibrary with install=true for an in-solution library first). "
-        + "version '*' means latest; distributor defaults to 'Tc3 Project'.")]
+        + "version '*' means latest; distributor defaults to 'Tc3 Project'. parametersJson "
+        + "optionally sets library parameter overrides as a JSON object "
+        + "{ \"GVL_Param_List\": { \"Key\": \"Value\" } } (TwinCAT booleans need 'TRUE'/'FALSE'). "
+        + "Re-issuing after a client timeout cannot double-apply: a duplicate add fails with "
+        + "'already contained'.")]
     public Task<string> AddLibraryReference(
         string libraryName, string version = "*", string distributor = "Tc3 Project",
-        string plcName = "", CancellationToken cancellationToken = default)
-        => Run(() => writer.AddLibraryReferenceAsync(Optional(plcName), libraryName, version, distributor, cancellationToken));
+        string parametersJson = "", string plcName = "", CancellationToken cancellationToken = default)
+        => Run(() => writer.AddLibraryReferenceAsync(
+            Optional(plcName), libraryName, version, distributor, ParseParameters(parametersJson), cancellationToken));
 
     [McpServerTool(Name = "DeleteLibraryReference")]
     [Description("Remove a library reference from a consumer PLC project. version '*' resolves to the "
@@ -201,7 +210,10 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
     [Description("Add a library placeholder to a consumer PLC project. defaultLibrary is the resolved "
         + "library; version '*' means latest; distributor is the library's company (empty for the API "
         + "default). parametersJson optionally sets library parameter overrides as a JSON object "
-        + "{ \"GVL_Param_List\": { \"Key\": \"Value\" } } (TwinCAT booleans need 'TRUE'/'FALSE').")]
+        + "{ \"GVL_Param_List\": { \"Key\": \"Value\" } } (TwinCAT booleans need 'TRUE'/'FALSE'). "
+        + "Idempotent and long-running (the parameter path reloads the solution): a client timeout "
+        + "does not mean failure, and re-issuing is safe (an already-present placeholder falls "
+        + "through to the parameter update).")]
     public Task<string> AddLibraryPlaceholder(
         string placeholderName, string defaultLibrary, string version = "*", string distributor = "",
         string parametersJson = "", string plcName = "", CancellationToken cancellationToken = default)
@@ -212,7 +224,8 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
     [McpServerTool(Name = "SetPlaceholderParameters")]
     [Description("Set library parameter overrides on an existing placeholder. parametersJson is a JSON "
         + "object { \"GVL_Param_List\": { \"Key\": \"Value\" } }; list names and keys are uppercased on "
-        + "disk, values written verbatim (TwinCAT booleans need 'TRUE'/'FALSE').")]
+        + "disk, values written verbatim (TwinCAT booleans need 'TRUE'/'FALSE'). Idempotent and "
+        + "long-running (reloads the solution): safe to re-issue after a client timeout.")]
     public Task<string> SetPlaceholderParameters(
         string placeholderName, string parametersJson, string plcName = "", CancellationToken cancellationToken = default)
         => Run(() => writer.SetPlaceholderParametersAsync(

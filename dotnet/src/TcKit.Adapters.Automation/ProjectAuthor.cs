@@ -366,7 +366,8 @@ internal static partial class ProjectAuthor
     // --- library references / placeholders -----------------------------------
 
     public static Result AddLibraryReference(
-        ITcSession session, string? plcName, string libraryName, string version, string distributor)
+        ITcSession session, string? plcName, string libraryName, string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters = null)
     {
         if (string.IsNullOrEmpty(libraryName))
         {
@@ -377,6 +378,13 @@ internal static partial class ProjectAuthor
         ReferencesNode(sm, plc).AddLibrary(libraryName, version, distributor);
         // AddLibrary mutates only in-memory state; Save persists the .plcproj.
         session.Save();
+
+        if (parameters is { Count: > 0 })
+        {
+            var plcProjPath = PlcProjXml.Find(Path.GetDirectoryName(session.SolutionPath), plc);
+            SpliceParameters(session, plcProjPath, PlcProjXml.LibraryElement, libraryName, parameters);
+        }
+
         return Ok(
             ("consumer_plc", plc), ("library", libraryName), ("version", version), ("distributor", distributor));
     }
@@ -406,6 +414,11 @@ internal static partial class ProjectAuthor
 
         sm.LookupTreeItem(refsPath).RemoveReference(libraryName, resolvedVersion, distributor);
         session.Save();
+        if (TryFindPlcProj(session.SolutionPath, plc) is { } plcProjPath)
+        {
+            ParameterGuard.Unregister(plcProjPath, libraryName);
+        }
+
         return Ok(
             ("consumer_plc", plc), ("library", libraryName), ("version", resolvedVersion), ("distributor", distributor));
     }
@@ -442,11 +455,7 @@ internal static partial class ProjectAuthor
         if (parameters is { Count: > 0 })
         {
             plcProjPath ??= PlcProjXml.Find(Path.GetDirectoryName(solutionPath), plc);
-            // Close before the file edit so the next File.SaveAll can't regenerate the .plcproj from
-            // an in-memory tree that doesn't know about the injected overrides; reopen re-hydrates it.
-            session.CloseSolution();
-            PlcProjXml.SetPlaceholderParameters(plcProjPath, placeholderName, parameters);
-            session.UseSolution(solutionPath);
+            SpliceParameters(session, plcProjPath, PlcProjXml.PlaceholderElement, placeholderName, parameters);
         }
 
         return Ok(
@@ -469,12 +478,9 @@ internal static partial class ProjectAuthor
         }
 
         var (plc, _) = Open(session, plcName);
-        var solutionPath = session.SolutionPath;
-        var plcProjPath = PlcProjXml.Find(Path.GetDirectoryName(solutionPath), plc);
+        var plcProjPath = PlcProjXml.Find(Path.GetDirectoryName(session.SolutionPath), plc);
 
-        session.CloseSolution();
-        PlcProjXml.SetPlaceholderParameters(plcProjPath, placeholderName, parameters);
-        session.UseSolution(solutionPath);
+        SpliceParameters(session, plcProjPath, PlcProjXml.PlaceholderElement, placeholderName, parameters);
 
         return Ok(("consumer_plc", plc), ("placeholder", placeholderName));
     }
@@ -490,6 +496,11 @@ internal static partial class ProjectAuthor
         // Single-arg RemoveReference targets placeholders specifically.
         ReferencesNode(sm, plc).RemoveReference(placeholderName);
         session.Save();
+        if (TryFindPlcProj(session.SolutionPath, plc) is { } plcProjPath)
+        {
+            ParameterGuard.Unregister(plcProjPath, placeholderName);
+        }
+
         return Ok(("consumer_plc", plc), ("placeholder", placeholderName));
     }
 
@@ -650,6 +661,23 @@ internal static partial class ProjectAuthor
 
     private static ITcTreeItem ReferencesNode(ITcSysManager sm, string plc)
         => sm.LookupTreeItem($"TIPC^{plc}^{plc} Project^References");
+
+    /// <summary>
+    /// Splice a parameter override block into the .plcproj and register it with the guard. Close
+    /// before the file edit so the next File.SaveAll can't regenerate the .plcproj from an
+    /// in-memory tree that doesn't know about the injected overrides; reopen re-hydrates it. The
+    /// guard re-checks the block after every later write verb (see <see cref="ParameterGuard"/>).
+    /// </summary>
+    private static void SpliceParameters(
+        ITcSession session, string plcProjPath, string elementName, string referenceName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> parameters)
+    {
+        var solutionPath = session.SolutionPath;
+        session.CloseSolution();
+        PlcProjXml.SetReferenceParameters(plcProjPath, elementName, referenceName, parameters);
+        session.UseSolution(solutionPath);
+        ParameterGuard.Register(plcProjPath, elementName, referenceName, parameters);
+    }
 
     private static string? TryFindPlcProj(string? solutionPath, string plc)
     {

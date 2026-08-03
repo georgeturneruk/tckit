@@ -190,16 +190,34 @@ public sealed class XmlProjectReader : IProjectReader
             throw new DirectoryNotFoundException($"Project path not found: {projectPath}");
         }
 
-        // Accept a .sln file path as shorthand for its containing directory.
-        if (isFile && string.Equals(Path.GetExtension(root), ".sln", StringComparison.OrdinalIgnoreCase))
+        // Accept a .sln file path as shorthand for its containing directory; pin that file as
+        // the solution rather than re-globbing, since the walk below could find a different
+        // .sln first in a tree that holds several.
+        var explicitSln = isFile
+            && string.Equals(Path.GetExtension(root), ".sln", StringComparison.OrdinalIgnoreCase);
+        if (explicitSln)
         {
             root = Path.GetDirectoryName(root)!;
         }
 
-        var slnPaths = EnumerateSorted(root, "*.sln", ".sln");
-        var solutionPath = slnPaths.Count > 0 ? Path.GetFullPath(slnPaths[0]) : "";
+        string solutionPath;
+        if (explicitSln)
+        {
+            solutionPath = Path.GetFullPath(projectPath);
+        }
+        else
+        {
+            var slnPaths = EnumerateSorted(root, "*.sln", ".sln");
+            solutionPath = slnPaths.Count > 0 ? Path.GetFullPath(slnPaths[0]) : "";
+        }
 
-        var plcprojPaths = EnumerateSorted(root, "*.plcproj", ".plcproj");
+        // A deploy-style solution references projects outside its own directory (..\ relative
+        // paths), which a walk of the solution directory alone cannot see; fold each referenced
+        // project's directory in as an extra search root.
+        var roots = new List<string> { root };
+        roots.AddRange(ExternalProjectRoots(solutionPath, root));
+
+        var plcprojPaths = EnumerateSorted(roots, "*.plcproj", ".plcproj");
 
         // Reset the index even on a scoped walk (mirrors the Python reader).
         var fileIndex = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
@@ -255,8 +273,61 @@ public sealed class XmlProjectReader : IProjectReader
             ProjectPath = projectPath,
             SolutionPath = solutionPath,
             Plcs = plcs,
-            Tasks = CollectTasks(root),
+            Tasks = CollectTasks(roots),
         };
+    }
+
+    /// <summary>
+    /// Directories of solution-referenced projects that live outside <paramref name="root"/>.
+    /// Solution-folder entries and dangling references resolve to nothing on disk and are
+    /// skipped; nested duplicates are pruned so the roots enumerate disjoint trees.
+    /// </summary>
+    private static List<string> ExternalProjectRoots(string solutionPath, string root)
+    {
+        var extras = new List<string>();
+        if (solutionPath.Length == 0)
+        {
+            return extras;
+        }
+
+        var slnDir = Path.GetDirectoryName(solutionPath)!;
+        var rootFull = Path.GetFullPath(root);
+        var referenced = TryParse(() => TcFileParser.ParseSlnProjectPaths(solutionPath)) ?? [];
+        foreach (var relative in referenced)
+        {
+            string projectFile;
+            try
+            {
+                projectFile = Path.GetFullPath(Path.Combine(slnDir, relative));
+            }
+            catch (ArgumentException)
+            {
+                continue;
+            }
+
+            if (!File.Exists(projectFile))
+            {
+                continue;
+            }
+
+            var dir = Path.GetDirectoryName(projectFile)!;
+            if (IsUnder(dir, rootFull) || extras.Any(e => IsUnder(dir, e)))
+            {
+                continue;
+            }
+
+            extras.RemoveAll(e => IsUnder(e, dir));
+            extras.Add(dir);
+        }
+
+        return extras;
+    }
+
+    private static bool IsUnder(string dir, string root)
+    {
+        var rel = Path.GetRelativePath(root, dir);
+        return rel == "."
+            || (!rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel));
     }
 
     private static PlcSection BuildSection(
@@ -459,7 +530,7 @@ public sealed class XmlProjectReader : IProjectReader
         return result;
     }
 
-    private static IReadOnlyList<TaskInfo> CollectTasks(string root)
+    private static IReadOnlyList<TaskInfo> CollectTasks(IReadOnlyList<string> roots)
     {
         // Prefer .TcTTO (cycle in µs + bound POU), then merge any .tsproj tasks lacking a
         // .TcTTO counterpart. First writer wins per task name.
@@ -483,7 +554,7 @@ public sealed class XmlProjectReader : IProjectReader
             order.Add(raw.Name);
         }
 
-        foreach (var file in EnumerateSorted(root, "*.TcTTO", ".TcTTO"))
+        foreach (var file in EnumerateSorted(roots, "*.TcTTO", ".TcTTO"))
         {
             var raw = TryParse(() => TcFileParser.ParseTctto(file));
             if (raw is not null)
@@ -492,7 +563,7 @@ public sealed class XmlProjectReader : IProjectReader
             }
         }
 
-        foreach (var file in EnumerateSorted(root, "*.tsproj", ".tsproj"))
+        foreach (var file in EnumerateSorted(roots, "*.tsproj", ".tsproj"))
         {
             var list = TryParse(() => TcFileParser.ParseTsproj(file));
             if (list is null)
@@ -525,6 +596,19 @@ public sealed class XmlProjectReader : IProjectReader
             .EnumerateFiles(root, pattern, SearchOption.AllDirectories)
             .Where(f => Path.GetExtension(f).Equals(extension, StringComparison.OrdinalIgnoreCase))
             .ToList();
+        files.Sort(PathComponentComparer.Instance);
+        return files;
+    }
+
+    /// <summary>Enumerate across disjoint roots (see <see cref="ExternalProjectRoots"/>), merged into one sorted list.</summary>
+    private static List<string> EnumerateSorted(IReadOnlyList<string> roots, string pattern, string extension)
+    {
+        if (roots.Count == 1)
+        {
+            return EnumerateSorted(roots[0], pattern, extension);
+        }
+
+        var files = roots.SelectMany(r => EnumerateSorted(r, pattern, extension)).ToList();
         files.Sort(PathComponentComparer.Instance);
         return files;
     }

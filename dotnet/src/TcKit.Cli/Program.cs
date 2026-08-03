@@ -22,6 +22,12 @@ if (args.Length == 0)
     return 0;
 }
 
+if (args[0] is "--version" or "version")
+{
+    Console.WriteLine(VersionString());
+    return 0;
+}
+
 var reader = new XmlProjectReader();
 var ct = CancellationToken.None;
 var (pos, opt) = ParseArgs(args);
@@ -110,13 +116,31 @@ async Task<int> RunBuildTestVerb()
             return EmitResult(result);
         }
 
+        case "test" when pos.Length >= 1:
+        {
+            var target = Opt("target");
+            if (string.IsNullOrEmpty(target))
+            {
+                Console.WriteLine(TckitJson.Serialize(new { error = "test requires --target <netid>." }));
+                return 2;
+            }
+
+            var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
+            using var testWriter = new AutomationProjectWriter();
+            using var buildRunner = new AutomationBuildRunner();
+            var result = await TcKit.Core.Workflows.TestWorkflow.RunAsync(
+                testWriter, buildRunner, new TcUnitTestRunner(),
+                pos[0], Opt("plc"), target, timeout, Opt("junit"), ct).ConfigureAwait(false);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
+        }
+
         case "run-tests" when pos.Length >= 1:
         {
             var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
             var result = await new TcUnitTestRunner()
                 .RunTestsAsync(pos[0], Opt("plc"), !Flag("no-wait"), timeout, ct)
                 .ConfigureAwait(false);
-            return EmitObj(result, result.Success);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
         }
 
         case "get-test-results" when pos.Length >= 1:
@@ -124,7 +148,7 @@ async Task<int> RunBuildTestVerb()
             var result = await new TcUnitTestRunner()
                 .GetResultsAsync(pos[0], Opt("plc"), Opt("xml"), ct)
                 .ConfigureAwait(false);
-            return EmitObj(result, result.Success);
+            return EmitTestOutcome(result, result.Success, result.TestsPassed);
         }
 
         case "read-symbols" when pos.Length >= 1:
@@ -327,7 +351,8 @@ async Task<int> RunWriteVerb()
 
         case "add-library-reference" when pos.Length >= 1:
             return EmitResult(await writer.AddLibraryReferenceAsync(
-                Opt("plc"), pos[0], OptOr("version", "*"), OptOr("distributor", "Tc3 Project"), ct).ConfigureAwait(false));
+                Opt("plc"), pos[0], OptOr("version", "*"), OptOr("distributor", "Tc3 Project"),
+                ParseParameters(Opt("params")), ct).ConfigureAwait(false));
 
         case "delete-library-reference" when pos.Length >= 1:
             return EmitResult(await writer.DeleteLibraryReferenceAsync(
@@ -374,6 +399,15 @@ static int EmitObj<T>(T value, bool success)
 {
     Console.WriteLine(TckitJson.Serialize(value));
     return success ? 0 : 1;
+}
+
+// Test-verb exit codes: 0 = ran and passed (or outcome not requested), 1 = infrastructure
+// failure (runtime/timeout/parse), 3 = run completed but tests failed or expected results
+// never appeared. 2 stays the usage error, so CI can tell the three apart.
+static int EmitTestOutcome<T>(T value, bool infrastructureOk, bool? testsPassed)
+{
+    Console.WriteLine(TckitJson.Serialize(value));
+    return !infrastructureOk ? 1 : testsPassed == false ? 3 : 0;
 }
 
 static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(string[] args)
@@ -454,9 +488,24 @@ static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? ParsePa
         list => list.Key, list => (IReadOnlyDictionary<string, string>)list.Value, StringComparer.Ordinal);
 }
 
+static string VersionString()
+{
+    var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+    var informational = assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), inherit: false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+        .FirstOrDefault()?.InformationalVersion;
+    // Drop the '+<commit>' source-revision suffix the SDK appends to the informational version.
+    var version = informational?.Split('+')[0];
+    return string.IsNullOrEmpty(version)
+        ? assembly.GetName().Version?.ToString() ?? "unknown"
+        : version;
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("tckit (C# rewrite) - CLI scaffold");
+    Console.WriteLine("  version | --version");
     Console.WriteLine("read verbs:");
     Console.WriteLine("  get-structure <path> [--plc <name>]");
     Console.WriteLine("  get-pou-interface | get-pou-declaration <path> <pou> [--plc <name>]");
@@ -488,7 +537,8 @@ static void PrintUsage()
     Console.WriteLine("  delete-method | delete-property <pou> <name> [--plc <name>]");
     Console.WriteLine("  delete-folder <name> [--parent <p>] [--recursive] [--plc <name>]");
     Console.WriteLine("  delete-variable <pou> <name> [--item <m>] [--plc <name>]");
-    Console.WriteLine("  add-library-reference | delete-library-reference <lib> [--version *] [--distributor <d>] [--plc]");
+    Console.WriteLine("  add-library-reference <lib> [--version *] [--distributor <d>] [--params <json>] [--plc]");
+    Console.WriteLine("  delete-library-reference <lib> [--version *] [--distributor <d>] [--plc]");
     Console.WriteLine("  add-library-placeholder <name> <defaultLib> [--version *] [--distributor <d>] [--params <json>] [--plc]");
     Console.WriteLine("  set-placeholder-parameters <name> <paramsJson> [--plc <name>]");
     Console.WriteLine("  delete-placeholder <name> [--plc <name>]");
@@ -499,11 +549,15 @@ static void PrintUsage()
     Console.WriteLine("  add-ethercat-box <parentName> <boxName> <orderNumber> [--before <sibling>] [--project <tcProject>]");
     Console.WriteLine("  delete-io-device <name|^path> [--project <tcProject>] [--confirmed]");
     Console.WriteLine("build / test / deploy verbs:");
+    Console.WriteLine("  test <sln> --target <netid> [--plc <name>] [--timeout 120] [--junit <out.xml>]");
+    Console.WriteLine("    composite CI verb: open -> build -> deploy -> run tests -> copy results");
     Console.WriteLine("  build [--plc <name>] [--force-log]");
     Console.WriteLine("  deploy <targetAmsId> [--plc <name>] [--no-autostart]");
     Console.WriteLine("  start-runtime <targetAmsId>");
     Console.WriteLine("  run-tests <targetAmsId> [--plc <name>] [--no-wait] [--timeout 120]");
     Console.WriteLine("  get-test-results <targetAmsId> [--plc <name>] [--xml <path>]");
+    Console.WriteLine("    exit codes: 0 tests passed (or --no-wait), 1 run/parse failure,");
+    Console.WriteLine("                3 tests failed or expected results missing");
     Console.WriteLine("symbol I/O verbs (ADS; target must be in Run mode):");
     Console.WriteLine("  read-symbols <targetAmsId> <path> [<path> ...]");
     Console.WriteLine("  write-symbols <targetAmsId> <writesJson|@file>");

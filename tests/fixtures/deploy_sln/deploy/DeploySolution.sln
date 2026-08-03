@@ -1,0 +1,10 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# TwinCAT XAE Project Build 4026
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deployments", "Deployments", "{33333333-3333-3333-3333-333333333333}"
+EndProject
+Project("{B1E792BE-AA5F-4E3C-8C82-674BF9C0715B}") = "Shell", "Shell.tsproj", "{44444444-4444-4444-4444-444444444444}"
+EndProject
+Project("{B1E792BE-AA5F-4E3C-8C82-674BF9C0715B}") = "Machine", "..\src\Machine\Machine.tsproj", "{55555555-5555-5555-5555-555555555555}"
+EndProject
+Global
+EndGlobal

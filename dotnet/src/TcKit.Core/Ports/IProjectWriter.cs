@@ -111,9 +111,12 @@ public interface IProjectWriter
 
     // --- library references / placeholders -----------------------------------
 
-    /// <summary>Add a library reference to a consumer PLC project (the library must be installed).</summary>
+    /// <summary>Add a library reference to a consumer PLC project (the library must be installed),
+    /// optionally with library parameter overrides (same shape as the placeholder parameters).</summary>
     Task<Result> AddLibraryReferenceAsync(
-        string? plcName, string libraryName, string version, string distributor, CancellationToken cancellationToken);
+        string? plcName, string libraryName, string version, string distributor,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? parameters,
+        CancellationToken cancellationToken);
 
     /// <summary>Remove a library reference; resolves a "*" version to the effective one first.</summary>
     Task<Result> DeleteLibraryReferenceAsync(

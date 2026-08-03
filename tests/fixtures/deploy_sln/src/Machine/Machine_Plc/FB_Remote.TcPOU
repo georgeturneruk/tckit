@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.0">
+  <POU Name="FB_Remote" Id="{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1}" SpecialFunc="None">
+    <Declaration><![CDATA[
+// :Description: Lives outside the solution directory; only reachable via the .sln reference.
+FUNCTION_BLOCK FB_Remote
+VAR
+    counter : UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+counter := counter + 1;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

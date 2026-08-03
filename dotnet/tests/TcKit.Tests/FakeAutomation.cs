@@ -285,9 +285,21 @@ internal sealed class FakeSession(params ITcSysManager[] sysManagers) : ITcSessi
     /// <summary>When null, ReadErrorList returns null (the "tool window not exposed" case).</summary>
     public List<ComErrorItem>? ErrorListItems { get; set; } = [];
 
+    /// <summary>When null, ReadErrorListUia returns null (the "GUI unreachable" case).</summary>
+    public List<ComErrorItem>? UiaErrorListItems { get; set; }
+
+    /// <summary>The compileSucceeded flag the builder passed to the UIA fallback, when it did.</summary>
+    public bool? UiaCompileSucceeded { get; private set; }
+
     public string ResolveSolutionConfiguration(string prefer) => SolutionConfiguration;
 
     public IReadOnlyList<ComErrorItem>? ReadErrorList() => ErrorListItems;
+
+    public IReadOnlyList<ComErrorItem>? ReadErrorListUia(bool compileSucceeded)
+    {
+        UiaCompileSucceeded = compileSucceeded;
+        return UiaErrorListItems;
+    }
 
     public void Dispose()
     {

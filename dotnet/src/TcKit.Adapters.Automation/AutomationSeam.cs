@@ -131,4 +131,11 @@ internal interface ITcSession : IDisposable
     /// exposed (e.g. TcXaeShell Express), so the caller can fall back.
     /// </summary>
     IReadOnlyList<ComErrorItem>? ReadErrorList();
+
+    /// <summary>
+    /// The Express fallback: read the rendered Error List grid via UI Automation. Severity is
+    /// inferred from <paramref name="compileSucceeded"/> (the grid does not expose it; see
+    /// ErrorListUia / ADR-0014). Returns null when the GUI is unreachable.
+    /// </summary>
+    IReadOnlyList<ComErrorItem>? ReadErrorListUia(bool compileSucceeded);
 }

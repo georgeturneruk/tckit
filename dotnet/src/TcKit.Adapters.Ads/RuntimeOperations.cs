@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using TcKit.Ads;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Ads;
@@ -25,7 +26,8 @@ internal static class RuntimeOperations
         var state = factory.OpenSystem(targetAmsId).SetState(TcSystemState.Run, RunModeTimeoutMs);
         if (!state.Reached)
         {
-            return Result.Fail($"Runtime did not reach Run mode on {targetAmsId} (final state '{state.Final}').");
+            var error = $"Runtime did not reach Run mode on {targetAmsId} (final state '{state.Final}').";
+            return Result.Fail(WithLicenceDiagnosis(factory, targetAmsId, state.Final, error));
         }
 
         return Result.Ok(new Dictionary<string, object?>
@@ -40,14 +42,14 @@ internal static class RuntimeOperations
 
     public static TestRunResult RunTests(
         IAdsFactory factory, string targetAmsId, string? plcName, bool waitForResults, int timeoutSeconds,
-        int pollIntervalMs = 500, string? xmlPathOverride = null)
+        int pollIntervalMs = 500, string? xmlPathOverride = null, int xmlFreshTimeoutMs = XmlFreshTimeoutMs)
     {
         if (string.IsNullOrEmpty(targetAmsId))
         {
             throw new ArgumentException("TargetAmsId required.");
         }
 
-        var (xmlPath, resolveWarning) = ResolvePath(xmlPathOverride);
+        var (xmlPath, resolveWarning) = ResolvePath(xmlPathOverride, targetAmsId);
 
         // Stale-XML mitigation: delete the prior file and record the start so we can detect the new write.
         if (File.Exists(xmlPath))
@@ -61,10 +63,12 @@ internal static class RuntimeOperations
         var runState = factory.OpenSystem(targetAmsId).SetState(TcSystemState.Run, RunModeTimeoutMs);
         if (!runState.Reached)
         {
-            return FailedRun($"Runtime did not reach Run mode: final state '{runState.Final}'.", xmlPath, resolveWarning);
+            var error = $"Runtime did not reach Run mode: final state '{runState.Final}'.";
+            return FailedRun(
+                WithLicenceDiagnosis(factory, targetAmsId, runState.Final, error), xmlPath, resolveWarning);
         }
 
-        using var plc = factory.OpenPlc(targetAmsId, TcUnitPaths.DefaultPlcPort);
+        using var plc = factory.OpenPlc(targetAmsId, TcUnitResults.DefaultPlcPort);
 
         var deadline = TimeSpan.FromSeconds(timeoutSeconds);
         var finished = false;
@@ -87,7 +91,7 @@ internal static class RuntimeOperations
         }
 
         // The publisher only writes XML when xUnitEnablePublish is overridden TRUE; tolerate its absence.
-        var xmlPublished = WaitFileFresh(xmlPath, start, XmlFreshTimeoutMs);
+        var xmlPublished = WaitFileFresh(xmlPath, start, xmlFreshTimeoutMs);
         var suiteCount = plc.TryReadInt(SuiteCountSymbol, out var suites) ? suites : 0;
 
         var summary = new TestSummary { Suites = suiteCount, DurationSeconds = stopwatch.Elapsed.TotalSeconds };
@@ -97,19 +101,26 @@ internal static class RuntimeOperations
 
         if (waitForResults && xmlPublished)
         {
-            var parsed = TcUnitXml.Parse(xmlPath, failuresOnly: true);
+            var parsed = TcUnitResults.Parse(xmlPath, failuresOnly: true);
             if (parsed.Success)
             {
-                summary = parsed.Summary with { DurationSeconds = stopwatch.Elapsed.TotalSeconds };
-                suitesOut = parsed.Suites;
-                failuresOut = parsed.Failures;
+                summary = parsed.Summary.ToModel() with { DurationSeconds = stopwatch.Elapsed.TotalSeconds };
+                suitesOut = parsed.Suites.Select(TcUnitMap.ToModel).ToList();
+                failuresOut = parsed.Failures.Select(TcUnitMap.ToModel).ToList();
                 resultsIncluded = true;
             }
         }
 
+        // Waiting was requested but nothing parseable arrived: the outcome is a fail, not an unknown,
+        // so CI can't go green on a run whose assertions it never saw.
+        bool? testsPassed = waitForResults
+            ? resultsIncluded && summary.Failures == 0 && summary.Errors == 0
+            : null;
+
         return new TestRunResult
         {
             Success = true,
+            TestsPassed = testsPassed,
             DurationSeconds = stopwatch.Elapsed.TotalSeconds,
             Summary = summary,
             XmlPath = xmlPath,
@@ -121,24 +132,27 @@ internal static class RuntimeOperations
         };
     }
 
-    public static TestResults GetResults(string? plcName, string? xmlPath)
+    public static TestResults GetResults(string? plcName, string? xmlPath, string? targetAmsId = null)
     {
-        var (resolvedPath, resolveWarning) = ResolvePath(xmlPath);
-        var parsed = TcUnitXml.Parse(resolvedPath, failuresOnly: false);
+        var (resolvedPath, resolveWarning) = ResolvePath(xmlPath, targetAmsId);
+        var parsed = TcUnitResults.Parse(resolvedPath, failuresOnly: false);
         return new TestResults
         {
             Success = parsed.Success,
-            Suites = parsed.Suites,
-            Summary = parsed.Summary,
-            Failures = parsed.Failures,
+            TestsPassed = parsed.Success ? parsed.Summary.Failures == 0 && parsed.Summary.Errors == 0 : null,
+            Suites = parsed.Suites.Select(TcUnitMap.ToModel).ToList(),
+            Summary = parsed.Summary.ToModel(),
+            Failures = parsed.Failures.Select(TcUnitMap.ToModel).ToList(),
             XmlPath = parsed.XmlPath,
             ResolveWarning = resolveWarning,
             Error = parsed.Error,
         };
     }
 
-    private static (string Path, string Warning) ResolvePath(string? xmlPathOverride)
-        => string.IsNullOrEmpty(xmlPathOverride) ? TcUnitPaths.ResolveDefault() : (xmlPathOverride, "");
+    private static (string Path, string Warning) ResolvePath(string? xmlPathOverride, string? targetAmsId)
+        => string.IsNullOrEmpty(xmlPathOverride)
+            ? TcUnitResults.ResolveDefaultPath(targetAmsId)
+            : (xmlPathOverride, "");
 
     private static bool WaitFileFresh(string path, DateTime after, int timeoutMs)
     {
@@ -154,6 +168,22 @@ internal static class RuntimeOperations
         }
 
         return File.Exists(path) && File.GetLastWriteTimeUtc(path) > after;
+    }
+
+    /// <summary>
+    /// A target that bounces back to Config with no stated reason is the expired-licence failure
+    /// mode (TASKS task 6): the licence preflight names it when it can.
+    /// </summary>
+    private static string WithLicenceDiagnosis(
+        IAdsFactory factory, string targetAmsId, string finalState, string error)
+    {
+        if (finalState != nameof(TcSystemState.Config))
+        {
+            return error;
+        }
+
+        var diagnosis = factory.DiagnoseStuckInConfig(targetAmsId);
+        return diagnosis is null ? error : $"{error} {diagnosis}";
     }
 
     private static TestRunResult FailedRun(string error, string xmlPath, string resolveWarning) => new()

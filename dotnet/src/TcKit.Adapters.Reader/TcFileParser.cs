@@ -151,6 +151,32 @@ internal static class TcFileParser
     }
 
     /// <summary>
+    /// Return the project paths referenced by a .sln, as written (usually relative to the
+    /// solution directory). Solution-folder entries carry the folder name in the path slot;
+    /// callers filter those out with a File.Exists check on the resolved path.
+    /// </summary>
+    internal static List<string> ParseSlnProjectPaths(string path)
+    {
+        var result = new List<string>();
+        foreach (var line in File.ReadLines(path))
+        {
+            var match = s_slnProject.Match(line);
+            if (match.Success)
+            {
+                // .sln files always store Windows-style backslash paths; normalise so the
+                // resolution also works when the reader runs on a non-Windows host (CI).
+                result.Add(match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar));
+            }
+        }
+
+        return result;
+    }
+
+    private static readonly Regex s_slnProject = new(
+        @"^Project\(""\{[^}]*\}""\)\s*=\s*""[^""]*""\s*,\s*""([^""]+)""",
+        RegexOptions.Compiled);
+
+    /// <summary>
     /// Parse a .tsproj for System Manager task definitions. CycleTime is in 100 ns ticks;
     /// converted to microseconds for consistency with .TcTTO. Programs are never bound here.
     /// </summary>

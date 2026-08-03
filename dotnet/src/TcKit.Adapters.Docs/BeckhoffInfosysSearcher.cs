@@ -84,17 +84,33 @@ public sealed class BeckhoffInfosysSearcher : IDocsSearcher
             ? [.. InfosysNavigator.KnownSections, .. InfosysNavigator.HardwareSections]
             : [section];
         var results = new List<SearchResult>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
+        // Share FindFb's time budget. A section is crawled (and cached, resumably) the first time it is
+        // searched, so a cold cache — or an explicit section that no prior FindFb happened to index —
+        // still returns results instead of silently nothing. Repeat searches read the cache and are fast.
+        var budget = System.Diagnostics.Stopwatch.StartNew();
         foreach (var sec in sections)
         {
-            var index = LoadSectionIndex(sec);
-            if (index is null)
+            if (budget.Elapsed >= _findFbBudget)
+            {
+                break;
+            }
+
+            var index = await EnsureSectionIndexAsync(sec, budget, _findFbBudget, cancellationToken)
+                .ConfigureAwait(false);
+            if (index is null || index.Count == 0)
             {
                 continue;
             }
 
             foreach (var (_, url) in InfosysNavigator.SearchIndex(index, query).Take(3))
             {
+                if (!seen.Add(url))
+                {
+                    continue; // the same page can be indexed under several titles; report it once
+                }
+
                 try
                 {
                     var page = await GetPageAsync(url, cancellationToken).ConfigureAwait(false);
@@ -477,6 +493,48 @@ public sealed class BeckhoffInfosysSearcher : IDocsSearcher
         return SearchWithAliases(state.Pages, name);
     }
 
+    /// <summary>
+    /// Return a section's {title -&gt; url} index, crawling it on demand when it is not already fully
+    /// cached. Mirrors <see cref="FindInSectionAsync"/>'s resumable, budget-bounded crawl but hands back
+    /// the whole index rather than a single match: a completed cache is served as-is, an interrupted
+    /// crawl resumes from its saved frontier, and an unindexed section is crawled until it completes or
+    /// the shared budget is hit (partial progress is persisted either way). Returns null only when the
+    /// section is unreachable and nothing was ever cached.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>?> EnsureSectionIndexAsync(
+        string section, System.Diagnostics.Stopwatch budget, TimeSpan overall, CancellationToken cancellationToken)
+    {
+        var cache = LoadSectionCache(section);
+        if (cache is { Complete: not false })
+        {
+            return cache.Pages; // fully indexed (Complete == null is a legacy full-crawl file)
+        }
+
+        if (budget.Elapsed >= overall)
+        {
+            return cache?.Pages; // out of budget: hand back the partial index if one exists
+        }
+
+        var resume = cache is { Complete: false, Queue: not null, Visited: not null }
+            ? new InfosysNavigator.CrawlState(
+                cache.Pages, cache.Queue, new HashSet<string>(cache.Visited, StringComparer.Ordinal), Complete: false)
+            : null;
+
+        var state = await InfosysNavigator.CrawlSectionAsync(
+            _client, section, resume, _politeDelay,
+            shouldStop: () => budget.Elapsed >= overall,
+            onProgress: s => SaveSectionCache(section, s),
+            cancellationToken).ConfigureAwait(false);
+
+        if (state is null)
+        {
+            return cache?.Pages; // unreachable / no primaryid
+        }
+
+        SaveSectionCache(section, state);
+        return state.Pages;
+    }
+
     private static string? SearchWithAliases(IReadOnlyDictionary<string, string> index, string name)
     {
         var candidates = new List<string> { name };
@@ -503,25 +561,6 @@ public sealed class BeckhoffInfosysSearcher : IDocsSearcher
 
     private string SectionCachePath(string section) =>
         Path.Combine(_cacheDir, $"section_{Hash(section)}.json");
-
-    private Dictionary<string, string>? LoadSectionIndex(string section)
-    {
-        var path = SectionCachePath(section);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            var file = JsonSerializer.Deserialize<SectionCacheFile>(File.ReadAllText(path), CacheJson);
-            return file?.Pages ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        }
-        catch (Exception exc) when (exc is JsonException or IOException)
-        {
-            return null;
-        }
-    }
 
     private SectionCacheFile? LoadSectionCache(string section)
     {

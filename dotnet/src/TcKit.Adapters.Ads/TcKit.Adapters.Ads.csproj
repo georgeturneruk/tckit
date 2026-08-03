@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TcKit.Core\TcKit.Core.csproj" />
+    <ProjectReference Include="..\TcKit.Ads\TcKit.Ads.csproj" />
   </ItemGroup>
 
   <ItemGroup>

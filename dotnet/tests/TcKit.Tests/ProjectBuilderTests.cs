@@ -54,6 +54,42 @@ public class ProjectBuilderTests
     }
 
     [Fact]
+    public void Build_FallsBackToUiaRead_WhenEnvDteErrorListNotExposed()
+    {
+        var (session, project, _) = WithPlc();
+        project.CheckAllObjectsResult = false;
+        session.ErrorListItems = null; // TcXaeShell Express: EnvDTE tool window is null
+        session.UiaErrorListItems =
+        [
+            new ComErrorItem("FB_X.TcPOU", 12, "C0046: identifier not defined", 1, "Plc"),
+        ];
+
+        var result = ProjectBuilder.Build(session, null, forceLog: false);
+
+        Assert.False(result.Success);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("C0046", error.Code);
+        Assert.Equal("identifier not defined", error.Message);
+        Assert.Equal(12, error.Line);
+        Assert.Equal(false, session.UiaCompileSucceeded); // severity inference gets the real flag
+    }
+
+    [Fact]
+    public void Build_HonestMessage_WhenBothErrorListSourcesUnreachable()
+    {
+        var (session, project, _) = WithPlc();
+        project.CheckAllObjectsResult = false;
+        session.ErrorListItems = null;
+        session.UiaErrorListItems = null;
+
+        var result = ProjectBuilder.Build(session, null, forceLog: false);
+
+        Assert.False(result.Success);
+        var error = Assert.Single(result.Errors);
+        Assert.Contains("couldn't be read", error.Message);
+    }
+
+    [Fact]
     public void Build_ForceLog_SurfacesWarnings_EvenWhenSuccessful()
     {
         var (session, project, _) = WithPlc();

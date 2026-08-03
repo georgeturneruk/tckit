@@ -28,9 +28,10 @@ internal static partial class ProjectBuilder
         var infos = new List<BuildError>();
 
         // Tier 2: structured diagnostics when the build failed, or the caller asked for warnings.
+        // EnvDTE first (full VS); the UIA grid scrape second (TcXaeShell Express, ADR-0014).
         if (!checkOk || forceLog)
         {
-            var rows = session.ReadErrorList();
+            var rows = session.ReadErrorList() ?? session.ReadErrorListUia(checkOk);
             if (rows is not null)
             {
                 foreach (var row in rows)

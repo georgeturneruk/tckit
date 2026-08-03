@@ -18,25 +18,23 @@ internal static class InfosysNavigator
 
     /// <summary>
     /// PLC-library / TF / documentation sections searched in order of likelihood for find_fb() and
-    /// search_docs(). Ordered most-common first so a find_fb hit short-circuits early. The library set
-    /// was sourced from the infosys PLC-libraries menu tree (2026-06) plus the motion libraries (which
-    /// live under a separate menu branch).
+    /// search_docs(). Ordered most-common first so a find_fb hit short-circuits early. Enumerated from
+    /// infosys's own menu.php tree and reachability-verified by <c>oracle/regen-library-sections.ps1</c>
+    /// (2026-07): every slug below resolved to a live <c>&lt;meta primaryid&gt;</c> page. Re-run that
+    /// script to refresh when Beckhoff adds or renames libraries.
     /// </summary>
     public static readonly IReadOnlyList<string> KnownSections =
     [
-        // Standard / utility PLC libraries
+        // Standard / utility / system PLC libraries (TC2)
         "tcplclib_tc2_standard",
         "tcplclib_tc2_utilities",
         "tcplclib_tc2_math",
-        "tcplclib_tc3_math",
-        "tcplclib_tc3_string",
         "tcplclib_tc2_system",
         "tcplclib_tc2_iofunctions",
-        // Motion / drives
-        "tcplclib_tc2_mc2",
-        "tcplclib_tc2_mc2_drive",
-        "tcplclib_tc2_drive",
-        // Fieldbus / communication
+        "tcplclib_tc2_sups",
+        "tcplclib_tc2_systemcx",
+        "tcplclib_tc2_systemc69xx",
+        // Fieldbus / communication (TC2)
         "tcplclib_tc2_ethercat",
         "tcplclib_tc3_ethercatdiag",
         "tcplclib_tc2_dataexchange",
@@ -48,15 +46,79 @@ internal static class InfosysNavigator
         "tcplclib_tc2_profinetdiag",
         // IO-Link
         "tcplclib_tc3_iolink",
-        // System / utility (TC3)
+        // System / diagnostics / utility (TC3)
         "tcplclib_tc3_eventlogger",
         "tcplclib_tc3_jsonxml",
         "tcplclib_tc3_dynamicmemory",
         "tcplclib_tc3_module",
         "tcplclib_tc3_ipcdiag",
-        "tcplclib_tc2_sups",
-        "tcplclib_tc2_systemcx",
-        "tcplclib_tc2_systemc69xx",
+        // Motion / drives / NC / kinematics / xPlanar
+        "tcplclib_tc2_mc2",
+        "tcplclib_tc2_mc2_drive",
+        "tcplclib_tc2_drive",
+        "tcplclib_tc2_ncdrive",
+        "tcplclib_tc3_drivemotioncontrol",
+        "tcplclib_tc3_mc2_advancedhoming",
+        "tc3plclib_tc3_physics",
+        "tc3ncerrcode",
+        "tf50x0_tc3_nc_ptp",
+        "tf5050_tc3_nc_camming",
+        "tf5055_tc3_nc_flying_saw",
+        "tf5060_tc3_nc_fifo_axes",
+        "tf5065_tc3_plc_motion_control_xfc_xfc_nci",
+        "tf5100_tc3_nc_i",
+        "tf5110-tf5113_tc3_kinematic_transformation",
+        "tf5120",
+        "tf5130_tc3_unival_plc",
+        "tf5400_tc3_advanced_motion_pack",
+        "tf5410_tc3_collision_avoidance",
+        "tf5420_tc3_advanced_pick_and_place",
+        "tf5430_tc3_xplanar", // XPlanar PLC API (Tc3_Mc3PlanarMotion: MC_PlanarMover, MC_PlanarGroup, ...)
+        "tf5810_tc3_hydraulic_positioning",
+        "tf5890_tc3_xplanar",
+        // Application frameworks
+        "tcplclib_tc3_packml",
+        "tcplclib_tc3_packml_v2",
+        "tcplclib_tc3_packml_v3",
+        // Connectivity / TwinCAT Functions (TF6xxx): ADS, OPC UA, fieldbus gateways, IoT, database
+        "tf6000_tc3_ads_commlib",
+        "tf6010_tc3_ads_monitor",
+        "tf6020_tc3_json_data_interface",
+        "tf6100_tc3_opcua_server",
+        "tf6100_tc3_opcua_client",
+        "tf6100_tc3_opcua_configurator",
+        "tf6100_tc3_opcua_gateway",
+        "tf6105_tc3_opc_ua_pub_sub",
+        "tf6120_tc3_opcda",
+        "tf6225_tc3_ethercat_external_sync",
+        "tf6230_tc3_parallel_redundancy_protocol",
+        "tf6250_tc3_modbus_tcp",
+        "tf6255_tc3_modbus_rtu",
+        "tf6270_tc3_profinet_rt_device",
+        "tf6271_tc3_profinet_rt_controller",
+        "tf6280_tc3_ethernetipslave",
+        "tf6281_tc3_ethernetipscanner",
+        "tf6300_tc3_ftp",
+        "tf6310_tc3_tcpip",
+        "tf6311_tc3_tcpudp",
+        "tf6340_tc3_serial_communication",
+        "tf6350_tc3_sms_smtp",
+        "tf6360_tc3_virtual_serial_com",
+        "tf6420_tc3_database_server",
+        "tf6421_tc3_xml_server",
+        "tf6500_tc3_iec60870_5_10x",
+        "tf6510_tc3_iec61850",
+        "tf6600_tc3_rfid",
+        "tf6610_tc3_s5s7communication",
+        "tf6620_tc3_s7_communication",
+        "tf6650_tc3_dbc_fileimportforcan",
+        "tf6701_tc3_iot_communication_mqtt",
+        "tf6710_tc3_iot_functions",
+        "tf6720_tc3_iot_data_agent",
+        "tf6730_tc3_iot_communicator",
+        "tf6760_tc3_iot_https_rest",
+        "tf6770_tc3_iot_websockets",
+        "tf6771_tc3_iot_ocpp",
         // Building automation
         "tcplclib_tc3_ba_common",
         "tcplclib_tc3_ba2_common",
@@ -67,12 +129,22 @@ internal static class InfosysNavigator
         "tcplclib_tc2_enocean",
         "tcplclib_tc2_lon",
         "tcplclib_tc2_smi",
-        // TwinCAT Functions
-        "tf6310_tc3_tcpip",
-        "tf6100_tc3_opcua",
-        "tf6300_tc3_tcp",
-        "tf6xxx_tc3_ads",
-        // Documentation
+        // Safety / TwinSAFE (Safety PLC intro + TwinSAFE Logic FBs: SF_EStop, SF_TwoHandControl, ...)
+        "tc3_safety_intro",
+        "tctwinsafe",
+        // HMI
+        "tf1800_tc3_plc_hmi",
+        "tf1810_tc3_plc_hmi_web",
+        "tf2000_tc3_hmi_server",
+        // Measurement / analytics / vision
+        "tf3300_tc3_scopeserver",
+        "tf3600_tc3_condition_monitoring",
+        "tf3650_tc3_power_monitoring",
+        "tf3680_tc3_filter",
+        "tf3820_tc3_machine_learning_server",
+        "tf3900_tc3_solar_position_algorithm",
+        "tf7xxx_tc3_vision",
+        // Documentation / intro (GetDocPage fallbacks)
         "tc3_automationinterface",
         "tc3_plc_intro",
         "tc3_ads_intro",
@@ -515,35 +587,58 @@ internal static class InfosysNavigator
     }
 
     /// <summary>
-    /// Search a section index for pages matching a query. Exact title matches sort first, then
-    /// substring matches in index order. Returns (title, url) pairs.
+    /// Search a section index for pages matching a query, ranked in tiers: an exact title match first,
+    /// then titles containing the whole query as a contiguous substring, then (for multi-word queries)
+    /// titles scored by how many whitespace-separated query tokens they contain, most first. The token
+    /// tier keeps a title only when it matches at least two of the query's words, so single-word noise
+    /// is dropped but a natural phrase like "ethercat coe sdo read" still reaches "FB_EcCoeSdoRead"
+    /// (which matches coe/sdo/read but not the abbreviated-away "ethercat"). A single-token query keeps
+    /// the original exact- then substring-match behaviour. Returns (title, url) pairs.
     /// </summary>
     public static IReadOnlyList<(string Title, string Url)> SearchIndex(
         IReadOnlyDictionary<string, string> index, string query, bool exact = false)
     {
-        var q = query.ToLowerInvariant();
-        var results = new List<(string Title, string Url)>();
+        var q = query.ToLowerInvariant().Trim();
+        if (exact)
+        {
+            return index.Where(kv => kv.Key == q).Select(kv => (kv.Key, kv.Value)).ToList();
+        }
+
+        var tokens = q.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var minTokens = Math.Min(2, tokens.Length); // two words must land before a scattered hit counts
+        var exactHits = new List<(string Title, string Url)>();
+        var phraseHits = new List<(string Title, string Url)>();
+        var scored = new List<(int Score, int Order, string Title, string Url)>();
+        var order = 0;
 
         foreach (var (title, url) in index)
         {
-            if (exact)
+            if (title == q)
             {
-                if (title == q)
-                {
-                    results.Insert(0, (title, url));
-                }
-            }
-            else if (title == q)
-            {
-                results.Insert(0, (title, url)); // exact match first
+                exactHits.Add((title, url));
             }
             else if (title.Contains(q, StringComparison.Ordinal))
             {
-                results.Add((title, url));
+                phraseHits.Add((title, url));
             }
+            else if (tokens.Length > 1)
+            {
+                var score = tokens.Count(t => title.Contains(t, StringComparison.Ordinal));
+                if (score >= minTokens)
+                {
+                    scored.Add((score, order, title, url));
+                }
+            }
+
+            order++;
         }
 
-        return results;
+        var tokenHits = scored
+            .OrderByDescending(s => s.Score)
+            .ThenBy(s => s.Order)
+            .Select(s => (s.Title, s.Url));
+
+        return [.. exactHits, .. phraseHits, .. tokenHits];
     }
 
     // -----------------------------------------------------------------------
