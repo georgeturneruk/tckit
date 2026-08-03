@@ -101,9 +101,11 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     [Fact]
     public void TargetMatch_NormalisesDoubledSeparatorsInBootDir()
     {
-        // The real TcRegistry.xml writes BootDir with a doubled separator ('...\3.1\\Boot\').
+        // The real TcRegistry.xml writes BootDir with a doubled separator ('...\3.1\\Boot\');
+        // built with the platform separator so the collapse also verifies on the Linux CI.
         var versionDir = Path.Combine(_runtimesRoot, "UmRT_Default", "3.1");
-        var doubled = versionDir + @"\\Boot\";
+        var sep = Path.DirectorySeparatorChar;
+        var doubled = $"{versionDir}{sep}{sep}Boot{sep}";
         AddRuntime("UmRT_Default", "C0A801140101", bootDirValue: doubled);
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(

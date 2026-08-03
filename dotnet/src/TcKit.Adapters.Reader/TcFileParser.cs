@@ -163,7 +163,9 @@ internal static class TcFileParser
             var match = s_slnProject.Match(line);
             if (match.Success)
             {
-                result.Add(match.Groups[1].Value);
+                // .sln files always store Windows-style backslash paths; normalise so the
+                // resolution also works when the reader runs on a non-Windows host (CI).
+                result.Add(match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar));
             }
         }
 
