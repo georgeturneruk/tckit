@@ -274,7 +274,11 @@ internal sealed class ComTcSession : ITcSession
     }
 
     public IReadOnlyList<ComErrorItem>? ReadErrorListUia(bool compileSucceeded)
+#if TCKIT_UIA
         => ErrorListUia.Read(SolutionPath, compileSucceeded);
+#else
+        => null; // non-Windows build: no UIA client; the builder keeps its honest-message fallback.
+#endif
 
     private static string? TryGetActiveConfigName(dynamic solutionBuild)
     {

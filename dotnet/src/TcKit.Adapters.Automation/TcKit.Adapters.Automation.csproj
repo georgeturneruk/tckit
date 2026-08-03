@@ -19,9 +19,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- System.Windows.Automation (the UIA client) ships with the WPF profile of the Windows
-         Desktop framework; needed for the Express-edition Error List read (ADR-0014). -->
-    <UseWPF>true</UseWPF>
+         Desktop framework; needed for the Express-edition Error List read (ADR-0014). WPF only
+         exists on Windows, and pulling the WindowsDesktop framework reference makes the Linux CI
+         test host unlaunchable, so the UIA lane is compiled only on Windows builds (which include
+         every shipped artefact; release publishing runs on windows-latest). Overridable for
+         local verification via -p:TcKitUiaLane=false. -->
+    <TcKitUiaLane Condition="'$(TcKitUiaLane)' == ''">$([MSBuild]::IsOSPlatform('Windows'))</TcKitUiaLane>
+    <UseWPF Condition="'$(TcKitUiaLane)' == 'true'">true</UseWPF>
+    <DefineConstants Condition="'$(TcKitUiaLane)' == 'true'">$(DefineConstants);TCKIT_UIA</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(TcKitUiaLane)' != 'true'">
+    <Compile Remove="ErrorListUia.cs" />
+  </ItemGroup>
 
 </Project>
 
