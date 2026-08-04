@@ -4,6 +4,22 @@ All notable changes to TcKit are documented here. The format is loosely based
 on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **TcUnit results resolution on TwinCAT 4026 local runtimes.** The resolver
+  only knew the pre-4026 kernel boot root (`C:\TwinCAT\3.1\Boot`) and the
+  UmRT installs under `Runtimes\`, so results published by a 4026 local
+  runtime to `C:\ProgramData\Beckhoff\TwinCAT\3.1\Boot` were never found.
+  The 4026 boot root is now checked ahead of the legacy root, and the
+  no-match fallback prefers it when it exists on disk.
+- **`SavePlcAsLibrary` no longer overwrites project metadata.** It used to
+  rewrite `ProjectInfo` on disk with a hardcoded Company (`Tc3 Project`) and
+  Version (`1.0.0.0`) on every save. Existing Title/Company/Version values
+  are now preserved; only blank fields are filled with defaults, and a
+  fully-populated `ProjectInfo` skips the rewrite entirely.
+
 ## [0.5.1] - 2026-08-03
 
 ### Fixed

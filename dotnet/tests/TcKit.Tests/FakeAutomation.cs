@@ -32,6 +32,11 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
     public string? SavedLibraryPath { get; private set; }
     public bool SavedLibraryInstall { get; private set; }
     public int CheckAllObjectsCount { get; private set; }
+    public int ConsumeXmlCount { get; private set; }
+
+    /// <summary>Seed ProjectInfo as if the user had filled it in XAE (does not count as a rewrite).</summary>
+    public void SeedProjectInfo(string title, string company, string version)
+        => (ProjectTitle, ProjectCompany, ProjectVersion) = (title, company, version);
     public bool IsPlaceholder => _reference is { IsPlaceholder: true };
 
     public string PathName => Parent is null ? Name : $"{Parent.PathName}^{Name}";
@@ -101,6 +106,7 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
 
     public void ConsumeXml(string xml)
     {
+        ConsumeXmlCount++;
         var doc = new System.Xml.XmlDocument();
         doc.LoadXml(xml);
         ProjectTitle = doc.SelectSingleNode("//Title")?.InnerText ?? ProjectTitle;

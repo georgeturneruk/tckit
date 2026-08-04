@@ -4,8 +4,9 @@ namespace TcKit.Tests;
 
 /// <summary>
 /// save_plc_as_library against the fake PLC project node: the ProjectInfo metadata round-trip
-/// (ProduceXml -> set Title/Company/Version -> ConsumeXml) lands before SaveAsLibrary records the
-/// path + install flag, and the repository guard rejects anything but System on install.
+/// (ProduceXml -> fill blank Title/Company/Version -> ConsumeXml) lands before SaveAsLibrary
+/// records the path + install flag, existing metadata survives untouched (no rewrite when
+/// nothing is blank), and the repository guard rejects anything but System on install.
 /// </summary>
 public sealed class ProjectAuthorSaveLibraryTests : IDisposable
 {
@@ -39,6 +40,43 @@ public sealed class ProjectAuthorSaveLibraryTests : IDisposable
         Assert.True(projectNode.SavedLibraryInstall);
         Assert.Equal("Plc", projectNode.ProjectTitle); // Title defaults to the PLC name via ConsumeXml
         Assert.Equal(false, result.Details["cold_start_warmup"]);
+    }
+
+    [Fact]
+    public void SavePlcAsLibrary_PreservesExistingMetadata_WithoutRewrite()
+    {
+        var (session, pous, _) = FakeProject.Build("Plc");
+        var projectNode = (FakeTreeItem)pous["Plc"].Parent!;
+        projectNode.SeedProjectInfo("My Library", "CircuitHub", "2.3.0.0");
+        var outputPath = Path.Combine(_dir, "Plc.library");
+
+        var result = ProjectAuthor.SavePlcAsLibrary(session, null, outputPath, install: false, "System", overwrite: false);
+
+        Assert.True(result.Success);
+        Assert.Equal("My Library", projectNode.ProjectTitle);
+        Assert.Equal("CircuitHub", projectNode.ProjectCompany);
+        Assert.Equal("2.3.0.0", projectNode.ProjectVersion);
+        Assert.Equal(0, projectNode.ConsumeXmlCount); // fully-populated ProjectInfo skips the rewrite
+        Assert.Equal("My Library", result.Details["title"]);
+        Assert.Equal("CircuitHub", result.Details["company"]);
+        Assert.Equal("2.3.0.0", result.Details["version"]);
+    }
+
+    [Fact]
+    public void SavePlcAsLibrary_FillsOnlyBlankFields()
+    {
+        var (session, pous, _) = FakeProject.Build("Plc");
+        var projectNode = (FakeTreeItem)pous["Plc"].Parent!;
+        projectNode.SeedProjectInfo("", "CircuitHub", "");
+        var outputPath = Path.Combine(_dir, "Plc.library");
+
+        var result = ProjectAuthor.SavePlcAsLibrary(session, null, outputPath, install: false, "System", overwrite: false);
+
+        Assert.True(result.Success);
+        Assert.Equal("Plc", projectNode.ProjectTitle);
+        Assert.Equal("CircuitHub", projectNode.ProjectCompany);
+        Assert.Equal("1.0.0.0", projectNode.ProjectVersion);
+        Assert.Equal(1, projectNode.ConsumeXmlCount);
     }
 
     [Fact]

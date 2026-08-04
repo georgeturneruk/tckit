@@ -10,11 +10,14 @@ namespace TcKit.Ads;
 ///
 /// Path resolution mirrors GVL_Param_TcUnit.xUnitFilePath (default
 /// '%TC_BOOTPRJPATH%tcunit_xunit_testresults.xml'), whose expansion is runtime-kind dependent: on a
-/// user-mode runtime it is the Boot root of that runtime's install; on a kernel RT it is under
+/// user-mode runtime it is the Boot root of that runtime's install; on a 4026 local runtime it is
+/// under C:\ProgramData\Beckhoff\TwinCAT\3.1\Boot; on a pre-4026 kernel RT it is under
 /// C:\TwinCAT\3.1\Boot. Resolution order: TCKIT_TCUNIT_XML_PATH env override -> the boot folder of
 /// the UmRT whose TcRegistry.xml declares the target's AMS Net ID (existence not required: a test
-/// run resolves before the file is written) -> existing kernel-RT file (Port_&lt;port&gt; subfolder, then
-/// Boot root) -> freshest existing UmRT candidate -> kernel-RT Port_&lt;port&gt; path as a stable fallback.
+/// run resolves before the file is written) -> existing local/kernel-RT file (4026 ProgramData boot
+/// before legacy kernel boot, Port_&lt;port&gt; subfolder before Boot root) -> freshest existing UmRT
+/// candidate -> the Port_&lt;port&gt; path under whichever boot root exists on disk (4026 ProgramData
+/// preferred) as a stable fallback.
 ///
 /// Parsing is pure (no ADS), JUnit-style XML in, <see cref="TcUnitParsed"/> out; summary totals
 /// always reflect the full run even when the suites list is narrowed to failures-only.
@@ -37,10 +40,12 @@ public static partial class TcUnitResults
             port,
             Environment.GetEnvironmentVariable("TCKIT_TCUNIT_XML_PATH"),
             @"C:\TwinCAT\3.1\Boot",
+            LocalBootDir(),
             RuntimesRoot());
 
     internal static (string Path, string Warning) ResolveDefaultPath(
-        string? targetAmsId, int port, string? envOverride, string kernelBootDir, string? runtimesRoot)
+        string? targetAmsId, int port, string? envOverride, string kernelBootDir,
+        string? localBootDir, string? runtimesRoot)
     {
         if (!string.IsNullOrEmpty(envOverride))
         {
@@ -58,19 +63,30 @@ public static partial class TcUnitResults
             }
         }
 
-        // Kernel RT: the Port_<port> subfolder is the historic default; the Boot root is where
+        // Local/kernel RT: the 4026 local runtime boots from ProgramData, pre-4026 kernel RT from
+        // C:\TwinCAT; the Port_<port> subfolder is the historic default and the Boot root is where
         // %TC_BOOTPRJPATH% lands on user-mode runtimes and possibly on kernel targets too, so an
-        // existing file in either counts.
-        var kernelPortPath = Path.Combine(kernelBootDir, "Plc", $"Port_{port}", XmlFileName);
-        if (File.Exists(kernelPortPath))
+        // existing file in any of the four counts, 4026 first.
+        var bootRoots = new List<string>(2);
+        if (localBootDir is not null)
         {
-            return (kernelPortPath, "");
+            bootRoots.Add(localBootDir);
         }
 
-        var kernelRootPath = Path.Combine(kernelBootDir, XmlFileName);
-        if (File.Exists(kernelRootPath))
+        bootRoots.Add(kernelBootDir);
+        foreach (var bootRoot in bootRoots)
         {
-            return (kernelRootPath, "");
+            var portPath = Path.Combine(bootRoot, "Plc", $"Port_{port}", XmlFileName);
+            if (File.Exists(portPath))
+            {
+                return (portPath, "");
+            }
+
+            var rootPath = Path.Combine(bootRoot, XmlFileName);
+            if (File.Exists(rootPath))
+            {
+                return (rootPath, "");
+            }
         }
 
         if (runtimesRoot is not null && Directory.Exists(runtimesRoot))
@@ -96,7 +112,12 @@ public static partial class TcUnitResults
             }
         }
 
-        return (kernelPortPath, "");
+        // Nothing exists yet (a test run resolves before the file is written): fall back to the
+        // Port_<port> path under the boot root that is actually on disk, 4026 ProgramData first.
+        var fallbackRoot = localBootDir is not null && Directory.Exists(localBootDir)
+            ? localBootDir
+            : kernelBootDir;
+        return (Path.Combine(fallbackRoot, "Plc", $"Port_{port}", XmlFileName), "");
     }
 
     /// <summary>Parse a TcUnit JUnit-style results file. Never throws; failures land in the result.</summary>
@@ -180,6 +201,15 @@ public static partial class TcUnitResults
         return string.IsNullOrEmpty(programData)
             ? null
             : Path.Combine(programData, "Beckhoff", "TwinCAT", "3.1", "Runtimes");
+    }
+
+    /// <summary>The 4026 local runtime's boot root (%TC_BOOTPRJPATH% lives under ProgramData).</summary>
+    private static string? LocalBootDir()
+    {
+        var programData = Environment.GetEnvironmentVariable("ProgramData");
+        return string.IsNullOrEmpty(programData)
+            ? null
+            : Path.Combine(programData, "Beckhoff", "TwinCAT", "3.1", "Boot");
     }
 
     /// <summary>
