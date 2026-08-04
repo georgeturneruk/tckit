@@ -4,8 +4,8 @@ namespace TcKit.Tests;
 
 /// <summary>
 /// TcUnit results-path resolution against fixture directories: env override, target-aware UmRT
-/// registry match (including stale-kernel-file precedence), kernel candidates, and the freshest
-/// UmRT heuristic fallback.
+/// registry match (including stale-kernel-file precedence), 4026 local-boot and legacy kernel
+/// candidates, and the freshest UmRT heuristic fallback.
 /// </summary>
 public sealed class TcUnitPathResolutionTests : IDisposable
 {
@@ -13,11 +13,13 @@ public sealed class TcUnitPathResolutionTests : IDisposable
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "tckit-paths-" + Guid.NewGuid().ToString("N"));
     private readonly string _kernelBoot;
+    private readonly string _localBoot;
     private readonly string _runtimesRoot;
 
     public TcUnitPathResolutionTests()
     {
         _kernelBoot = Path.Combine(_dir, "TwinCAT", "3.1", "Boot");
+        _localBoot = Path.Combine(_dir, "ProgramData", "Boot"); // created only by tests that need a 4026 install
         _runtimesRoot = Path.Combine(_dir, "ProgramData", "Runtimes");
         Directory.CreateDirectory(_kernelBoot);
         Directory.CreateDirectory(_runtimesRoot);
@@ -64,7 +66,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     public void EnvOverride_Wins()
     {
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            "192.168.1.20.1.1", 851, envOverride: @"D:\custom\results.xml", _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: @"D:\custom\results.xml", _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(@"D:\custom\results.xml", path);
         Assert.Equal("", warning);
@@ -77,7 +79,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         var bootDir = AddRuntime("UmRT_Default", "C0A801140101");
 
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
         Assert.Equal("", warning);
@@ -93,7 +95,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         var bootDir = AddRuntime("UmRT_Default", "C0A801140101");
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(bootDir, XmlFileName), path);
     }
@@ -109,7 +111,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         AddRuntime("UmRT_Default", "C0A801140101", bootDirValue: doubled);
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.1.20.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(versionDir, "Boot", XmlFileName), path);
     }
@@ -124,7 +126,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         File.WriteAllText(kernelFile, "<results/>");
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(kernelFile, path);
     }
@@ -136,9 +138,40 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         File.WriteAllText(kernelFile, "<results/>");
 
         var (path, _) = TcUnitResults.ResolveDefaultPath(
-            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(kernelFile, path);
+    }
+
+    [Fact]
+    public void NoTargetMatch_ExistingLocalBootPortFile_BeatsKernelFile()
+    {
+        // A 4026 install publishes under ProgramData; a legacy kernel file may linger beside it.
+        var localPortDir = Path.Combine(_localBoot, "Plc", "Port_851");
+        Directory.CreateDirectory(localPortDir);
+        var localFile = Path.Combine(localPortDir, XmlFileName);
+        File.WriteAllText(localFile, "<results/>");
+        var kernelPortDir = Path.Combine(_kernelBoot, "Plc", "Port_851");
+        Directory.CreateDirectory(kernelPortDir);
+        File.WriteAllText(Path.Combine(kernelPortDir, XmlFileName), "<stale/>");
+
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
+            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
+
+        Assert.Equal(localFile, path);
+    }
+
+    [Fact]
+    public void NoTargetMatch_ExistingLocalBootRootFile_Wins()
+    {
+        Directory.CreateDirectory(_localBoot);
+        var localFile = Path.Combine(_localBoot, XmlFileName);
+        File.WriteAllText(localFile, "<results/>");
+
+        var (path, _) = TcUnitResults.ResolveDefaultPath(
+            "192.168.0.9.1.1", 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
+
+        Assert.Equal(localFile, path);
     }
 
     [Fact]
@@ -149,7 +182,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         File.WriteAllText(umrtFile, "<results/>");
 
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            targetAmsId: null, 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            targetAmsId: null, 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(umrtFile, path);
         Assert.Equal("", warning);
@@ -168,7 +201,7 @@ public sealed class TcUnitPathResolutionTests : IDisposable
         File.SetLastWriteTimeUtc(newFile, DateTime.UtcNow);
 
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            targetAmsId: null, 851, envOverride: null, _kernelBoot, _runtimesRoot);
+            targetAmsId: null, 851, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(newFile, path);
         Assert.Contains("Multiple UmRT runtimes", warning);
@@ -176,12 +209,26 @@ public sealed class TcUnitPathResolutionTests : IDisposable
     }
 
     [Fact]
-    public void NothingFound_FallsBackToKernelPortPath()
+    public void NothingFound_NoLocalBootDir_FallsBackToKernelPortPath()
     {
         var (path, warning) = TcUnitResults.ResolveDefaultPath(
-            "192.168.0.9.1.1", 852, envOverride: null, _kernelBoot, _runtimesRoot);
+            "192.168.0.9.1.1", 852, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
 
         Assert.Equal(Path.Combine(_kernelBoot, "Plc", "Port_852", XmlFileName), path);
+        Assert.Equal("", warning);
+    }
+
+    [Fact]
+    public void NothingFound_LocalBootDirExists_FallsBackToLocalPortPath()
+    {
+        // A 4026 install has the ProgramData boot root on disk before any results file exists;
+        // resolution must point there so RunTests polls the path the publisher will write.
+        Directory.CreateDirectory(_localBoot);
+
+        var (path, warning) = TcUnitResults.ResolveDefaultPath(
+            "192.168.0.9.1.1", 852, envOverride: null, _kernelBoot, _localBoot, _runtimesRoot);
+
+        Assert.Equal(Path.Combine(_localBoot, "Plc", "Port_852", XmlFileName), path);
         Assert.Equal("", warning);
     }
 }

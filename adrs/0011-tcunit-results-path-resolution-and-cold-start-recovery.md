@@ -3,7 +3,7 @@ adr: 0011
 title: TcUnit results path resolution, run_tests inline failures, placeholder idempotency, save_plc_as_library cold-start retry
 status: Implemented
 created: 2026-05-17
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-04
 issue:
 pr:
 related: [0006, 0007, 0009, 0010]
@@ -15,15 +15,23 @@ related: [0006, 0007, 0009, 0010]
 carried into the C# rewrite (ADR-0015, PR #132), with post-rewrite
 deviations: (1) results-path resolution now lives in `TcKit.Ads.TcUnitResults`
 and is **target-aware** — the UmRT whose `TcRegistry.xml` declares the target
-AMS Net ID owns the path, ahead of the kernel/freshest-candidate ladder
-(PR #134, superseding the mtime-first heuristic); (2) `RunTests` returns
-`summary` + failures-only inline, plus `tests_passed` distinct from
+AMS Net ID owns the path, ahead of an existence ladder that checks the 4026
+local-runtime boot root (`%ProgramData%\Beckhoff\TwinCAT\3.1\Boot`) before
+the legacy kernel root (`C:\TwinCAT\3.1\Boot`), then the freshest UmRT
+candidate; the no-match fallback also prefers the 4026 root when it exists
+on disk (PR #134 for target-awareness, 2026-08-04 for the 4026 root, which
+a laptop bench found missing — the ladder was pre-4026 only); (2) `RunTests`
+returns `summary` + failures-only inline, plus `tests_passed` distinct from
 infrastructure `success` (PR #134); (3) placeholder idempotency probe and
 (6) `SetPlaceholderParameters` survive as C# verbs, now backed by the
 ParameterGuard (PR #134); (4) the `SavePlcAsLibrary` cold-start retry is in
-`ProjectAuthor`; (5) the `tckit doctor` TcUnit section did **not** survive —
-the doctor CLI was not ported in the rewrite. Headless cold-start stays
-deferred (ADR-0014/0015 territory).
+`ProjectAuthor`, and since 2026-08-04 the metadata round-trip preserves any
+`ProjectInfo` Title/Company/Version the project already carries — only blank
+fields are filled (Title←PLC name, Company←'Tc3 Project', Version←'1.0.0.0')
+and a fully-populated `ProjectInfo` skips the `ConsumeXml` rewrite entirely;
+(5) the `tckit doctor` TcUnit section did **not** survive — the doctor CLI
+was not ported in the rewrite. Headless cold-start stays deferred
+(ADR-0014/0015 territory).
 
 **Where it lives:** `dotnet/src/TcKit.Ads/TcUnitResults.cs`,
 `dotnet/src/TcKit.Adapters.Ads/RuntimeOperations.cs`,
@@ -258,3 +266,13 @@ reliable on-host disambiguation.
   re-verified the lane live against a UmRT. The T1 re-bench sweep that
   originally gated promotion never ran; promotion proceeds on shipped-and-
   re-verified grounds instead.
+- 2026-08-04: Course-correction from a laptop bench round. The resolver's
+  existence ladder only knew the pre-4026 kernel boot root, so on a 4026
+  local runtime (which publishes under
+  `C:\ProgramData\Beckhoff\TwinCAT\3.1\Boot`) it resolved
+  `C:\TwinCAT\3.1\Boot\Plc\Port_851\…` and results were never found; the
+  4026 root now sits ahead of the legacy root in both the existence checks
+  and the no-match fallback. In the same round, `SavePlcAsLibrary` was
+  found rewriting `ProjectInfo` on disk with hardcoded
+  Company='Tc3 Project'/Version='1.0.0.0'; it now preserves existing
+  values and only fills blanks.

@@ -534,17 +534,24 @@ internal static partial class ProjectAuthor
         }
 
         var projectPath = ProjectNode(sm, plc).PathName;
-        var title = plc;
-        const string company = "Tc3 Project";
-        const string version = "1.0.0.0";
+        var title = "";
+        var company = "";
+        var version = "";
 
         // SaveAsLibrary refuses a managed library with an empty ProjectInfo/Title (the Standard
-        // template leaves it blank), so set Title/Company/Version via the ProduceXml/ConsumeXml
-        // round-trip before SaveAsLibrary.
+        // template leaves it blank), so fill blank Title/Company/Version via the ProduceXml/
+        // ConsumeXml round-trip before SaveAsLibrary. Values the project already carries are
+        // preserved, and a fully-populated ProjectInfo skips the on-disk rewrite entirely.
         void MetadataAndSave()
         {
             var node = sm.LookupTreeItem(projectPath);
-            node.ConsumeXml(WithProjectInfo(node.ProduceXml(0), title, company, version));
+            var (xml, changed, effective) = FillProjectInfoBlanks(node.ProduceXml(0), defaultTitle: plc);
+            (title, company, version) = effective;
+            if (changed)
+            {
+                node.ConsumeXml(xml);
+            }
+
             sm.LookupTreeItem(projectPath).SaveAsLibrary(outputPath, install);
         }
 
@@ -738,23 +745,37 @@ internal static partial class ProjectAuthor
         return null;
     }
 
-    /// <summary>Set ProjectInfo Title/Company/Version on a PLC project's ProduceXml output.</summary>
-    private static string WithProjectInfo(string projectXml, string title, string company, string version)
+    /// <summary>
+    /// Fill blank ProjectInfo fields on a PLC project's ProduceXml output: Title falls back to the
+    /// PLC name (SaveAsLibrary refuses an empty Title on a managed library), Company/Version to
+    /// generic defaults. Non-blank values are left untouched; Changed is false when nothing was
+    /// blank, so the caller can skip the ConsumeXml rewrite.
+    /// </summary>
+    private static (string Xml, bool Changed, (string Title, string Company, string Version) Effective)
+        FillProjectInfoBlanks(string projectXml, string defaultTitle)
     {
         var doc = new XmlDocument();
         doc.LoadXml(projectXml);
         var info = doc.SelectSingleNode("//ProjectInfo")
             ?? throw new InvalidOperationException("ProjectInfo node not found in PLC project XML.");
-        SetChildText(info, "Title", title);
-        SetChildText(info, "Company", company);
-        SetChildText(info, "Version", version);
-        return doc.OuterXml;
+        var changed = false;
+        var title = FillIfBlank(info, "Title", defaultTitle, ref changed);
+        var company = FillIfBlank(info, "Company", "Tc3 Project", ref changed);
+        var version = FillIfBlank(info, "Version", "1.0.0.0", ref changed);
+        return (doc.OuterXml, changed, (title, company, version));
 
-        static void SetChildText(XmlNode parent, string child, string value)
+        static string FillIfBlank(XmlNode parent, string child, string fallback, ref bool changed)
         {
             var node = parent.SelectSingleNode(child)
                 ?? throw new InvalidOperationException($"ProjectInfo/{child} node not found.");
-            node.InnerText = value;
+            if (!string.IsNullOrWhiteSpace(node.InnerText))
+            {
+                return node.InnerText;
+            }
+
+            node.InnerText = fallback;
+            changed = true;
+            return fallback;
         }
     }
 

@@ -242,7 +242,9 @@ public sealed class WriterTools(IProjectWriter writer, IPermissionGate gate)
     [McpServerTool(Name = "SavePlcAsLibrary")]
     [Description("Save a PLC project as a .library file, optionally installing it. outputPath is the "
         + "absolute .library path. install registers it into the repository (only 'System' supported). "
-        + "overwrite removes an existing artefact first (SaveAsLibrary otherwise refuses to overwrite).")]
+        + "overwrite removes an existing artefact first (SaveAsLibrary otherwise refuses to overwrite). "
+        + "ProjectInfo metadata already set on the project is preserved; only blank fields are filled "
+        + "(Title falls back to the PLC name, Company to 'Tc3 Project', Version to '1.0.0.0').")]
     public Task<string> SavePlcAsLibrary(
         string outputPath, bool install = true, string repository = "System", bool overwrite = false,
         string plcName = "", CancellationToken cancellationToken = default)
