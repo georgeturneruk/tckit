@@ -47,18 +47,18 @@ public sealed class ProjectAuthorSaveLibraryTests : IDisposable
     {
         var (session, pous, _) = FakeProject.Build("Plc");
         var projectNode = (FakeTreeItem)pous["Plc"].Parent!;
-        projectNode.SeedProjectInfo("My Library", "Acme Automation", "2.3.0.0");
+        projectNode.SeedProjectInfo("My Library", "TcKit Automation", "2.3.0.0");
         var outputPath = Path.Combine(_dir, "Plc.library");
 
         var result = ProjectAuthor.SavePlcAsLibrary(session, null, outputPath, install: false, "System", overwrite: false);
 
         Assert.True(result.Success);
         Assert.Equal("My Library", projectNode.ProjectTitle);
-        Assert.Equal("Acme Automation", projectNode.ProjectCompany);
+        Assert.Equal("TcKit Automation", projectNode.ProjectCompany);
         Assert.Equal("2.3.0.0", projectNode.ProjectVersion);
         Assert.Equal(0, projectNode.ConsumeXmlCount); // fully-populated ProjectInfo skips the rewrite
         Assert.Equal("My Library", result.Details["title"]);
-        Assert.Equal("Acme Automation", result.Details["company"]);
+        Assert.Equal("TcKit Automation", result.Details["company"]);
         Assert.Equal("2.3.0.0", result.Details["version"]);
     }
 
@@ -67,14 +67,14 @@ public sealed class ProjectAuthorSaveLibraryTests : IDisposable
     {
         var (session, pous, _) = FakeProject.Build("Plc");
         var projectNode = (FakeTreeItem)pous["Plc"].Parent!;
-        projectNode.SeedProjectInfo("", "Acme Automation", "");
+        projectNode.SeedProjectInfo("", "TcKit Automation", "");
         var outputPath = Path.Combine(_dir, "Plc.library");
 
         var result = ProjectAuthor.SavePlcAsLibrary(session, null, outputPath, install: false, "System", overwrite: false);
 
         Assert.True(result.Success);
         Assert.Equal("Plc", projectNode.ProjectTitle);
-        Assert.Equal("Acme Automation", projectNode.ProjectCompany);
+        Assert.Equal("TcKit Automation", projectNode.ProjectCompany);
         Assert.Equal("1.0.0.0", projectNode.ProjectVersion);
         Assert.Equal(1, projectNode.ConsumeXmlCount);
     }
