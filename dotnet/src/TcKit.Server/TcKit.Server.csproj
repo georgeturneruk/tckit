@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TcKit.Core\TcKit.Core.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Ads\TcKit.Adapters.Ads.csproj" />
+    <ProjectReference Include="..\TcKit.Adapters.Analysis\TcKit.Adapters.Analysis.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.DocGen\TcKit.Adapters.DocGen.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Docs\TcKit.Adapters.Docs.csproj" />

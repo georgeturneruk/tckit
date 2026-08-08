@@ -152,6 +152,78 @@ public sealed class XmlProjectReader : IProjectReader
         }
     }
 
+    public Task<PouSource> GetPouSourceAsync(
+        string pouName, string? plcName, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
+        {
+            var path = Resolve(pouName, ".TcPOU", plcName);
+            var pou = TcFileParser.ParsePouFull(path);
+
+            var members = new List<PouMember>();
+            members.AddRange(pou.Methods.Select(m => new PouMember
+            {
+                Name = m.Name,
+                Kind = PouMemberKind.Method,
+                Declaration = m.Declaration,
+                Body = m.Body,
+            }));
+            members.AddRange(pou.Actions.Select(a => new PouMember
+            {
+                Name = a.Name,
+                Kind = PouMemberKind.Action,
+                Declaration = a.Declaration,
+                Body = a.Body,
+            }));
+
+            foreach (var property in pou.Properties)
+            {
+                // The header carries the property's type and access specifier; the accessors carry
+                // the code. All three are separate members so a finding can point at the right one.
+                members.Add(new PouMember
+                {
+                    Name = property.Name,
+                    Kind = PouMemberKind.Property,
+                    Declaration = property.Declaration,
+                    Body = "",
+                });
+
+                if (property.Get is not null)
+                {
+                    members.Add(new PouMember
+                    {
+                        Name = $"{property.Name}.Get",
+                        Kind = PouMemberKind.PropertyGet,
+                        Declaration = property.Get.Declaration,
+                        Body = property.Get.Body,
+                    });
+                }
+
+                if (property.Set is not null)
+                {
+                    members.Add(new PouMember
+                    {
+                        Name = $"{property.Name}.Set",
+                        Kind = PouMemberKind.PropertySet,
+                        Declaration = property.Set.Declaration,
+                        Body = property.Set.Body,
+                    });
+                }
+            }
+
+            return Task.FromResult(new PouSource
+            {
+                PouName = pou.Name.Length > 0 ? pou.Name : pouName,
+                PouType = pou.Type,
+                Path = path,
+                Declaration = pou.Declaration,
+                Body = pou.Body,
+                Members = members,
+            });
+        }
+    }
+
     public Task<Gvl> GetGvlAsync(string gvlName, string? plcName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

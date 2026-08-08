@@ -33,6 +33,13 @@ public interface IProjectReader
     Task<PouItem> GetPouItemAsync(
         string pouName, string itemName, string? plcName, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Return a POU's complete source: declaration, body, and every member with both halves.
+    /// One parse for callers that need the whole object rather than a slice of it.
+    /// </summary>
+    Task<PouSource> GetPouSourceAsync(
+        string pouName, string? plcName, CancellationToken cancellationToken);
+
     /// <summary>Return the declaration block of a Global Variable List.</summary>
     Task<Gvl> GetGvlAsync(string gvlName, string? plcName, CancellationToken cancellationToken);
 

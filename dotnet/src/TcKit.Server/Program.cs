@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TcKit.Adapters.Ads;
+using TcKit.Adapters.Analysis;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
@@ -22,6 +23,7 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 builder.Services.AddSingleton<IPermissionGate>(_ => new FilePermissionGate());
 
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
+builder.Services.AddSingleton<IProjectAnalyser, ProjectAnalyser>();
 builder.Services.AddSingleton<IProjectWriter, AutomationProjectWriter>();
 builder.Services.AddSingleton<IBuildRunner, AutomationBuildRunner>();
 builder.Services.AddSingleton<IRuntimeControl, AdsRuntimeControl>();

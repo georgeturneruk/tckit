@@ -6,6 +6,34 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ## [Unreleased]
 
+### Added
+
+- **`AnalyseProject`: offline static analysis of naming conventions.** Checks
+  POU, DUT, GVL, member and variable names against a configurable convention
+  without XAE, a licence or a running runtime, so it costs far less than a
+  build and can run first. Pass `objectName` to check only the POU you just
+  edited. Findings carry a rule id, a location (`object`, `item`, line) and a
+  suggested name; nothing is rewritten automatically, because renaming a
+  referenced symbol is a decision for you rather than the tool.
+
+  Configuration lives in the project's own `.editorconfig` under
+  `[*.{TcPOU,TcGVL,TcDUT}]`, using the same three-part schema as .NET's naming
+  rules (`tckit_naming_symbols` / `tckit_naming_style` / `tckit_naming_rule`),
+  plus `tckit_analysis_profile` to pick a house style:
+
+  - `hybrid` (default) keeps kind prefixes on program objects (`FB_Motor`,
+    `ST_Config`, `I_Drive`, `GVL_Parameters`), because POUs, DUTs and GVLs
+    share one flat namespace, and drops type prefixes on variables in favour
+    of .NET casing (`Enable`, `_retryCount`, `MaxRetries`).
+  - `dotnet` drops the object prefixes too (`Motor`, `IMotor`, `Config`).
+  - `hungarian` is the Beckhoff/CODESYS convention in full.
+  - `none` disables naming checks.
+
+  Severity follows the Roslyn ladder and can be set per rule id
+  (`tckit_diagnostic.TCK1002.severity`) or per category
+  (`tckit_analyzer_diagnostic.category-naming.severity`). Naming defaults to
+  `suggestion`.
+
 ### Fixed
 
 - **TcUnit results resolution on TwinCAT 4026 local runtimes.** The resolver

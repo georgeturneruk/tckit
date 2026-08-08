@@ -63,3 +63,41 @@ public sealed record Dut
     public DutKind DutKind { get; init; } = DutKind.Struct;
     public string BaseType { get; init; } = "";
 }
+
+/// <summary>What a <see cref="PouMember"/> is. Property accessors are separate members from the property header.</summary>
+public enum PouMemberKind
+{
+    Method,
+    Action,
+    Property,
+    PropertyGet,
+    PropertySet,
+}
+
+/// <summary>One member of a POU, with both halves of its source.</summary>
+public sealed record PouMember
+{
+    /// <summary>The item name, using the same spelling as <c>GetPouItem</c>: "Execute", "Status", "Status.Get".</summary>
+    public required string Name { get; init; }
+
+    public required PouMemberKind Kind { get; init; }
+
+    public required string Declaration { get; init; }
+
+    public required string Body { get; init; }
+}
+
+/// <summary>
+/// A whole POU's source: declaration, body, and every member with its own halves. The single
+/// read that whole-object work (analysis, documentation) needs, so it does not have to issue one
+/// call per member and re-parse the file each time.
+/// </summary>
+public sealed record PouSource
+{
+    public required string PouName { get; init; }
+    public required PouType PouType { get; init; }
+    public required string Path { get; init; }
+    public required string Declaration { get; init; }
+    public required string Body { get; init; }
+    public IReadOnlyList<PouMember> Members { get; init; } = [];
+}
