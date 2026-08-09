@@ -132,10 +132,6 @@ internal sealed class TcPlcObjectFile
         return null;
     }
 
-    /// <summary>All direct member elements (Method / Action / Property) of the container.</summary>
-    public IReadOnlyList<XmlElement> Members
-        => _container.ChildNodes.OfType<XmlElement>().Where(e => s_namedMemberTags.Contains(e.LocalName)).ToList();
-
     /// <summary>Append a Method element; interface methods get no Implementation element.</summary>
     public XmlElement AddMethod(string name, string declaration, string? implementation)
     {

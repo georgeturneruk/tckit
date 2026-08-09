@@ -40,9 +40,6 @@ internal sealed class PlcProjFile
 
     // --- Compile / Folder items ----------------------------------------------
 
-    public bool HasCompileItem(string include)
-        => FindItem("Compile", include) is not null;
-
     /// <summary>
     /// Add a &lt;Compile Include="..."&gt;&lt;SubType&gt;Code&lt;/SubType&gt;&lt;/Compile&gt; item,
     /// inserted in case-insensitive ordinal Include order among the existing Compile items.
@@ -80,10 +77,6 @@ internal sealed class PlcProjFile
         return true;
     }
 
-    /// <summary>All Compile Includes, as written (backslash-relative paths).</summary>
-    public IReadOnlyList<string> CompileItems()
-        => Items("Compile").Select(e => e.GetAttribute("Include")).ToList();
-
     public bool HasFolderItem(string include)
         => FindItem("Folder", include) is not null;
 
@@ -92,17 +85,6 @@ internal sealed class PlcProjFile
         var folder = _doc.CreateElement("Folder", _namespace);
         folder.SetAttribute("Include", include);
         TcXmlFormat.AppendIndented(ItemGroupFor("Folder"), folder, 2);
-    }
-
-    public bool RemoveFolderItem(string include)
-    {
-        if (FindItem("Folder", include) is not { } item)
-        {
-            return false;
-        }
-
-        TcXmlFormat.RemoveIndented(item);
-        return true;
     }
 
     /// <summary>Remove every Compile / Folder item at or under a folder path prefix.</summary>
