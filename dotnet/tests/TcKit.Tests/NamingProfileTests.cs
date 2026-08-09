@@ -230,6 +230,73 @@ public class NamingProfileTests
     }
 
     [Fact]
+    public void Hybrid_HungarianPrefixOnAConformingLocal_IsFlaggedAsRedundant()
+    {
+        // "nCount" is already valid camelCase, so the casing rule cannot see the prefix. This is
+        // the gap TCK1005 exists to close.
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    nCount : INT;\nEND_VAR"));
+
+        var finding = Assert.Single(Run(NamingProfiles.Hybrid, pou));
+        Assert.Equal(NamingRuleEngine.RedundantTypePrefixId, finding.RuleId);
+        Assert.Equal("count", finding.Suggestion);
+    }
+
+    [Fact]
+    public void Hybrid_WordThatMerelyStartsLikeAPrefix_IsNotFlagged()
+    {
+        // "nextValue" starts with n on an INT, but "ne" is not a prefix and the agreement test
+        // only matches a prefix followed by an upper-case boundary.
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    nextValue : INT;\nEND_VAR"));
+
+        Assert.Empty(Run(NamingProfiles.Hybrid, pou));
+    }
+
+    [Fact]
+    public void Hybrid_PrefixDisagreeingWithTheType_IsNotFlagged()
+    {
+        // "bufferSize" on an INT starts with "b", which tags a BOOL, so it is a word not a tag.
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    bufferSize : INT;\nEND_VAR"));
+
+        Assert.Empty(Run(NamingProfiles.Hybrid, pou));
+    }
+
+    [Fact]
+    public void Hybrid_InstanceFieldKeepsItsUnderscoreButNotItsTypePrefix()
+    {
+        var pou = Fb("FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\n    _nCount : INT;\nEND_VAR");
+
+        var finding = Assert.Single(Run(NamingProfiles.Hybrid, pou));
+        Assert.Equal(NamingRuleEngine.RedundantTypePrefixId, finding.RuleId);
+        Assert.Equal("_count", finding.Suggestion);
+    }
+
+    [Fact]
+    public void Hungarian_TypePrefixIsTheConvention_SoItIsNotFlaggedAsRedundant()
+    {
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR_INPUT\n    nCount : INT;\nEND_VAR");
+
+        Assert.Empty(Run(NamingProfiles.Hungarian, pou));
+    }
+
+    [Fact]
+    public void Hybrid_NonConformingName_IsReportedOnceNotTwice()
+    {
+        // "bEnable" fails the casing rule and carries a type prefix. Both describe the same defect
+        // with the same fix, so only the casing finding is emitted.
+        var pou = Fb("FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR_INPUT\n    bEnable : BOOL;\nEND_VAR");
+
+        var finding = Assert.Single(Run(NamingProfiles.Hybrid, pou));
+        Assert.Equal(NamingRuleEngine.VariableRuleId, finding.RuleId);
+    }
+
+    [Fact]
     public void None_Profile_DisablesEveryRule()
         => Assert.Empty(Run(NamingProfiles.None, Fb("motor", "FUNCTION_BLOCK motor\nVAR\n    X : INT;\nEND_VAR")));
 }

@@ -151,11 +151,18 @@ public static class NameChecker
         [TypeClass.Integer] = ["udi", "uli", "di", "ui", "li", "by", "dw", "i", "w", "u"],
     };
 
-    private static string StripTypePrefix(string value, TypeClass typeClass)
+    /// <summary>
+    /// The Hungarian type prefix <paramref name="value"/> carries for <paramref name="typeClass"/>,
+    /// or empty when it carries none. Agreement is the whole test: "nCount" on an INT is a type
+    /// prefix, while "next" on an INT is a word that happens to start with n.
+    /// </summary>
+    public static string TypePrefixOn(string value, TypeClass typeClass)
     {
+        ArgumentNullException.ThrowIfNull(value);
+
         if (typeClass is TypeClass.Unknown)
         {
-            return value;
+            return "";
         }
 
         var canonical = NamingProfiles.TypePrefixes
@@ -171,11 +178,17 @@ public static class NameChecker
                 && value.StartsWith(prefix, StringComparison.Ordinal)
                 && char.IsUpper(value[prefix.Length]))
             {
-                return value[prefix.Length..];
+                return prefix;
             }
         }
 
-        return value;
+        return "";
+    }
+
+    private static string StripTypePrefix(string value, TypeClass typeClass)
+    {
+        var prefix = TypePrefixOn(value, typeClass);
+        return prefix.Length > 0 ? value[prefix.Length..] : value;
     }
 
     /// <summary>Split an identifier into words on underscores and on case boundaries, keeping acronyms whole.</summary>

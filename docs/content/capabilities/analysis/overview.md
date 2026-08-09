@@ -41,6 +41,9 @@ Each of these compiles cleanly, which is the whole reason they are here.
 | `TCK1002` | Variable names in any VAR block |
 | `TCK1003` | Method, property and action names |
 | `TCK1004` | Struct fields and enumeration constants |
+| `TCK1005` | A type prefix left behind under a convention that does not use one |
+
+`TCK1005` covers a gap the others structurally cannot: `nCount` is already valid camelCase, so a casing rule never notices the `n`. It fires only when the prefix agrees with the declared type, so `nCount : INT` is reported and `nextValue : INT` is not, and only on names that otherwise conform, so a name failing the casing rule is reported once rather than twice.
 
 Every finding carries the object, the item, the line within that item, and the offending identifier. Naming findings also carry a suggested name.
 
@@ -57,7 +60,9 @@ Each rule carries a guard, because a false positive is worse than a miss: it inv
 - `TCK2002` reads simple operands only. A comparison through a dotted path is left alone.
 - `TCK3002` cannot tell dead code from a library intended for consumers outside the solution, which is why it is a suggestion rather than a warning.
 
-`TCK2005`, `TCK3001` and `TCK3002` need the whole solution in view, so they are skipped when `objectName` scopes the run. The result says which in `rules_not_run` rather than letting a partial pass look clean.
+- `TCK3002` counts a namespace-qualified reference (`LibraryPlc.F_Trim`) as a use, which is how one PLC project calls into another. A library consumed only by a sibling test project is reached, not dead.
+
+`TCK2005`, `TCK3001` and `TCK3002` need the whole solution in view, so they are skipped when `objectName` scopes the run, as is the `infer` profile. The result says which in `rules_not_run` rather than letting a partial pass look clean.
 
 ## Profiles
 
@@ -68,7 +73,12 @@ Pick a house style with `tckit_analysis_profile`:
 | `hybrid` (default) | `FB_Motor`, `F_Clamp`, `PRG_Main`, `I_Drive`, `ST_Config`, `E_State`, `GVL_Parameters` | `Enable`, `_retryCount`, `retries`, `MaxRetries` |
 | `dotnet` | `Motor`, `Clamp`, `Main`, `IDrive`, `Config`, `State`, `Parameters` | as `hybrid` |
 | `hungarian` | as `hybrid` | `bEnable`, `nRetryCount`, `fbDrive`, `stConfig` |
+| `infer` | learned from the project | learned from the project |
 | `none` | not checked | not checked |
+
+`infer` derives the convention from the project's own declarations and reports departures from what it already does, rather than from a table someone else chose. That makes it the honest option for an existing codebase whose house style matches none of the above: adopting it does not produce thousands of findings on day one.
+
+It learns type prefixes per type family and capitalisation and scope prefixes per kind of declaration, treating those separately because a project that writes `bEnable` uses `b` in every VAR block but may still case an input differently from a local. Nothing is inferred from thin evidence: below three declarations, or below sixty per cent agreement, a slot simply gets no rule and the analyser stays quiet rather than enforcing a coincidence. Because it needs the whole project to learn from, `infer` is skipped on an `objectName`-scoped run and says so in `rules_not_run`.
 
 `hybrid` is the default because the two halves of the Hungarian convention are worth separating. Kind prefixes on objects earn their place: POUs, DUTs and GVLs share one flat namespace, and a bare `Config` does not tell you whether it is a struct, an enum or a function block. Type prefixes on variables do not: the type is already in the declaration, and the prefix goes stale the moment the type changes.
 

@@ -24,12 +24,19 @@ public static class NamingRuleEngine
     /// <summary>Struct fields and enumeration constants.</summary>
     public const string TypeMemberRuleId = "TCK1004";
 
+    /// <summary>A Hungarian type prefix under a profile that does not ask for one.</summary>
+    public const string RedundantTypePrefixId = "TCK1005";
+
     /// <summary>
     /// Names TwinCAT itself mandates. Flagging <c>MAIN</c> would be advising a rename that breaks
-    /// the project, which is worse than saying nothing.
+    /// the project, which is worse than saying nothing. Inference excludes them too, so a single
+    /// reserved name cannot skew a small sample.
     /// </summary>
     private static readonly HashSet<string> ReservedNames =
         new(StringComparer.OrdinalIgnoreCase) { "MAIN" };
+
+    /// <summary>Whether TwinCAT mandates this name, making any rule about it unactionable.</summary>
+    public static bool IsReserved(string name) => ReservedNames.Contains(name);
 
     /// <summary>Check every symbol and return one finding per non-conforming name.</summary>
     public static List<AnalysisFinding> Run(IEnumerable<NamedSymbol> symbols, AnalysisSettings settings)
@@ -46,8 +53,16 @@ public static class NamingRuleEngine
             }
 
             var rule = settings.Rules.FirstOrDefault(candidate => candidate.Symbols.Matches(symbol));
-            if (rule is null || NameChecker.Conforms(symbol.Name, rule.Style))
+            if (rule is null)
             {
+                continue;
+            }
+
+            if (NameChecker.Conforms(symbol.Name, rule.Style))
+            {
+                // Only a name that already satisfies the casing rule can be hiding a type prefix.
+                // A name that fails it is reported once, by the rule below, with the same fix.
+                AddRedundantTypePrefix(findings, settings, symbol, rule);
                 continue;
             }
 
@@ -77,6 +92,60 @@ public static class NamingRuleEngine
         }
 
         return findings;
+    }
+
+    /// <summary>
+    /// TCK1005. A Hungarian type prefix is invisible to the casing rules, because "nCount" is
+    /// already valid camelCase, so a profile that has dropped type prefixes would never notice one
+    /// left behind. Firing only when the prefix agrees with the declared type is what keeps this
+    /// precise: "nextValue" on an INT is a word, "nValue" on an INT is a tag.
+    /// </summary>
+    private static void AddRedundantTypePrefix(
+        List<AnalysisFinding> findings, AnalysisSettings settings, NamedSymbol symbol, NamingRule rule)
+    {
+        if (symbol.Kind is not (SymbolKind.Variable or SymbolKind.StructMember)
+            || symbol.TypeClass is TypeClass.Unknown)
+        {
+            return;
+        }
+
+        // The style's own prefix is stripped first, so "_nCount" is judged on "nCount".
+        var core = symbol.Name.StartsWith(rule.Style.RequiredPrefix, StringComparison.Ordinal)
+            ? symbol.Name[rule.Style.RequiredPrefix.Length..]
+            : symbol.Name.TrimStart('_');
+
+        var typePrefix = NameChecker.TypePrefixOn(core, symbol.TypeClass);
+
+        // Under a profile that asks for the prefix, carrying it is the convention, not a defect.
+        if (typePrefix.Length == 0
+            || rule.Style.RequiredPrefix.EndsWith(typePrefix, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var severity = settings.SeverityFor(RedundantTypePrefixId, Category, DiagnosticSeverity.Suggestion);
+        if (severity is DiagnosticSeverity.None)
+        {
+            return;
+        }
+
+        var suggestion = NameChecker.Suggest(symbol.Name, rule.Style, symbol.TypeClass);
+        findings.Add(new AnalysisFinding
+        {
+            RuleId = RedundantTypePrefixId,
+            Category = Category,
+            Severity = severity,
+            Message = $"{Label(symbol.Kind)} '{symbol.Name}' carries the type prefix "
+                + $"'{typePrefix}', which the '{rule.Name}' convention does not use. The type is "
+                + $"already declared as {symbol.TypeExpression}.",
+            PlcName = symbol.PlcName,
+            ObjectName = symbol.ObjectName,
+            ItemName = symbol.ItemName,
+            Part = CodePart.Declaration,
+            Line = symbol.Line,
+            Symbol = symbol.Name,
+            Suggestion = string.Equals(suggestion, symbol.Name, StringComparison.Ordinal) ? "" : suggestion,
+        });
     }
 
     private static string RuleIdFor(SymbolKind kind) => kind switch

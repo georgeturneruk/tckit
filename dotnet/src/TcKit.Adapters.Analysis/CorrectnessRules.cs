@@ -41,9 +41,6 @@ public static class CorrectnessRules
     public static IReadOnlyList<string> WholeProjectRules { get; } =
         [UnreadInputId, MultiWriterGlobalId, UnreachableObjectId];
 
-    private static readonly HashSet<string> ReservedNames =
-        new(StringComparer.OrdinalIgnoreCase) { "MAIN" };
-
     /// <summary>Run every correctness and structure rule over the parsed project.</summary>
     public static List<AnalysisFinding> Run(AnalysedProject project, AnalysisSettings settings)
     {
@@ -319,7 +316,7 @@ public static class CorrectnessRules
 
         foreach (var pou in project.Pous)
         {
-            if (ReservedNames.Contains(pou.Name) || taskPrograms.Contains(pou.Name))
+            if (NamingRuleEngine.IsReserved(pou.Name) || taskPrograms.Contains(pou.Name))
             {
                 continue;
             }
@@ -352,9 +349,12 @@ public static class CorrectnessRules
                 return true;
             }
 
+            // Qualified matching throughout: one PLC project calls into another as
+            // "OtherPlc.F_Trim", and treating that as a non-reference would report every library
+            // POU consumed by a sibling test project as dead.
             if (DeclaresType(other.Declaration, target.Name)
                 || other.Members.Any(member => DeclaresType(member.Declaration, target.Name))
-                || StIdentifiers.Mentions(other.AllBodies, target.Name))
+                || StIdentifiers.MentionsQualified(other.AllBodies, target.Name))
             {
                 return true;
             }
@@ -369,7 +369,7 @@ public static class CorrectnessRules
         => declaration.Variables.Any(variable => MentionsType(variable.TypeExpression, typeName));
 
     private static bool MentionsType(string typeExpression, string typeName)
-        => StIdentifiers.Mentions(typeExpression, typeName);
+        => StIdentifiers.MentionsQualified(typeExpression, typeName);
 
     private static HashSet<string> RealNames(StDeclaration declaration, TypeClassifier classifier)
         => new(

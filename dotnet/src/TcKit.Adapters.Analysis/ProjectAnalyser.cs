@@ -107,6 +107,37 @@ public sealed class ProjectAnalyser(IProjectReader reader) : IProjectAnalyser
             symbols.AddRange(SymbolCollector.FromDut(dut.Source, dut.PlcName, classifier));
         }
 
+        var rulesNotRun = new List<string>();
+        if (scoped)
+        {
+            rulesNotRun.Add(
+                $"{string.Join(", ", CorrectnessRules.WholeProjectRules)}: these rules need the "
+                + "whole solution, so they are skipped when objectName scopes the run. Analyse "
+                + "without objectName to include them.");
+        }
+
+        if (settings.Profile == NamingProfiles.Infer)
+        {
+            if (scoped)
+            {
+                // Inferring a convention from a single object would be guessing, and a wrong
+                // inference produces confidently wrong findings.
+                rulesNotRun.Add(
+                    "naming: the 'infer' profile derives the convention from the whole project, so "
+                    + "naming rules are skipped when objectName scopes the run.");
+            }
+            else
+            {
+                settings = settings with
+                {
+                    Rules = settings.Rules
+                        .Concat(ProfileInference.Infer(symbols))
+                        .OrderByDescending(rule => rule.Symbols.Specificity)
+                        .ToList(),
+                };
+            }
+        }
+
         var findings = NamingRuleEngine.Run(symbols, settings)
             .Concat(CorrectnessRules.Run(project, settings))
             .Where(finding => finding.Severity >= request.MinimumSeverity)
@@ -126,11 +157,7 @@ public sealed class ProjectAnalyser(IProjectReader reader) : IProjectAnalyser
             Findings = findings,
             Skipped = skipped,
             ConfigWarnings = settings.ConfigWarnings,
-            RulesNotRun = scoped
-                ? [$"{string.Join(", ", CorrectnessRules.WholeProjectRules)}: these rules need the "
-                    + "whole solution, so they are skipped when objectName scopes the run. Analyse "
-                    + "without objectName to include them."]
-                : [],
+            RulesNotRun = rulesNotRun,
         };
     }
 

@@ -86,15 +86,6 @@ public static partial class AnalysisSettingsLoader
                 + $"Valid values: {string.Join(", ", NamingProfiles.Names)}.");
             profile = NamingProfiles.Hybrid;
         }
-        else if (profile == NamingProfiles.Infer)
-        {
-            // Falling back loudly rather than returning an empty rule set, which would look like a
-            // clean project instead of a profile that does nothing.
-            warnings.Add(
-                $"tckit_analysis_profile '{NamingProfiles.Infer}' is not implemented yet. "
-                + $"Using '{NamingProfiles.Hybrid}'.");
-            profile = NamingProfiles.Hybrid;
-        }
 
         var groups = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         var styles = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);

@@ -23,6 +23,21 @@ public class StIdentifiersTests
         Assert.True(StIdentifiers.Mentions("GVL_State.Mode := 1;", "GVL_State"));
     }
 
+    [Fact]
+    public void MentionsQualified_CountsANamespaceQualifiedUse()
+    {
+        // One PLC project calls into another as "OtherPlc.F_Trim". Mentions rejects it by design,
+        // because a local is not used by a member access; a called function is.
+        const string body = "result := OtherPlc.F_Trim(text);";
+
+        Assert.False(StIdentifiers.Mentions(body, "F_Trim"));
+        Assert.True(StIdentifiers.MentionsQualified(body, "F_Trim"));
+    }
+
+    [Fact]
+    public void MentionsQualified_StillRespectsTheRightBoundary()
+        => Assert.False(StIdentifiers.MentionsQualified("fb : FB_PidTests;", "FB_Pid"));
+
     [Theory]
     [InlineData("total := total + 1;", "total", true)]
     [InlineData("IF total = 1 THEN", "total", false)]

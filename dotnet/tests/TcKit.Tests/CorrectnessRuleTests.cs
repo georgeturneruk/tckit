@@ -313,6 +313,34 @@ public class CorrectnessRuleTests
     }
 
     [Fact]
+    public void UnreachableObject_CalledThroughANamespaceQualifier_IsNotFlagged()
+    {
+        // A test PLC calls into its library sibling as "LibraryPlc.F_Trim". Missing this reported
+        // every library POU in the T3 fixture as dead code.
+        var library = Pou("F_Trim", PouType.Function, "FUNCTION F_Trim : STRING", "F_Trim := '';");
+        var consumer = Pou(
+            "FB_Tests", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Tests\nVAR\nEND_VAR",
+            "result := LibraryPlc.F_Trim(text);");
+
+        Assert.DoesNotContain(
+            OfRule(Run([library, consumer]), CorrectnessRules.UnreachableObjectId),
+            finding => finding.Symbol == "F_Trim");
+    }
+
+    [Fact]
+    public void UnreachableObject_DeclaredWithAQualifiedType_IsNotFlagged()
+    {
+        var library = Pou("FB_Pid", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Pid\nVAR\nEND_VAR", "n := 1;");
+        var consumer = Pou(
+            "FB_PidTests", PouType.FunctionBlock,
+            "FUNCTION_BLOCK FB_PidTests\nVAR\n    pid : LibraryPlc.FB_Pid;\nEND_VAR", "pid();");
+
+        Assert.DoesNotContain(
+            OfRule(Run([library, consumer]), CorrectnessRules.UnreachableObjectId),
+            finding => finding.Symbol == "FB_Pid");
+    }
+
+    [Fact]
     public void UnreachableObject_BoundToATask_IsNotFlagged()
     {
         var program = Pou("PRG_Cyclic", PouType.Program, "PROGRAM PRG_Cyclic\nVAR\nEND_VAR", "n := 1;");

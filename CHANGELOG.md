@@ -27,6 +27,10 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   - `TCK3001` a global written from more than one POU
   - `TCK3002` a POU nothing instantiates, calls, or binds to a task
   - `TCK1001`–`TCK1004` names departing from the project's convention
+  - `TCK1005` a type prefix left behind under a convention that dropped them.
+    `nCount` is already valid camelCase, so a casing rule never notices the `n`;
+    this fires only when the prefix agrees with the declared type, so
+    `nCount : INT` is reported and `nextValue : INT` is not
 
   `TCK2005`, `TCK3001` and `TCK3002` need the whole solution, so they are
   skipped when `objectName` scopes the run, and the result says so in
@@ -48,6 +52,11 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
     of .NET casing (`Enable`, `_retryCount`, `MaxRetries`).
   - `dotnet` drops the object prefixes too (`Motor`, `IMotor`, `Config`).
   - `hungarian` is the Beckhoff/CODESYS convention in full.
+  - `infer` learns the convention from the project's own declarations and
+    reports departures from what it already does, which is the option that
+    makes adoption on an existing codebase tractable. Nothing is inferred from
+    fewer than three declarations or below sixty per cent agreement, so a slot
+    with no clear convention produces no rule rather than a guess.
   - `none` disables naming checks.
 
   Severity follows the Roslyn ladder and can be set per rule id

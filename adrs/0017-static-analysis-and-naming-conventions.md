@@ -26,28 +26,27 @@ is auto-fixable in v1.
 DTOs), `TcKit.Core/Ports/IProjectAnalyser.cs`,
 `IProjectReader.GetPouSourceAsync`, `dotnet/src/TcKit.Adapters.Analysis`
 (config loader, profiles, `NamingRuleEngine`, `CorrectnessRules`),
-`TcKit.Server/Tools/AnalysisTools.cs`. Eleven rules ship: `TCK1001`-`TCK1004`
-naming; `TCK2001` FB instance on a call stack, `TCK2002` REAL equality,
-`TCK2003` misplaced retention, `TCK2004` unused local, `TCK2005` unread input;
-`TCK3001` multi-writer global, `TCK3002` unreachable POU. Correctness defaults
-to `warning`, naming and structure to `suggestion`. `TCK2005`/`TCK3001`/`TCK3002`
-need the whole solution and are skipped (and reported in `rules_not_run`) when
-`objectName` scopes the run. `tc-write-st` runs a scoped pass after each write;
+`TcKit.Server/Tools/AnalysisTools.cs`. Twelve rules ship: `TCK1001`-`TCK1004`
+naming and `TCK1005` redundant type prefix; `TCK2001` FB instance on a call
+stack, `TCK2002` REAL equality, `TCK2003` misplaced retention, `TCK2004` unused
+local, `TCK2005` unread input; `TCK3001` multi-writer global, `TCK3002`
+unreachable POU. Correctness defaults to `warning`, naming and structure to
+`suggestion`. All five profiles are live, `infer` included
+(`ProfileInference.cs`). `TCK2005`/`TCK3001`/`TCK3002` and `infer` need the whole
+solution and are skipped (and reported in `rules_not_run`) when `objectName`
+scopes the run. `tc-write-st` runs a scoped pass after each write;
 `tc-build-test-loop` runs a project pass before the first build.
 
 **Open questions:**
-- `infer` is accepted but not implemented; it warns and falls back to `hybrid`.
 - `prefix_composition` and `recursive_type_prefix` were specified below but are not
   in the shipped schema. `hungarian` enforces type prefixes only, with no scope
-  composition (`gbEnable`) and no recursion into `POINTER TO POINTER`.
+  composition (`gbEnable`) and no recursion into `POINTER TO POINTER`. `infer`
+  learns a scope prefix and a type prefix separately and composes them, so the
+  capability exists there; lifting it into the declarative schema is unfinished.
 - Finding location is reported as `(pou, item, line-within-item)`. Whether to also
   compute a real file line in the `.TcPOU` is deferred until a consumer needs it.
 - Casing-only corrections are reference-safe (ST identifiers are case-insensitive),
   so they could become the first fixable rules. Deliberately deferred past v1.
-- A `TCK1005` "redundant type prefix" rule would catch what `hybrid` structurally
-  cannot: a Hungarian-prefixed method local is already camelCase, so it conforms.
-  Gating the rule on prefix/type agreement (`nCount : INT`) makes it precise; the
-  same agreement test already gates suggestion stripping.
 - Rules still unbuilt from the original list: pointer dereference with no validity
   check, unbounded loop in a cyclic POU, unchecked array index, missing `SUPER^()`
   in an override. Each needs either scope analysis or a heuristic that could not be
@@ -298,3 +297,19 @@ are wanted.
     access needs shadowing analysis.
   - Across all four bench fixtures the correctness lane reports one finding, and
     it is genuine. The guards, not the rules, are what took it there.
+- 2026-08-09: `infer` and `TCK1005` built, closing the last two gaps.
+  - `infer` learns type prefixes per type family and capitalisation plus scope
+    prefixes per declaration kind, separately, because a Hungarian project uses
+    the same type prefix in every VAR block while still casing an input
+    differently from a local. Below three samples or sixty per cent agreement a
+    slot yields no rule, and a style with neither a prefix nor a capitalisation
+    requirement is dropped rather than emitted as an unfailable rule.
+  - `TCK1005` fires only on names that already conform. Emitting it alongside a
+    casing finding double-reported one defect with one fix; restricting it to
+    conforming names is exactly the gap it was specified to close.
+  - `StIdentifiers` needed a second boundary rule. `Mentions` rejects a preceding
+    dot so `fb.count` is not a use of a local `count`, but that made every
+    library POU consumed as `LibraryPlc.F_Trim` look dead: seven of thirteen
+    objects in the T3 fixture. `MentionsQualified` counts the qualified form, and
+    `TCK3002` uses it throughout. The fixture now reports zero unreachable
+    objects, and its total is 13 findings, all legitimate.

@@ -31,6 +31,27 @@ public static partial class StIdentifiers
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="name"/> appears as a whole identifier, counting a namespace- or
+    /// instance-qualified occurrence such as <c>MyPlc.F_Trim</c> as a mention.
+    ///
+    /// This is the opposite boundary rule to <see cref="Mentions"/>, and the difference matters: a
+    /// local called <c>count</c> is not used by <c>fb.count</c>, but a function called
+    /// <c>F_Trim</c> very much is used by <c>MyPlc.F_Trim(...)</c>, which is how one PLC project
+    /// calls into another.
+    /// </summary>
+    public static bool MentionsQualified(string masked, string name)
+    {
+        ArgumentNullException.ThrowIfNull(masked);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return name.Length > 0
+            && Regex.IsMatch(
+                masked,
+                $@"(?<![A-Za-z0-9_]){Regex.Escape(name)}(?![A-Za-z0-9_])",
+                RegexOptions.IgnoreCase);
+    }
+
     /// <summary>Whether <paramref name="name"/> is assigned with <c>:=</c> somewhere in <paramref name="masked"/>.</summary>
     public static bool IsAssigned(string masked, string name)
     {
