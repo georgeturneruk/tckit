@@ -34,6 +34,7 @@ nav:
   - Capabilities:
     - Reader: capabilities/project-reader/overview.md
     - Writer: capabilities/project-writer/overview.md
+    - Analysis: capabilities/analysis/overview.md
     - Build & deploy: capabilities/build-runner/overview.md
     - Testing: capabilities/test-runner/overview.md
     - Hardware: capabilities/hardware/overview.md

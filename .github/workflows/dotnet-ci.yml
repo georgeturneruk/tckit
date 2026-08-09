@@ -13,11 +13,27 @@ on:
     branches: [main, feat/csharp-rewrite]
   pull_request:
     branches: [main]
+  # Manual only, and the one thing it adds is the SARIF upload. See the step at the end for why
+  # that is not on by default.
+  workflow_dispatch:
+    inputs:
+      upload_sarif:
+        description: "Upload the fixture analysis to the Security tab"
+        type: boolean
+        default: false
+
+# Least privilege by default; the upload step is the only thing that writes anything, and it only
+# runs on a manual dispatch that asks for it.
+permissions:
+  contents: read
 
 jobs:
   dotnet:
     name: Build + unit tests (.NET / Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     defaults:
       run:
         working-directory: dotnet
@@ -42,6 +58,51 @@ jobs:
 
       - name: Test
         run: dotnet test TcKit.sln --configuration Release --no-build --verbosity normal
+
+      # Runs the shipped analysis verb over a real fixture, which is both a smoke test of the CLI
+      # path (the unit tests exercise the analyser directly, not the exe) and proof that offline
+      # analysis works on a Linux runner. Gated at `error` rather than `warning`: these are bench
+      # fixtures, which exist to contain bugs, so a stricter gate here would be meaningless. On a
+      # real codebase the pattern is `--baseline <file> --fail-on warning`.
+      - name: Analyse a fixture (smoke test of the analyse verb)
+        run: |
+          dotnet run --project src/TcKit.Cli --configuration Release --framework net8.0 --no-build -- \
+            analyse ../bench/fixtures/bug-hunting/T3-tckit-utils/T3TckitUtils.sln \
+            --severity warning --format text --fail-on error
+
+      # SARIF is the format an external service consumes, so a malformed document fails at upload
+      # rather than here, where nobody is watching. Validating it in CI keeps that feedback local.
+      # --fail-on none because the gate above already decides the job's fate: a non-zero exit here
+      # would stop the workflow before the document was ever checked.
+      - name: Analyse a fixture as SARIF and validate it against the 2.1.0 schema
+        run: |
+          dotnet run --project src/TcKit.Cli --configuration Release --framework net8.0 --no-build -- \
+            analyse ../bench/fixtures/bug-hunting/T3-tckit-utils/T3TckitUtils.sln \
+            --severity suggestion --format sarif --sarif-base .. --fail-on none > "$RUNNER_TEMP/tckit.sarif"
+          python3 -m pip install --quiet check-jsonschema
+          python3 -m check_jsonschema \
+            --schemafile https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json \
+            "$RUNNER_TEMP/tckit.sarif"
+
+      # Deliberately opt-in, and never on push or pull_request.
+      #
+      # The only TwinCAT code in this repository is bench fixtures, which exist to contain bugs so
+      # the analyser can be measured against them. Uploading on every run would leave this public
+      # repository permanently showing a dozen code-scanning alerts that read as "TcKit has
+      # problems" rather than "the analyser found what it was built to find", and they could never
+      # be resolved, because fixing the fixtures is what destroys them.
+      #
+      # It stays available on demand because a schema-valid document is not the same as one GitHub
+      # accepts: ingest also enforces a result cap and resolves every URI against the checkout, and
+      # nothing else here exercises that. Run the workflow manually with `upload_sarif` ticked to
+      # prove the whole path, then dismiss the alerts it raises.
+      - name: Upload SARIF to code scanning (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_sarif
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ runner.temp }}/tckit.sarif
+          # Namespaces the results, so this never collides with another tool's alerts.
+          category: tckit-analysis
 
       # The xml writer backend's whole point is writes with no XAE (ADR-0017): drive a
       # representative verb sequence through the CLI on Linux against a fixture copy, then read

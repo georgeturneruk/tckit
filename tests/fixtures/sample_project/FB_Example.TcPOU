@@ -105,6 +105,13 @@ Reset := TRUE;
 ]]></ST>
       </Implementation>
     </Method>
+    <Action Name="LogState" Id="{12345678-0000-0000-0000-000000000008}">
+      <Implementation>
+        <ST><![CDATA[
+nInternal := nInternal;
+]]></ST>
+      </Implementation>
+    </Action>
     <Property Name="ErrorId" Id="{12345678-0000-0000-0000-000000000004}">
       <Declaration><![CDATA[
 // :Description: Last error code, 0 when no error.

@@ -188,6 +188,44 @@ public class XmlProjectReaderTests
     private static DutRef DutNamed(PlcSection plc, string name)
         => Assert.Single(plc.Duts, d => d.Name == name);
 
+    // --- POU type detection --------------------------------------------------
+
+    [Theory]
+    [InlineData("PROGRAM PRG_Test\nVAR\n    WriteProtectedFunctions : FB_Wpf;\nEND_VAR", PouType.Program)]
+    [InlineData("FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", PouType.FunctionBlock)]
+    [InlineData("FUNCTION F_Add : INT\nVAR_INPUT\nEND_VAR", PouType.Function)]
+    [InlineData("(* FUNCTION in a comment *)\nPROGRAM PRG_Test\nVAR\nEND_VAR", PouType.Program)]
+    [InlineData("PROGRAM PRG_Test\nVAR\n    Note : STRING := 'FUNCTION_BLOCK';\nEND_VAR", PouType.Program)]
+    public async Task GetStructure_PouType_ComesFromTheHeaderNotTheWholeDeclaration(
+        string declaration, PouType expected)
+    {
+        // TcUnit's PRG_TEST declares "WriteProtectedFunctions : FB_WriteProtectedFunctions", whose
+        // "Functions" made a substring search read the PROGRAM as a FUNCTION.
+        var directory = Path.Combine(Path.GetTempPath(), $"tckit-pou-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(directory, "Subject.TcPOU"),
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                + "<TcPlcObject Version=\"1.1.0.1\">\n"
+                + "  <POU Name=\"Subject\" Id=\"{00000000-0000-0000-0000-000000000001}\">\n"
+                + $"    <Declaration><![CDATA[{declaration}]]></Declaration>\n"
+                + "    <Implementation><ST><![CDATA[]]></ST></Implementation>\n"
+                + "  </POU>\n"
+                + "</TcPlcObject>\n");
+
+            var structure = await new XmlProjectReader()
+                .GetStructureAsync(directory, null, CancellationToken.None);
+
+            Assert.Equal(expected, Assert.Single(structure.Plcs.Values).Pous.Single().PouType);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string SampleProject => Path.Combine(RepoRoot(), "tests", "fixtures", "sample_project");
 
     private static string MultiProject => Path.Combine(RepoRoot(), "tests", "fixtures", "multi_project_sln");

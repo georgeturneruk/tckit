@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\TcKit.Core\TcKit.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Plain net8.0: analysis is pure managed code with no COM, and running offline on a Linux
+         runner is the point of it. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

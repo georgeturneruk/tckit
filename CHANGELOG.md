@@ -6,8 +6,130 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ## [Unreleased]
 
+### Added
+
+- **`AnalyseProject`: offline static analysis.** Runs against the project files
+  without XAE, a licence or a running runtime, so it costs far less than a build
+  and can run first. Pass `objectName` to check only the POU you just edited.
+  Findings carry a rule id and a location (`object`, `item`, line); nothing is
+  rewritten automatically, because renaming a referenced symbol is a decision
+  for you rather than the tool.
+
+  Every rule catches something the compiler does not, so a green build is not
+  evidence against a finding:
+
+  - `TCK2001` a function block that must persist between calls, declared on a
+    call stack (a method's `VAR`, or a `FUNCTION`), so it is rebuilt every call
+    and never advances. Restricted to instances that genuinely cannot work that
+    way: a standard stateful block (`TON`, `R_TRIG`, `CTU`) or one with a
+    `Busy`/`Done` handshake. A synchronous helper scoped to one method call is a
+    correct idiom and is not reported
+  - `TCK2002` `REAL`/`LREAL` compared with `=` or `<>`
+  - `TCK2003` `RETAIN`/`PERSISTENT` on a local, where it cannot retain
+  - `TCK2004` a local declared and never used
+  - `TCK2005` a function block input nothing reads
+  - `TCK3001` a global written from more than one POU
+  - `TCK3002` a POU nothing instantiates, calls, or binds to a task
+  - `TCK1001`–`TCK1004` names departing from the project's convention
+  - `TCK1005` a type prefix left behind under a convention that dropped them.
+    `nCount` is already valid camelCase, so a casing rule never notices the `n`;
+    this fires only when the prefix agrees with the declared type, so
+    `nCount : INT` is reported and `nextValue : INT` is not
+
+  `TCK2005`, `TCK3001` and `TCK3002` need the whole solution, so they are
+  skipped when `objectName` scopes the run, and the result says so in
+  `rules_not_run`. Unimplemented stubs are exempt from the unused-declaration
+  rules, and objects that could not be parsed come back in `skipped`, so a short
+  finding list never quietly means partial coverage.
+
+  Suppress a finding in the code with `// tckit-disable-next-line TCK2002` or a
+  trailing `// tckit-disable-line TCK2002`; rule ids are comma-separated, and
+  omitting them suppresses every rule on that line. Names TwinCAT mandates are
+  never reported: `MAIN`, and anything inside `FB_init`, `FB_exit` or
+  `FB_reinit`, whose parameter names the compiler matches on.
+
+  The `tc-write-st` and `tc-build-test-loop` skills now run it: scoped to the
+  edited POU after a write, and across the project before the first build.
+
+- **`tckit analyse`: the same analysis from the command line, for CI.** It needs
+  no XAE, no licence and no runtime, so unlike `build` it runs anywhere,
+  including a Linux runner.
+
+  ```bash
+  tckit analyse <path> --severity warning --format text --fail-on warning
+  ```
+
+  Exit codes are `0` clean, `2` findings at or above `--fail-on`, `1` tool error,
+  so a broken run is never mistaken for a failing one. `--format text` prints the
+  `location(line): severity code: message` shape compilers use, which CI log
+  parsers already turn into annotations.
+
+  `--format sarif` emits SARIF 2.1.0 for GitHub code scanning, which buys three
+  things a log line cannot: annotations on the pull request diff, a Security tab
+  that separates new findings from existing ones, and a dismissal that survives
+  the next run.
+
+  ```bash
+  tckit analyse . --severity warning --format sarif --sarif-base . > tckit.sarif
+  ```
+
+  `--sarif-base` is what result paths are made relative to, and wants to be the
+  repository root: GitHub matches a result to a file by its path in the checkout,
+  so an absolute path matches nothing and the upload annotates nothing. A project
+  stored outside that base falls back to an absolute `file://` URI. Baseline
+  fingerprints double as SARIF `partialFingerprints`, so GitHub recognises a
+  finding it has seen before even once the surrounding code has moved.
+
+  Findings now also carry the file and the line within it, alongside the TwinCAT
+  address they already had. A line inside a `.TcPOU` is a line of one CDATA
+  block rather than of the file, so that mapping had to be computed rather than
+  assumed; it is verified against TcUnit and TcOpen, where all 2,230 results
+  resolve to a real line and the document validates against the OASIS schema.
+
+  `--write-baseline <file>` records the current findings and `--baseline <file>`
+  suppresses them, so the check can be adopted on a mature codebase without
+  fixing everything first: the build then fails only on new findings. Baseline
+  fingerprints exclude the line number, so inserting a variable higher up a
+  declaration does not invalidate every entry below it.
+
+  Configuration lives in the project's own `.editorconfig` under
+  `[*.{TcPOU,TcGVL,TcDUT}]`, using the same three-part schema as .NET's naming
+  rules (`tckit_naming_symbols` / `tckit_naming_style` / `tckit_naming_rule`),
+  plus `tckit_analysis_profile` to pick a house style:
+
+  - `hybrid` (default) keeps kind prefixes on program objects (`FB_Motor`,
+    `ST_Config`, `I_Drive`, `GVL_Parameters`), because POUs, DUTs and GVLs
+    share one flat namespace, and drops type prefixes on variables in favour
+    of .NET casing (`Enable`, `_retryCount`, `MaxRetries`).
+  - `dotnet` drops the object prefixes too (`Motor`, `IMotor`, `Config`).
+  - `hungarian` is the Beckhoff/CODESYS convention in full.
+  - `infer` learns the convention from the project's own declarations and
+    reports departures from what it already does, which is the option that
+    makes adoption on an existing codebase tractable. Nothing is inferred from
+    fewer than three declarations or below sixty per cent agreement, so a slot
+    with no clear convention produces no rule rather than a guess.
+  - `none` disables naming checks.
+
+  Severity follows the Roslyn ladder and can be set per rule id
+  (`tckit_diagnostic.TCK1002.severity`) or per category
+  (`tckit_analyzer_diagnostic.category-naming.severity`). Naming defaults to
+  `suggestion`.
+
 ### Fixed
 
+- **DUT declarations opening with a pragma read their name from the wrong
+  line.** The `TYPE` header pattern was anchored on `\s*`, which crosses
+  newlines, so a DUT prefixed with `{attribute 'qualified_only'}` was reported
+  as declared on line 1 of its declaration block. The same expression also read
+  the access specifier as the type name, so `TYPE INTERNAL eMessageCondition`
+  parsed as a type called `INTERNAL`.
+- **POU type detection no longer substring-matches the whole declaration.** A
+  `PROGRAM` declaring `WriteProtectedFunctions : FB_WriteProtectedFunctions` was
+  reported as a `FUNCTION`, because the search looked for "FUNCTION" anywhere in
+  the declaration rather than as a header keyword. This affected `GetStructure`
+  for any POU whose VAR block or comments happened to contain a keyword
+  substring, and TcUnit's `PRG_TEST` is one. The keyword must now start a line
+  and end on a word boundary, and comments are excluded.
 - **TcUnit results resolution on TwinCAT 4026 local runtimes.** The resolver
   only knew the pre-4026 kernel boot root (`C:\TwinCAT\3.1\Boot`) and the
   UmRT installs under `Runtimes\`, so results published by a 4026 local

@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using TcKit.Core.Analysis;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Xml;
@@ -21,19 +22,29 @@ internal static class TcFileParser
 
     internal sealed record TaskRaw(string Name, int? CycleTimeUs, int? Priority, IReadOnlyList<string> Programs);
 
-    internal sealed record AccessorPart(string Declaration, string Body);
+    /// <summary>
+    /// A block of source text lifted out of the XML, with the 1-based line of the file its first
+    /// character sits on. Everything a rule reports is located relative to one of these, so the
+    /// line is what turns "line 4 of <c>Execute</c>" into a line a reader or an editor can open.
+    /// </summary>
+    internal readonly record struct SourceText(string Text, int Line)
+    {
+        internal static readonly SourceText Empty = new("", 0);
+    }
 
-    internal sealed record MemberPart(string Name, string Declaration, string Body);
+    internal sealed record AccessorPart(SourceText Declaration, SourceText Body);
 
-    internal sealed record PropertyPart(string Name, string Declaration, AccessorPart? Get, AccessorPart? Set);
+    internal sealed record MemberPart(string Name, SourceText Declaration, SourceText Body, string Language);
+
+    internal sealed record PropertyPart(string Name, SourceText Declaration, AccessorPart? Get, AccessorPart? Set);
 
     internal sealed record PouFull(
-        string Name, PouType Type, string Declaration, string Body,
+        string Name, PouType Type, SourceText Declaration, SourceText Body, string Language,
         IReadOnlyList<MemberPart> Methods, IReadOnlyList<MemberPart> Actions, IReadOnlyList<PropertyPart> Properties);
 
-    internal sealed record GvlFull(string Name, string Declaration);
+    internal sealed record GvlFull(string Name, SourceText Declaration);
 
-    internal sealed record DutFull(string Name, string Declaration, DutKind Kind, string BaseType);
+    internal sealed record DutFull(string Name, SourceText Declaration, DutKind Kind, string BaseType);
 
     /// <summary>Parse a .TcPOU for its name and POU type. Handles &lt;POU&gt; and &lt;Itf&gt; roots.</summary>
     internal static PouMeta ParsePou(string path)
@@ -42,7 +53,7 @@ internal static class TcFileParser
         var container = Child(root, "POU") ?? Child(root, "Itf")
             ?? throw new InvalidDataException($"No <POU> or <Itf> element found in {path}");
         var name = container.Attribute("Name")?.Value ?? "";
-        var declaration = Declaration(container);
+        var declaration = Declaration(container).Text;
         return new PouMeta(name, DetectPouType(declaration, container.Name.LocalName));
     }
 
@@ -63,13 +74,15 @@ internal static class TcFileParser
             ?? throw new InvalidDataException($"No <POU> or <Itf> element found in {path}");
         var name = container.Attribute("Name")?.Value ?? "";
         var declaration = Declaration(container);
-        var type = DetectPouType(declaration, container.Name.LocalName);
+        var type = DetectPouType(declaration.Text, container.Name.LocalName);
 
         var methods = container.Elements().Where(e => e.Name.LocalName == "Method")
-            .Select(m => new MemberPart(m.Attribute("Name")?.Value ?? "", Declaration(m), StBody(m)))
+            .Select(m => new MemberPart(
+                m.Attribute("Name")?.Value ?? "", MemberDeclaration(m), StBody(m), ImplementationLanguage(m)))
             .ToList();
         var actions = container.Elements().Where(e => e.Name.LocalName == "Action")
-            .Select(a => new MemberPart(a.Attribute("Name")?.Value ?? "", Declaration(a), StBody(a)))
+            .Select(a => new MemberPart(
+                a.Attribute("Name")?.Value ?? "", MemberDeclaration(a), StBody(a), ImplementationLanguage(a)))
             .ToList();
         var properties = container.Elements().Where(e => e.Name.LocalName == "Property")
             .Select(p =>
@@ -84,7 +97,9 @@ internal static class TcFileParser
             })
             .ToList();
 
-        return new PouFull(name, type, declaration, StBody(container), methods, actions, properties);
+        return new PouFull(
+            name, type, declaration, StBody(container), ImplementationLanguage(container),
+            methods, actions, properties);
     }
 
     /// <summary>Parse a .TcGVL for its name and declaration block.</summary>
@@ -103,7 +118,7 @@ internal static class TcFileParser
         var dut = Child(root, "DUT")
             ?? throw new InvalidDataException($"No <DUT> element found in {path}");
         var declaration = Declaration(dut);
-        var (kind, baseType) = ClassifyDutFull(declaration);
+        var (kind, baseType) = ClassifyDutFull(declaration.Text);
         return new DutFull(dut.Attribute("Name")?.Value ?? "", declaration, kind, baseType);
     }
 
@@ -114,7 +129,7 @@ internal static class TcFileParser
         var dut = Child(root, "DUT")
             ?? throw new InvalidDataException($"No <DUT> element found in {path}");
         var name = dut.Attribute("Name")?.Value ?? "";
-        return new DutMeta(name, ClassifyDut(Declaration(dut)));
+        return new DutMeta(name, ClassifyDut(Declaration(dut).Text));
     }
 
     /// <summary>Parse a .plcproj for its library references.</summary>
@@ -233,10 +248,18 @@ internal static class TcFileParser
         return new TaskRaw(name, cycleUs, priority, programs);
     }
 
+    private static readonly Regex s_pouKeyword = new(
+        @"^[ \t]*(FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE)\b",
+        RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>
-    /// Detect the POU type from the element tag and declaration text. &lt;Itf&gt; is always
-    /// an interface; otherwise the first keyword in the declaration wins. FUNCTION_BLOCK must
-    /// be tested before FUNCTION because it contains it.
+    /// Detect the POU type from the element tag and declaration text. &lt;Itf&gt; is always an
+    /// interface; otherwise the first header keyword wins.
+    ///
+    /// The keyword must start a line and end on a word boundary, and comments are masked out
+    /// first. A substring search over the whole declaration is not good enough: TcUnit's
+    /// <c>PRG_TEST</c> declares <c>WriteProtectedFunctions : FB_WriteProtectedFunctions</c>, whose
+    /// "Functions" made a PROGRAM read as a FUNCTION.
     /// </summary>
     internal static PouType DetectPouType(string declaration, string elementTag)
     {
@@ -245,28 +268,19 @@ internal static class TcFileParser
             return PouType.Interface;
         }
 
-        var text = declaration.ToUpperInvariant();
-        if (text.Contains("FUNCTION_BLOCK", StringComparison.Ordinal))
+        var match = s_pouKeyword.Match(StSource.Mask(declaration));
+        if (!match.Success)
         {
             return PouType.FunctionBlock;
         }
 
-        if (text.Contains("FUNCTION", StringComparison.Ordinal))
+        return match.Groups[1].Value.ToUpperInvariant() switch
         {
-            return PouType.Function;
-        }
-
-        if (text.Contains("PROGRAM", StringComparison.Ordinal))
-        {
-            return PouType.Program;
-        }
-
-        if (text.Contains("INTERFACE", StringComparison.Ordinal))
-        {
-            return PouType.Interface;
-        }
-
-        return PouType.FunctionBlock;
+            "FUNCTION" => PouType.Function,
+            "PROGRAM" => PouType.Program,
+            "INTERFACE" => PouType.Interface,
+            _ => PouType.FunctionBlock,
+        };
     }
 
     private static readonly Regex s_blockComment = new(@"\(\*[\s\S]*?\*\)", RegexOptions.Compiled);
@@ -375,7 +389,9 @@ internal static class TcFileParser
     {
         try
         {
-            return XDocument.Load(path).Root
+            // SetLineInfo is what lets a finding be reported against a line of the file on disk
+            // rather than only a line within one CDATA block.
+            return XDocument.Load(path, LoadOptions.SetLineInfo).Root
                 ?? throw new InvalidDataException($"Empty XML document: {path}");
         }
         catch (XmlException exc)
@@ -387,13 +403,78 @@ internal static class TcFileParser
     private static XElement? Child(XElement parent, string localName)
         => parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName);
 
-    private static string Declaration(XElement element)
-        => (Child(element, "Declaration")?.Value ?? "").Trim();
+    private static SourceText Declaration(XElement element)
+        => TextAt(Child(element, "Declaration"));
 
-    private static string StBody(XElement element)
+    /// <summary>
+    /// A member's declaration, falling back to the member element's own line when there is no
+    /// declaration text.
+    ///
+    /// An ACTION has no declaration block at all: TwinCAT stores only its implementation, and its
+    /// name lives in the <c>Name</c> attribute. Without this a finding about an action's name has
+    /// nowhere to point, which is the one finding a reader would most want to click through to.
+    /// </summary>
+    private static SourceText MemberDeclaration(XElement element)
+    {
+        var declaration = Declaration(element);
+        return declaration.Line > 0 ? declaration : declaration with { Line = LineOf(element) };
+    }
+
+    private static SourceText StBody(XElement element)
     {
         var implementation = Child(element, "Implementation");
-        return implementation is null ? "" : (Child(implementation, "ST")?.Value ?? "").Trim();
+        return implementation is null ? SourceText.Empty : TextAt(Child(implementation, "ST"));
+    }
+
+    /// <summary>
+    /// The trimmed text of an element together with the file line its first character sits on.
+    ///
+    /// TwinCAT stores every declaration and body in a CDATA section, and the reader reports that
+    /// section's position, so a finding at line N of the block is at <c>Line + N - 1</c> in the
+    /// file. The offset accounts for the trim: a <c>&lt;![CDATA[</c> opener followed by a newline
+    /// would otherwise place the first line of code one line too high.
+    /// </summary>
+    private static SourceText TextAt(XElement? element)
+    {
+        if (element is null)
+        {
+            return SourceText.Empty;
+        }
+
+        var raw = element.Value;
+        var text = raw.Trim();
+        if (text.Length == 0)
+        {
+            return SourceText.Empty;
+        }
+
+        // XML end-of-line normalisation has already collapsed CRLF to LF here, so counting '\n'
+        // agrees with the file's own line numbering whichever the file uses.
+        var leading = raw.Length - raw.AsSpan().TrimStart().Length;
+        var skipped = raw.AsSpan(0, leading).Count('\n');
+
+        // The CDATA node carries the position of the text itself. Falling back to the element
+        // covers content stored as a plain text node, where both sit on the same line anyway.
+        var line = LineOf(element.Nodes().OfType<XCData>().FirstOrDefault() ?? (XObject)element);
+        return new SourceText(text, line == 0 ? 0 : line + skipped);
+    }
+
+    /// <summary>The 1-based file line a node sits on, or 0 when the document was parsed without line info.</summary>
+    private static int LineOf(XObject node)
+        => node is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
+
+    /// <summary>
+    /// The implementation language of a POU or member, taken from the element under
+    /// &lt;Implementation&gt;: ST, LD, FBD, SFC, CFC or IL. Empty when there is no implementation.
+    ///
+    /// Callers need this to know when a body is invisible to them: only ST is stored as source
+    /// text, so a ladder network's contents cannot be read, and any analysis that scans bodies is
+    /// blind to it rather than merely finding nothing.
+    /// </summary>
+    internal static string ImplementationLanguage(XElement element)
+    {
+        var implementation = Child(element, "Implementation");
+        return implementation?.Elements().FirstOrDefault()?.Name.LocalName ?? "";
     }
 
     private static string ChildText(XElement element, string localName)

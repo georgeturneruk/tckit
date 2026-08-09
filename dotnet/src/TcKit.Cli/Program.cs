@@ -10,6 +10,7 @@
 // TcXaeShell, the xml backend targets the solution named by --sln / TCKIT_SOLUTION.
 // Code-bearing args accept either a literal string or '@<path>' to read a file.
 using TcKit.Adapters.Ads;
+using TcKit.Adapters.Analysis;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
@@ -43,6 +44,81 @@ try
 {
     switch (args[0])
     {
+        case "analyse" or "analyze" when pos.Length >= 1:
+        {
+            if (!Enum.TryParse<DiagnosticSeverity>(
+                OptOr("severity", "suggestion"), ignoreCase: true, out var minimum))
+            {
+                Console.WriteLine(TckitJson.Serialize(new
+                {
+                    error = $"Unknown --severity '{Opt("severity")}'. "
+                        + "Use error, warning, suggestion, silent or none.",
+                }));
+                return 1;
+            }
+
+            var analysis = await new ProjectAnalyser(reader).AnalyseAsync(
+                new AnalysisRequest
+                {
+                    ProjectPath = pos[0],
+                    PlcName = Opt("plc"),
+                    ObjectName = Opt("object"),
+                    MinimumSeverity = minimum,
+                    RuleIds = (Opt("rules") ?? "")
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                },
+                ct).ConfigureAwait(false);
+
+            // --write-baseline records the current findings and always succeeds; adopting a
+            // baseline is not itself a failure.
+            if (Opt("write-baseline") is { Length: > 0 } baselinePath)
+            {
+                AnalysisBaseline.Save(baselinePath, analysis.Findings);
+                Console.Error.WriteLine(
+                    $"Wrote {analysis.Findings.Count} findings to baseline '{baselinePath}'.");
+                return 0;
+            }
+
+            var reported = AnalysisBaseline.Filter(
+                analysis.Findings, AnalysisBaseline.Load(Opt("baseline")));
+
+            var format = OptOr("format", "json");
+            if (format is not ("json" or "text" or "sarif"))
+            {
+                Console.WriteLine(TckitJson.Serialize(new
+                {
+                    error = $"Unknown --format '{format}'. Use json, text or sarif.",
+                }));
+                return 1;
+            }
+
+            Console.WriteLine(format switch
+            {
+                "text" => AnalysisText.Render(analysis, reported),
+
+                // Paths are made relative to --sarif-base so they match a GitHub checkout; the
+                // working directory is the right default because that is where CI runs the tool.
+                "sarif" => SarifWriter.Render(
+                    analysis,
+                    reported,
+                    OptOr("sarif-base", Directory.GetCurrentDirectory()),
+                    typeof(ProjectAnalyser).Assembly.GetName().Version?.ToString()),
+
+                _ => TckitJson.Serialize(analysis with { Findings = reported }),
+            });
+
+            // A distinct code for "the code has findings" so CI can tell it apart from
+            // "the tool fell over", which stays 1 in line with every other verb.
+            if (!Enum.TryParse<DiagnosticSeverity>(
+                OptOr("fail-on", "none"), ignoreCase: true, out var failOn)
+                || failOn is DiagnosticSeverity.None)
+            {
+                return 0;
+            }
+
+            return reported.Any(finding => finding.Severity >= failOn) ? 2 : 0;
+        }
+
         case "get-structure" when pos.Length >= 1:
             return Emit(await reader.GetStructureAsync(pos[0], Opt("plc"), ct).ConfigureAwait(false));
 
@@ -594,6 +670,12 @@ static void PrintUsage()
     Console.WriteLine("  get-pou-interface | get-pou-declaration <path> <pou> [--plc <name>]");
     Console.WriteLine("  get-pou-item <path> <pou> <item> [--plc <name>]");
     Console.WriteLine("  get-gvl | get-dut <path> <name> [--plc <name>]");
+    Console.WriteLine("analysis verb (offline; no XAE, no licence, safe in CI):");
+    Console.WriteLine("  analyse <path> [--plc <name>] [--object <name>] [--severity warning]");
+    Console.WriteLine("          [--rules TCK1002,TCK2001] [--format json|text|sarif]");
+    Console.WriteLine("          [--sarif-base <dir>] (paths relative to it; defaults to cwd)");
+    Console.WriteLine("          [--baseline <file>] [--write-baseline <file>] [--fail-on warning]");
+    Console.WriteLine("          exit 0 = clean, 1 = tool error, 2 = findings at or above --fail-on");
     Console.WriteLine("infosys docs verbs (network; results cached locally):");
     Console.WriteLine("  find-fb <fbName>");
     Console.WriteLine("  find-hardware <orderNumber>");

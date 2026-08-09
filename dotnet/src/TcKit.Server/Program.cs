@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TcKit.Adapters.Ads;
+using TcKit.Adapters.Analysis;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
@@ -22,6 +23,7 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 builder.Services.AddSingleton<IPermissionGate>(_ => new FilePermissionGate());
 
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
+builder.Services.AddSingleton<IProjectAnalyser, ProjectAnalyser>();
 
 // Writer backend selection (ADR-0017): resolved once at startup, never per call. An attached
 // XAE regenerates files from its stale in-memory tree on its next save, so interleaving the two
