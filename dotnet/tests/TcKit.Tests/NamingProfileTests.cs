@@ -255,6 +255,37 @@ public class NamingProfileTests
         Assert.Empty(Run(NamingProfiles.Hybrid, pou));
     }
 
+    [Theory]
+    [InlineData("bBOOL : BOOL")]
+    [InlineData("bBool : BOOL")]
+    [InlineData("aDINT : ARRAY [0..3] OF DINT")]
+    [InlineData("aLREAL2d : ARRAY [0..3] OF LREAL")]
+    public void Hybrid_VariableNamedAfterItsOwnType_IsNotFlagged(string declaration)
+    {
+        // TcUnit declares its test subjects as "aDINT : ARRAY OF DINT". The leading letter reads as
+        // a type prefix, but the name is the type, and there is nothing useful to suggest:
+        // stripping "aDINT" leaves "DINT", which recases to "dINT". Worse than silence.
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR",
+            Method("Execute", $"METHOD Execute : BOOL\nVAR\n    {declaration};\nEND_VAR"));
+
+        Assert.Empty(Run(NamingProfiles.Hybrid, pou));
+    }
+
+    [Fact]
+    public void Hybrid_TypeNameThatIsOnlyTheStartOfAWord_IsStillFlagged()
+    {
+        // "IntervalMs" begins with the type name INT, but the next character is lower case, so it
+        // is the start of a word rather than the whole of one. The prefix is still redundant.
+        var pou = Fb(
+            "FB_Motor", "FUNCTION_BLOCK FB_Motor\nVAR\nEND_VAR",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    nIntervalMs : INT;\nEND_VAR"));
+
+        var finding = Assert.Single(Run(NamingProfiles.Hybrid, pou));
+        Assert.Equal(NamingRuleEngine.RedundantTypePrefixId, finding.RuleId);
+        Assert.Equal("intervalMs", finding.Suggestion);
+    }
+
     [Fact]
     public void Hybrid_PrefixDisagreeingWithTheType_IsNotFlagged()
     {

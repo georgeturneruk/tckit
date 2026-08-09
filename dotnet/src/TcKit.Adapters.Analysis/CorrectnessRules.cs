@@ -153,7 +153,7 @@ public static class CorrectnessRules
     /// </summary>
     private static bool NeedsPersistentStorage(string typeExpression, AnalysedProject project)
     {
-        var baseName = BaseTypeName(typeExpression);
+        var baseName = TypeClassifier.BaseName(typeExpression);
         if (baseName.Length == 0)
         {
             return false;
@@ -177,27 +177,6 @@ public static class CorrectnessRules
     private static bool IsHandshakeOutput(string name)
         => Regex.IsMatch(name, "^[a-z]{0,3}(busy|done)$", RegexOptions.IgnoreCase);
 
-    /// <summary>Strip array, pointer and reference wrappers and any namespace qualifier.</summary>
-    private static string BaseTypeName(string typeExpression)
-    {
-        var text = (typeExpression ?? "").Trim();
-        var arrayOf = text.LastIndexOf(" OF ", StringComparison.OrdinalIgnoreCase);
-        if (arrayOf >= 0)
-        {
-            text = text[(arrayOf + 4)..].Trim();
-        }
-
-        foreach (var wrapper in new[] { "POINTER TO ", "REFERENCE TO ", "REF_TO " })
-        {
-            if (text.StartsWith(wrapper, StringComparison.OrdinalIgnoreCase))
-            {
-                text = text[wrapper.Length..].Trim();
-            }
-        }
-
-        var dot = text.LastIndexOf('.');
-        return dot >= 0 ? text[(dot + 1)..] : text;
-    }
 
     /// <summary>
     /// TCK2002: exact equality on a floating-point value. Compiles and usually appears to work, then

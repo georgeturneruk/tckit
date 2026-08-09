@@ -17,6 +17,34 @@ public sealed partial class TypeClassifier
         _projectTypes = projectTypes;
     }
 
+    /// <summary>
+    /// The bare type name inside a type expression: array, pointer and reference wrappers and any
+    /// namespace qualifier are stripped, so <c>ARRAY [0..3] OF Tc2_Standard.TON</c> gives <c>TON</c>.
+    /// </summary>
+    public static string BaseName(string typeExpression)
+    {
+        var text = (typeExpression ?? "").Trim();
+        var arrayOf = text.LastIndexOf(" OF ", StringComparison.OrdinalIgnoreCase);
+        if (arrayOf >= 0)
+        {
+            text = text[(arrayOf + 4)..].Trim();
+        }
+
+        foreach (var wrapper in new[] { "POINTER TO ", "REFERENCE TO ", "REF_TO " })
+        {
+            if (text.StartsWith(wrapper, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[wrapper.Length..].Trim();
+            }
+        }
+
+        var dot = text.LastIndexOf('.');
+        text = dot >= 0 ? text[(dot + 1)..] : text;
+
+        var argument = text.IndexOf('(', StringComparison.Ordinal);
+        return (argument >= 0 ? text[..argument] : text).Trim();
+    }
+
     /// <summary>Classify a type expression such as <c>ARRAY [0..9] OF POINTER TO ST_Foo</c>.</summary>
     public TypeClass Classify(string typeExpression)
     {

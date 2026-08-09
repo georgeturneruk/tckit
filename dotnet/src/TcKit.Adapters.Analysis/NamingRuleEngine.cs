@@ -135,6 +135,14 @@ public static class NamingRuleEngine
             return;
         }
 
+        // A variable named after its own type is not a variable tagged with one. TcUnit declares
+        // "aDINT : ARRAY OF DINT" and "bBool : BOOL" as the subject under test, and there is
+        // nothing useful to say about them: "aDINT" -> "dINT" is worse than silence.
+        if (IsNamedAfterItsType(core[typePrefix.Length..], symbol.TypeExpression))
+        {
+            return;
+        }
+
         var severity = settings.SeverityFor(RedundantTypePrefixId, Category, DiagnosticSeverity.Suggestion);
         if (severity is DiagnosticSeverity.None)
         {
@@ -158,6 +166,27 @@ public static class NamingRuleEngine
             Symbol = symbol.Name,
             Suggestion = string.Equals(suggestion, symbol.Name, StringComparison.Ordinal) ? "" : suggestion,
         });
+    }
+
+    /// <summary>
+    /// Whether what is left after stripping a prefix is the declared type's own name. The type name
+    /// must end on a boundary so that "IntervalMs" on an INT does not count: "Int" is followed by a
+    /// lower-case letter, which means it is the start of a word rather than the whole of one.
+    /// </summary>
+    private static bool IsNamedAfterItsType(string core, string typeExpression)
+    {
+        var typeName = TypeClassifier.BaseName(typeExpression);
+        if (typeName.Length == 0 || core.Length < typeName.Length)
+        {
+            return false;
+        }
+
+        if (!core.StartsWith(typeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return core.Length == typeName.Length || !char.IsLower(core[typeName.Length]);
     }
 
     private static string RuleIdFor(SymbolKind kind) => kind switch

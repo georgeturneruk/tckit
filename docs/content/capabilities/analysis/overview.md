@@ -43,7 +43,7 @@ Each of these compiles cleanly, which is the whole reason they are here.
 | `TCK1004` | Struct fields and enumeration constants |
 | `TCK1005` | A type prefix left behind under a convention that does not use one |
 
-`TCK1005` covers a gap the others structurally cannot: `nCount` is already valid camelCase, so a casing rule never notices the `n`. It fires only when the prefix agrees with the declared type, so `nCount : INT` is reported and `nextValue : INT` is not, and only on names that otherwise conform, so a name failing the casing rule is reported once rather than twice.
+`TCK1005` covers a gap the others structurally cannot: `nCount` is already valid camelCase, so a casing rule never notices the `n`. Three things keep it precise. The prefix must agree with the declared type, so `nCount : INT` is reported and `nextValue : INT` is not. It fires only on names that otherwise conform, so a name failing the casing rule is reported once rather than twice. And a variable named after its own type is left alone: `aDINT : ARRAY OF DINT` is the type under test, not a tagged variable.
 
 Every finding carries the object, the item, the line within that item, and the offending identifier. Naming findings also carry a suggested name.
 

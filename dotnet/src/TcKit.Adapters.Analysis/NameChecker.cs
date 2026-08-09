@@ -252,5 +252,14 @@ public static class NameChecker
     // Only the first character is recased, so an acronym inside a word survives intact.
     private static string Upper(string word) => char.ToUpperInvariant(word[0]) + word[1..];
 
-    private static string Lower(string word) => char.ToLowerInvariant(word[0]) + word[1..];
+    /// <summary>
+    /// Lower-case a word for camelCase. An all-capitals word is lowered whole, because recasing
+    /// only its first character turns "BOOL" into "bOOL".
+    /// </summary>
+    private static string Lower(string word)
+        => IsAcronym(word) ? word.ToLowerInvariant() : char.ToLowerInvariant(word[0]) + word[1..];
+
+    /// <summary>Whether a word is written entirely in capitals, e.g. a type name or an acronym.</summary>
+    public static bool IsAcronym(string word)
+        => word.Length > 1 && word.Any(char.IsUpper) && !word.Any(char.IsLower);
 }

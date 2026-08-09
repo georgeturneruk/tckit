@@ -54,10 +54,9 @@ scopes the run. `tc-write-st` runs a scoped pass after each write;
   made precise, so none shipped rather than shipping noisy.
 - `TCK3001` sees qualified writes only. Unqualified global access would need
   shadowing analysis; the rule under-reports instead.
-- Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are handled defensively
-  but have never been run against. Validating on a Ladder-heavy project is the
-  next real-world test worth doing, along with a project large enough to say
-  anything about performance; TcUnit at 75 objects says nothing.
+- Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are out of scope by
+  decision, not oversight. `TCK3002` stands down on a project containing any, and
+  no further support is planned.
 
 ## Context
 
@@ -338,7 +337,31 @@ are wanted.
   spot-checked as genuine (unused locals appearing exactly once in their file,
   inputs never read, globals with four writers). TcOpen: 302 to 286.
 
-  All 120 POUs across both projects are ST, so **non-ST implementation languages
+- 2026-08-09: Re-run at scale, after discovering the first clones were truncated
+  by Windows path limits: TcOpen was 60 of its 510 POU files, so the earlier pass
+  covered 12% of it. Corpus is now TcOpen (510 POUs, 1156 objects),
+  TcUnit (79), TcUnit-Verifier (29) and TwinCat-Dynamic-Collections (59), cloned
+  with `core.longpaths`.
+  - **No crashes and no skipped objects** anywhere in the corpus, and TcOpen's
+    1156 objects analyse in 2.7 s. Performance is not a concern at this scale.
+  - **`TCK1005` produced mangled suggestions.** TcUnit declares its test subjects
+    as `aDINT : ARRAY OF DINT` and `bBool : BOOL`; the leading letter reads as a
+    type prefix, but stripping it leaves the type name, which recases to `dINT`.
+    124 such findings on TcUnit. A variable whose remainder is its own type name
+    is now left alone, with a boundary test so `nIntervalMs : INT` still reports
+    (`Int` is followed by a lower-case letter, so it starts a word rather than
+    being one). `TCK1005` drops to 0 on TcUnit and 14 on TcOpen, and every
+    survivor is the intended case: `iSize` to `size`, `pParent` to `parent`.
+  - `NameChecker` also lower-cased only the first character of an all-capitals
+    word for camelCase, turning `BOOL` into `bOOL`. Acronyms are now lowered whole.
+  - A suspected duplicate-findings bug turned out not to be one: TcOpen copies a
+    test-context template into each driver package, so seven identical findings
+    were seven distinct files. Checking before "fixing" mattered.
+  - `infer` at scale: TcOpen 4859 findings to 1544, TcUnit 1640 to 686,
+    TwinCat-Dynamic-Collections 1499 to 445. The remainder is genuine drift from
+    each project's own convention.
+
+  All POUs across the corpus are ST, so **non-ST implementation languages
   remain untested**. That is a real hole rather than a theoretical one: only ST
   is stored as readable source, so a call made from a Ladder or FBD network is
   invisible and `TCK3002` would report anything called only from one as dead.
