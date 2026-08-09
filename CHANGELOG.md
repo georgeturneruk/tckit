@@ -8,6 +8,16 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ### Added
 
+- **The plugin installs on Linux.** Its `.mcp.json` launched the server through
+  `powershell`, which a stock Linux box does not have, so the plugin was
+  Windows-only however capable the server underneath it was. A plugin carries
+  one launch command for every platform, with no OS conditional, so the
+  launcher is now Node — which Claude Code already runs on — and resolves the
+  right server for the host: the SDK build if one is present, otherwise the
+  matching release binary, cached per version under `%LOCALAPPDATA%` or
+  `$XDG_CACHE_HOME`. On a host with no `node` on the `PATH`, setting
+  `TCKIT_SERVER_EXE` bypasses the launcher entirely.
+
 - **`AnalyseProject`: offline static analysis.** Runs against the project files
   without XAE, a licence or a running runtime, so it costs far less than a build
   and can run first. Pass `objectName` to check only the POU you just edited.
@@ -116,6 +126,11 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   `suggestion`.
 
 ### Fixed
+
+- **Linux release binaries are actually published.** The docs advertised
+  `tckit-server-linux-x64`, but the release that shipped predated the lanes that
+  build it, so the only assets on it were Windows ones and a Linux host had no
+  option but to build from source with the .NET 8 SDK.
 
 - **DUT declarations opening with a pragma read their name from the wrong
   line.** The `TYPE` header pattern was anchored on `\s*`, which crosses

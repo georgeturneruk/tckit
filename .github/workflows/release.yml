@@ -4,7 +4,7 @@ name: Release
 # GitHub Release assets: win-x64 from the net8.0-windows flavour (COM Automation
 # Interface + the UIA lane), and linux-x64 from the plain net8.0 flavour (readers,
 # ADS, and the xml writer backend; ADR-0017). The plugin launcher downloads the
-# Windows server asset when no .NET SDK is present (see plugin/start-server.ps1);
+# asset matching the host when no .NET SDK is present (see plugin/start-server.mjs);
 # CI runners fetch the CLI asset and pin a minimum version via `tckit --version`.
 
 on:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   release:
-    name: Publish self-contained Windows exes
+    name: Publish self-contained binaries (Windows + Linux)
     runs-on: windows-latest
 
     steps:

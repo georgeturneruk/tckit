@@ -17,17 +17,29 @@ In Claude Code:
 > Set me up for TcKit.
 ```
 
-The bundled skills walk you through setup. No .NET SDK is required: if the SDK is present the plugin builds the server from source, otherwise it downloads a self-contained server (~74 MB, cached per version) from the [releases page](https://github.com/georgeturneruk/tckit/releases).
+The bundled skills walk you through setup. No .NET SDK is required: if the SDK is present the plugin builds the server from source, otherwise it downloads the self-contained server for your platform (~75 MB, cached per version) from the [releases page](https://github.com/georgeturneruk/tckit/releases).
+
+The launcher runs on Node, which Claude Code already needs, so the plugin installs the same way on Windows and Linux. On a host without `node` on the `PATH`, set `TCKIT_SERVER_EXE` (below) and the launcher is bypassed entirely.
 
 ## Prebuilt binary
 
-For MCP clients other than the plugin, or for offline and locked-down machines, download `tckit-server-win-x64.exe` from the [releases page](https://github.com/georgeturneruk/tckit/releases). It is a self-contained build with no .NET runtime or SDK dependency. `tckit-server-linux-x64` is the Linux equivalent (readers, ADS, and the xml writer backend; no COM-backed lanes).
+For MCP clients other than the plugin, or for offline and locked-down machines, download the server for your platform from the [releases page](https://github.com/georgeturneruk/tckit/releases). Both are self-contained, with no .NET runtime or SDK dependency.
+
+| Asset | Host | Lanes |
+|---|---|---|
+| `tckit-server-win-x64.exe` | Windows x64 | everything, including the COM-backed build and hardware lanes |
+| `tckit-server-linux-x64` | Linux x64 | readers, analysis, ADS, docs, and the xml writer backend; no COM-backed lanes |
 
 ```
 claude mcp add tckit -- <path>\tckit-server-win-x64.exe
 ```
 
-To point the plugin launcher at a pre-placed copy instead of letting it download, set the `TCKIT_SERVER_EXE` environment variable to the exe's full path.
+```
+chmod +x tckit-server-linux-x64
+claude mcp add tckit -- <path>/tckit-server-linux-x64
+```
+
+To point the plugin launcher at a pre-placed copy instead of letting it download, set the `TCKIT_SERVER_EXE` environment variable to its full path.
 
 ## From source
 
@@ -38,7 +50,14 @@ dotnet build dotnet/TcKit.sln -c Release
 claude mcp add tckit -- <clone>\dotnet\src\TcKit.Server\bin\Release\net8.0-windows\TcKit.Server.exe
 ```
 
-The server speaks MCP over stdio; any MCP client can register the built exe the same way.
+On Linux, build the plain `net8.0` flavour; the `net8.0-windows` one carries the COM lanes and only builds a Windows artefact:
+
+```
+dotnet build dotnet/src/TcKit.Server -c Release -f net8.0
+claude mcp add tckit -- <clone>/dotnet/src/TcKit.Server/bin/Release/net8.0/TcKit.Server
+```
+
+The server speaks MCP over stdio; any MCP client can register the built binary the same way.
 
 ## Verify
 
