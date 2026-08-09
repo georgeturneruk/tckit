@@ -51,6 +51,25 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   The `tc-write-st` and `tc-build-test-loop` skills now run it: scoped to the
   edited POU after a write, and across the project before the first build.
 
+- **`tckit analyse`: the same analysis from the command line, for CI.** It needs
+  no XAE, no licence and no runtime, so unlike `build` it runs anywhere,
+  including a Linux runner.
+
+  ```bash
+  tckit analyse <path> --severity warning --format text --fail-on warning
+  ```
+
+  Exit codes are `0` clean, `2` findings at or above `--fail-on`, `1` tool error,
+  so a broken run is never mistaken for a failing one. `--format text` prints the
+  `location(line): severity code: message` shape compilers use, which CI log
+  parsers already turn into annotations.
+
+  `--write-baseline <file>` records the current findings and `--baseline <file>`
+  suppresses them, so the check can be adopted on a mature codebase without
+  fixing everything first: the build then fails only on new findings. Baseline
+  fingerprints exclude the line number, so inserting a variable higher up a
+  declaration does not invalidate every entry below it.
+
   Configuration lives in the project's own `.editorconfig` under
   `[*.{TcPOU,TcGVL,TcDUT}]`, using the same three-part schema as .NET's naming
   rules (`tckit_naming_symbols` / `tckit_naming_style` / `tckit_naming_rule`),

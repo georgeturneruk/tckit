@@ -42,6 +42,17 @@ jobs:
       - name: Test
         run: dotnet test TcKit.sln --configuration Release --no-build --verbosity normal
 
+      # Runs the shipped analysis verb over a real fixture, which is both a smoke test of the CLI
+      # path (the unit tests exercise the analyser directly, not the exe) and proof that offline
+      # analysis works on a Linux runner. Gated at `error` rather than `warning`: these are bench
+      # fixtures, which exist to contain bugs, so a stricter gate here would be meaningless. On a
+      # real codebase the pattern is `--baseline <file> --fail-on warning`.
+      - name: Analyse a fixture (smoke test of the analyse verb)
+        run: |
+          dotnet run --project src/TcKit.Cli/TcKit.Cli.csproj --configuration Release --no-build -- \
+            analyse ../bench/fixtures/bug-hunting/T3-tckit-utils/T3TckitUtils.sln \
+            --severity warning --format text --fail-on error
+
       - name: Skills drift check (.claude/skills/ vs plugin/skills/)
         working-directory: ${{ github.workspace }}
         run: python3 scripts/sync-skills.py --check

@@ -10,6 +10,32 @@ Static analysis of a TwinCAT project against a configurable convention. Like the
 
 Pass `objectName` to check a single POU, GVL or DUT. That is the intended use while writing code: after editing a POU, analyse just that POU and fix what comes back before moving on.
 
+## Running it in CI
+
+Analysis needs no XAE, no licence and no runtime, so unlike `Build` it runs anywhere, including a Linux runner. The CLI carries the same analyser as the MCP tool:
+
+```bash
+tckit analyse <path> --severity warning --format text --fail-on warning
+```
+
+Exit codes are `0` clean, `2` findings at or above `--fail-on`, and `1` for a tool error, so a broken run is never mistaken for a failing one. `--format text` prints one finding per line in the `location(line): severity code: message` shape compilers use, which CI log parsers and editors already turn into annotations.
+
+### Adopting it on an existing codebase
+
+A mature project will report plenty on the first run: TcOpen reports 1544. Nobody is going to fix those before turning the check on, and a gate nobody can turn on never runs. So record them once and enforce from there:
+
+```bash
+tckit analyse <path> --severity warning --write-baseline tckit-analysis.baseline
+```
+
+Commit that file, then gate on it:
+
+```bash
+tckit analyse <path> --severity warning --fail-on warning --baseline tckit-analysis.baseline
+```
+
+The build now fails only on findings that are not in the baseline. Fingerprints deliberately exclude the line number, so inserting a variable higher up a declaration does not invalidate every entry below it and fail a build that changed nothing relevant. Delete a line from the baseline to start enforcing that finding again; `#` comments are ignored, so you can record why one is still there.
+
 ## Rules
 
 Correctness rules default to `warning`, naming and structure to `suggestion`. Asking for `severity: "warning"` is how you say "only the things that are actually wrong".

@@ -36,7 +36,10 @@ unreachable POU. Correctness defaults to `warning`, naming and structure to
 (`ProfileInference.cs`). `TCK2005`/`TCK3001`/`TCK3002` and `infer` need the whole
 solution and are skipped (and reported in `rules_not_run`) when `objectName`
 scopes the run. `tc-write-st` runs a scoped pass after each write;
-`tc-build-test-loop` runs a project pass before the first build.
+`tc-build-test-loop` runs a project pass before the first build. The same
+analyser is exposed as `tckit analyse` for CI, with `--fail-on`, text output in
+the compiler location format, and a baseline file so the check can be adopted on
+a codebase without fixing everything first.
 
 **Open questions:**
 - `prefix_composition` and `recursive_type_prefix` were specified below but are not
@@ -54,6 +57,9 @@ scopes the run. `tc-write-st` runs a scoped pass after each write;
   made precise, so none shipped rather than shipping noisy.
 - `TCK3001` sees qualified writes only. Unqualified global access would need
   shadowing analysis; the rule under-reports instead.
+- SARIF output would give GitHub code-scanning annotations and PR-inline comments
+  for free. `--format text` covers the log case; SARIF is the obvious next format
+  and nothing in the shape of `AnalysisResult` blocks it.
 - Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are out of scope by
   decision, not oversight. `TCK3002` stands down on a project containing any, and
   no further support is planned.
@@ -360,6 +366,20 @@ are wanted.
   - `infer` at scale: TcOpen 4859 findings to 1544, TcUnit 1640 to 686,
     TwinCat-Dynamic-Collections 1499 to 445. The remainder is genuine drift from
     each project's own convention.
+
+- 2026-08-09: CI surface added, because the analyser was only reachable through
+  MCP and so needed a client to run at all. `tckit analyse` carries the same
+  analyser; exit 2 for findings keeps "the code has problems" distinct from
+  "the tool fell over", which stays 1 in line with every other verb. Text output
+  uses the compiler location format so log parsers annotate it for free.
+  The baseline is the part that decides whether this ever gets switched on:
+  TcOpen reports 1544 findings, nobody fixes those before enabling a gate, and a
+  gate nobody enables never runs. Fingerprints exclude the line number so an
+  unrelated edit above a finding does not fail the build. Verified end to end on
+  TcOpen: record 136 warnings, re-run clean, remove one baseline entry, exactly
+  that finding returns and the exit code goes to 2. The repo's own CI now runs
+  the verb over a fixture, which also demonstrates that offline analysis works on
+  a Linux runner.
 
   All POUs across the corpus are ST, so **non-ST implementation languages
   remain untested**. That is a real hole rather than a theoretical one: only ST
