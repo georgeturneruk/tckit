@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TcKit.Core\TcKit.Core.csproj" />
-    <ProjectReference Include="..\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
+    <ProjectReference Include="..\TcKit.Adapters.Xml\TcKit.Adapters.Xml.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Ads\TcKit.Adapters.Ads.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.DocGen\TcKit.Adapters.DocGen.csproj" />

@@ -24,7 +24,7 @@ dotnet/
 │   ├── TcKit.Core/                 ← ports (interfaces), models, permission gate
 │   ├── TcKit.Server/               ← MCP server + tool definitions
 │   ├── TcKit.Cli/                  ← dev CLI driving the same adapters
-│   ├── TcKit.Adapters.Reader/
+│   ├── TcKit.Adapters.Xml/
 │   ├── TcKit.Adapters.Automation/
 │   ├── TcKit.Adapters.Ads/
 │   ├── TcKit.Adapters.Docs/

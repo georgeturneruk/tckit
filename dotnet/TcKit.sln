@@ -19,7 +19,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{5B9637EF
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TcKit.Tests", "tests\TcKit.Tests\TcKit.Tests.csproj", "{1CF3F89C-57AD-43C9-894A-3DA2B6713AE6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TcKit.Adapters.Reader", "src\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj", "{10036763-BE8F-47DB-9B91-E3FA49E86F05}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TcKit.Adapters.Xml", "src\TcKit.Adapters.Xml\TcKit.Adapters.Xml.csproj", "{10036763-BE8F-47DB-9B91-E3FA49E86F05}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TcKit.Adapters.Docs", "src\TcKit.Adapters.Docs\TcKit.Adapters.Docs.csproj", "{9FB80861-06A9-4884-950F-640E375CE984}"
 EndProject

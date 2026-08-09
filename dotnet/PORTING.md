@@ -10,7 +10,7 @@ work goes public.
 
 ## Readers (port first)
 
-- [x] get_structure — `TcKit.Adapters.Reader`; xUnit + oracle green (sample, multi-PLC, T3)
+- [x] get_structure — `TcKit.Adapters.Xml` (named `TcKit.Adapters.Reader` until the XML writer backend moved in); xUnit + oracle green (sample, multi-PLC, T3)
 - [x] get_pou_interface — xUnit + oracle green
 - [x] get_pou_declaration — xUnit + oracle green
 - [x] get_pou_item — methods, actions, property accessors (`Name.Get`/`.Set`); xUnit + oracle green

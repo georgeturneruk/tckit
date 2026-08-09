@@ -5,7 +5,7 @@ using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
-using TcKit.Adapters.Reader;
+using TcKit.Adapters.Xml;
 using TcKit.Core.Ports;
 using TcKit.Core.Security;
 

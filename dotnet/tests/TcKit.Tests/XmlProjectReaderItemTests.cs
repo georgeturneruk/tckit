@@ -1,4 +1,4 @@
-using TcKit.Adapters.Reader;
+using TcKit.Adapters.Xml;
 using TcKit.Core.Models;
 
 namespace TcKit.Tests;

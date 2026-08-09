@@ -1,7 +1,7 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
 
-namespace TcKit.Adapters.Reader;
+namespace TcKit.Adapters.Xml;
 
 /// <summary>
 /// File-based <see cref="IProjectReader"/>: builds a <see cref="ProjectStructure"/> by walking
