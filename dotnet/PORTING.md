@@ -261,11 +261,16 @@ canonicalised trees against the automation backend on a live 4026).
 
 - [x] all object verbs (add/update/patch/delete POU, GVL, DUT, folder, method,
   property, variable) — CI-tested; representative sequence in the Linux CI
-  integration step; parity run on the bench box **pending**
-- [x] library verbs (reference / placeholder / parameters) — CI-tested; parity
-  run **pending** (`DefaultResolution` / `Namespace` shapes to be locked live)
+  integration step; **parity-validated** (live 4026)
+- [x] library verbs (reference / placeholder / parameters) — CI-tested +
+  **parity-validated**; live-locked shapes: `*` version recorded as `newest`
+  in LibraryReference Includes, LibraryReferences in their own ItemGroup
 - [x] create_project / add_plc_project / save_plc_as_library — explicit
   unsupported `Result.Fail` on this backend (XAE templates / compiler)
-- [ ] parity sweep green on a live 4026 (the [~] -> [x] gate for this lane;
-  known open items: LineIds tolerance, accessor declaration defaults,
-  interface .TcIO shapes, XAE default templates for empty `code`)
+- [x] parity sweep green on a live 4026 — 28 verbs, 0 diverged (three
+  iterations: property shapes `PROPERTY PUBLIC` / accessor `Name` attrs /
+  `PUBLIC`+VAR accessor declaration, then the library-lane shapes above).
+  XAE opens and compiles an xml-authored project clean (CheckAllObjects,
+  LineIds absent). Side finding: ParameterGuard state is per process, so
+  CLI-per-verb automation usage loses spliced parameter blocks on the next
+  verb's save (the long-lived server is unaffected; ADR-0017 open item).

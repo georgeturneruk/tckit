@@ -128,7 +128,13 @@ internal static class XmlProjectAuthor
             throw new InvalidOperationException($"Item '{propertyName}' already exists on POU '{pouName}'.");
         }
 
-        var property = file.AddProperty(propertyName, $"PROPERTY {propertyName} : {returnType}");
+        // The automation lane passes vInfo ["ST", type, "PUBLIC"] for FB properties; XAE renders
+        // that as an explicit PUBLIC modifier. Interface properties carry no access modifier.
+        var property = file.AddProperty(
+            propertyName,
+            file.IsInterface
+                ? $"PROPERTY {propertyName} : {returnType}"
+                : $"PROPERTY PUBLIC {propertyName} : {returnType}");
         if (!string.IsNullOrEmpty(getterCode))
         {
             AddAccessor(file, property, "Get", getterCode);
@@ -557,10 +563,13 @@ internal static class XmlProjectAuthor
         }
 
         // The accessor code is the body, optionally preceded by a local VAR block (no header).
+        // With no VAR block, XAE's template declaration survives: a PUBLIC line plus an empty
+        // VAR block (live-verified by the parity oracle). A supplied block replaces it verbatim,
+        // matching the automation lane's SetSourceFromCode.
         var (declaration, implementation) = StCode.Split(code);
         file.AddAccessor(
             property, kind,
-            string.IsNullOrEmpty(declaration) ? "VAR\nEND_VAR" : declaration,
+            string.IsNullOrEmpty(declaration) ? "PUBLIC\nVAR\nEND_VAR" : declaration,
             implementation);
     }
 

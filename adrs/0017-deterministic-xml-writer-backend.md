@@ -1,7 +1,7 @@
 ---
 adr: 0017
 title: Deterministic XML writer backend for IProjectWriter
-status: Proposed
+status: Accepted
 created: 2026-08-09
 last_reviewed: 2026-08-09
 issue:
@@ -30,17 +30,19 @@ PlcProjFile / TcXmlFormat / GuidSource / SolutionContext), backend selection in
 `TcKit.Server/Program.cs` + `TcKit.Cli` (`--writer` / `--sln`), the net8.0
 retarget with the multi-targeted COM lane, linux-x64 release artefacts, a Linux
 CI integration step, and `dotnet/oracle/parity-writer.ps1`. Interfaces are
-emitted as `.TcIO` and the reader now indexes them.
+emitted as `.TcIO` and the reader now indexes them. **The promotion gate has
+passed on a live 4026: the full parity sweep is green (28 verbs, 0 diverged),
+and XAE opens and compiles (CheckAllObjects, zero errors/warnings) a project
+authored entirely by the xml backend, LineIds absent.**
 
 **Open questions:**
 
-- The parity sweep has not yet run on a live 4026 (the promotion gate).
-  Expected first-run divergences: LineIds tolerance, accessor declaration
-  defaults ("VAR\nEND_VAR" chosen), interface `.TcIO` shapes, XAE's default
-  templates for empty `code`, `Namespace` on `AddLibraryReference` (library
-  name chosen; XAE derives it from metadata).
 - Whether `CreateProject`/`AddPlcProject` can scaffold from embedded
   templates in a later phase (v1 fails explicitly).
+- ParameterGuard state is per process, so CLI-per-verb automation usage
+  loses spliced parameter blocks on the next verb's save (found by the
+  parity harness; the long-lived MCP server is unaffected). Worth a
+  follow-up: persist guard registrations, or re-verify from disk.
 
 ## Context
 
@@ -151,3 +153,13 @@ oracle.
   integration step, parity harness. 522 tests green; CLI xml-backend
   sequence verified locally against a B1 fixture copy. Promotion to
   Accepted/Implemented gates on the live parity sweep on the bench box.
+- 2026-08-09 (live sweep): Promoted to Accepted. Three sweep iterations on
+  a live 4026: first run 14/28 diverged, all but two from one root cause
+  (property shapes; XAE emits `PROPERTY PUBLIC`, `Name="Get"/"Set"` on
+  accessors, and a `PUBLIC` + empty VAR accessor declaration). Second run
+  isolated the library lane: XAE records a `*` version as `newest` in
+  LibraryReference Includes, keeps LibraryReferences in their own
+  ItemGroup, and drops an emptied group. Third run: 28 in parity, 0
+  diverged. Live findings beyond the writer: XAE happily opens and builds
+  files without LineIds, and the ParameterGuard per-process gap above.
+  Implemented (+ `pr:`) once the PR merges.

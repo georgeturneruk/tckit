@@ -212,9 +212,9 @@ public sealed class XmlProjectWriterTests : IDisposable
 
         var text = File.ReadAllText(XmlScratch.PouPath(_root, "FB_X.TcPOU"));
         Assert.Contains("<Property Name=\"ErrorId\"", text);
-        Assert.Contains("PROPERTY ErrorId : UDINT", text);
-        Assert.Contains("<Get Id=", text);
-        Assert.Contains("<Set Id=", text);
+        Assert.Contains("PROPERTY PUBLIC ErrorId : UDINT", text);
+        Assert.Contains("<Get Name=\"Get\" Id=", text);
+        Assert.Contains("<Set Name=\"Set\" Id=", text);
         Assert.Contains("ErrorId := nErr;", text);
         Assert.Contains("nErr := ErrorId;", text);
     }
@@ -454,7 +454,8 @@ public sealed class XmlProjectWriterTests : IDisposable
             CancellationToken.None));
 
         var proj = PlcProj();
-        Assert.Contains(@"<LibraryReference Include=""TcUnit,*,www.tcunit.org"">", proj);
+        // XAE records a "*" version request as "newest" in a LibraryReference Include.
+        Assert.Contains(@"<LibraryReference Include=""TcUnit,newest,www.tcunit.org"">", proj);
         Assert.Contains(@"Parameter ListName=""GVL_PARAM_TCUNIT""", proj);
         Assert.Contains("<Key>XUNITENABLEPUBLISH</Key>", proj);
     }

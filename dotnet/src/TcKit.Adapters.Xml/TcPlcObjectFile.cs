@@ -159,10 +159,11 @@ internal sealed class TcPlcObjectFile
         return property;
     }
 
-    /// <summary>Append a Get or Set accessor under a Property element.</summary>
+    /// <summary>Append a Get or Set accessor under a Property element (Name="Get"/"Set", as XAE writes).</summary>
     public XmlElement AddAccessor(XmlElement property, string kind, string declaration, string? implementation)
     {
         var accessor = _doc.CreateElement(kind);
+        accessor.SetAttribute("Name", kind);
         accessor.SetAttribute("Id", GuidSource.NewId());
         TcXmlFormat.AppendIndented(property, accessor, 3);
         SetDeclarationOn(accessor, declaration);

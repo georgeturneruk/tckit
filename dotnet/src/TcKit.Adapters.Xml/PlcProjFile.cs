@@ -108,16 +108,20 @@ internal sealed class PlcProjFile
     public bool HasReference(string elementName, string referenceName)
         => FindReference(elementName, referenceName) is not null;
 
-    /// <summary>Add a &lt;LibraryReference Include="Name,Version,Distributor"&gt; element.</summary>
+    /// <summary>
+    /// Add a &lt;LibraryReference Include="Name,Version,Distributor"&gt; element. XAE keeps
+    /// LibraryReferences in their own ItemGroup and records a "*" version request as "newest"
+    /// (both live-verified by the parity oracle).
+    /// </summary>
     public void AddLibraryReference(string libraryName, string version, string distributor)
     {
-        var include = $"{libraryName},{VersionOrStar(version)},{distributor}";
+        var recorded = string.IsNullOrEmpty(version) || version == "*" ? "newest" : version;
         var reference = _doc.CreateElement("LibraryReference", _namespace);
-        reference.SetAttribute("Include", include);
+        reference.SetAttribute("Include", $"{libraryName},{recorded},{distributor}");
         // XAE derives the namespace from library metadata we cannot see off-Windows; the library
         // name is the overwhelmingly common value (parity checklist item, ADR-0017).
         AppendTextChild(reference, "Namespace", libraryName);
-        TcXmlFormat.AppendIndented(ItemGroupFor("LibraryReference", "PlaceholderReference"), reference, 2);
+        TcXmlFormat.AppendIndented(ItemGroupFor("LibraryReference"), reference, 2);
     }
 
     /// <summary>
@@ -141,7 +145,7 @@ internal sealed class PlcProjFile
                 .ToList();
         }
 
-        if (!string.IsNullOrEmpty(version) && version != "*")
+        if (!string.IsNullOrEmpty(version) && version is not ("*" or "newest"))
         {
             candidates = candidates
                 .Where(e => Segment(e.GetAttribute("Include"), 1).Equals(version, StringComparison.OrdinalIgnoreCase))
@@ -155,7 +159,15 @@ internal sealed class PlcProjFile
 
         var chosen = candidates[0];
         var resolved = Segment(chosen.GetAttribute("Include"), 1);
+        var group = chosen.ParentNode as XmlElement;
         TcXmlFormat.RemoveIndented(chosen);
+        // XAE drops an ItemGroup once its last reference goes; leaving an empty one would churn
+        // the parity diff forever after.
+        if (group is not null && !group.ChildNodes.OfType<XmlElement>().Any())
+        {
+            TcXmlFormat.RemoveIndented(group);
+        }
+
         return resolved == "" ? "*" : resolved;
     }
 
@@ -166,7 +178,7 @@ internal sealed class PlcProjFile
         reference.SetAttribute("Include", placeholderName);
         AppendTextChild(reference, "DefaultResolution", $"{defaultLibrary}, {VersionOrStar(version)} ({distributor})");
         AppendTextChild(reference, "Namespace", defaultLibrary);
-        TcXmlFormat.AppendIndented(ItemGroupFor("PlaceholderReference", "LibraryReference"), reference, 2);
+        TcXmlFormat.AppendIndented(ItemGroupFor("PlaceholderReference"), reference, 2);
     }
 
     public bool RemovePlaceholder(string placeholderName)
