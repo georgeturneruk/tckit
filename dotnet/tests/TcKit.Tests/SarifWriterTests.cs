@@ -13,9 +13,21 @@ namespace TcKit.Tests;
 /// </summary>
 public class SarifWriterTests
 {
+    // Paths are composed rather than written as literals. The analyser runs on Linux runners as
+    // well as Windows, and a hardcoded "C:\proj" is not an absolute path on Linux, so the
+    // relative-URI assertions would be testing the wrong thing entirely.
+    private static readonly string s_projectRoot =
+        Path.Combine(Path.GetTempPath(), "tckit-sarif-tests", "proj");
+
+    private static readonly string s_elsewhere =
+        Path.Combine(Path.GetTempPath(), "tckit-sarif-tests", "elsewhere");
+
+    private static readonly string s_hostFile =
+        Path.Combine(s_projectRoot, "Plc", "POUs", "FB_Host.TcPOU");
+
     private static AnalysisResult Result(params AnalysisFinding[] findings) => new()
     {
-        ProjectPath = @"C:\proj\My.sln",
+        ProjectPath = Path.Combine(s_projectRoot, "My.sln"),
         Profile = "hybrid",
         ObjectsAnalysed = 2,
         Findings = findings,
@@ -24,7 +36,7 @@ public class SarifWriterTests
     private static AnalysisFinding Finding(
         string ruleId = CorrectnessRules.RealEqualityId,
         DiagnosticSeverity severity = DiagnosticSeverity.Warning,
-        string filePath = @"C:\proj\Plc\POUs\FB_Host.TcPOU",
+        string? filePath = null,
         int fileLine = 42,
         string suggestion = "") => new()
     {
@@ -37,16 +49,15 @@ public class SarifWriterTests
         ItemName = "Execute",
         Part = CodePart.Implementation,
         Line = 4,
-        FilePath = filePath,
+        FilePath = filePath ?? s_hostFile,
         FileLine = fileLine,
         Symbol = "delay",
         Suggestion = suggestion,
     };
 
-    private static JsonElement Render(
-        AnalysisResult result, string? baseDirectory = @"C:\proj")
+    private static JsonElement Render(AnalysisResult result, string? baseDirectory = null)
         => JsonDocument.Parse(
-            SarifWriter.Render(result, result.Findings, baseDirectory)).RootElement;
+            SarifWriter.Render(result, result.Findings, baseDirectory ?? s_projectRoot)).RootElement;
 
     private static JsonElement FirstRun(JsonElement root) => root.GetProperty("runs")[0];
 
@@ -80,7 +91,7 @@ public class SarifWriterTests
     [Fact]
     public void Render_PathsAreRelativeToTheBase_SoTheyMatchACheckout()
     {
-        var root = Render(Result(Finding()), baseDirectory: @"C:\proj");
+        var root = Render(Result(Finding()), baseDirectory: s_projectRoot);
 
         var uri = FirstRun(root).GetProperty("results")[0]
             .GetProperty("locations")[0]
@@ -97,7 +108,7 @@ public class SarifWriterTests
     {
         // A solution can sit outside the repository being scanned. A "../.." path would be neither
         // matchable nor meaningful, so the absolute form is the honest answer.
-        var root = Render(Result(Finding()), baseDirectory: @"C:\somewhere\else");
+        var root = Render(Result(Finding()), baseDirectory: s_elsewhere);
 
         var uri = FirstRun(root).GetProperty("results")[0]
             .GetProperty("locations")[0]
@@ -162,7 +173,7 @@ public class SarifWriterTests
     public void Render_FingerprintSurvivesTheCodeMovingDownTheFile()
     {
         string Print(AnalysisFinding finding) =>
-            JsonDocument.Parse(SarifWriter.Render(Result(finding), [finding], @"C:\proj"))
+            JsonDocument.Parse(SarifWriter.Render(Result(finding), [finding], s_projectRoot))
                 .RootElement.GetProperty("runs")[0].GetProperty("results")[0]
                 .GetProperty("partialFingerprints")
                 .GetProperty(SarifWriter.FingerprintKey).GetString()!;
@@ -177,7 +188,7 @@ public class SarifWriterTests
     public void Render_DifferentSymbolsProduceDifferentFingerprints()
     {
         string Print(AnalysisFinding finding) =>
-            JsonDocument.Parse(SarifWriter.Render(Result(finding), [finding], @"C:\proj"))
+            JsonDocument.Parse(SarifWriter.Render(Result(finding), [finding], s_projectRoot))
                 .RootElement.GetProperty("runs")[0].GetProperty("results")[0]
                 .GetProperty("partialFingerprints")
                 .GetProperty(SarifWriter.FingerprintKey).GetString()!;
