@@ -5,7 +5,7 @@ using TcKit.Core.Models;
 namespace TcKit.Adapters.Analysis;
 
 /// <summary>
-/// Loads analysis configuration from the project's own <c>.editorconfig</c> (ADR-0017). Using the
+/// Loads analysis configuration from the project's own <c>.editorconfig</c> (ADR-0018). Using the
 /// real file rather than inventing a format buys ancestor-walk discovery, <c>root = true</c>
 /// semantics and per-folder glob overrides for nothing, and the
 /// <c>[*.{TcPOU,TcGVL,TcDUT}]</c> section keeps our keys away from .NET tooling.

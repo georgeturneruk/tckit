@@ -6,7 +6,7 @@ namespace TcKit.Adapters.Analysis;
 /// Decides whether an identifier conforms to a <see cref="NamingStyle"/>, and derives a
 /// conforming alternative to offer alongside a finding.
 ///
-/// Suggestions are advisory only. Nothing in v1 rewrites code (ADR-0017): a rename on a
+/// Suggestions are advisory only. Nothing in v1 rewrites code (ADR-0018): a rename on a
 /// referenced symbol is exactly what the tc-write-st rename guard reserves for the user.
 /// </summary>
 public static class NameChecker

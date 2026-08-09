@@ -6,7 +6,7 @@ namespace TcKit.Adapters.Analysis;
 
 /// <summary>
 /// Derives a naming convention from the project's own declarations instead of imposing one
-/// (the <c>infer</c> profile, ADR-0017). This is the honest answer for a brownfield project whose
+/// (the <c>infer</c> profile, ADR-0018). This is the honest answer for a brownfield project whose
 /// house style matches none of the shipped profiles: it reports departures from what the project
 /// already does, so adopting it does not produce thousands of findings on day one.
 ///

@@ -5,7 +5,7 @@ using TcKit.Core.Ports;
 namespace TcKit.Adapters.Analysis;
 
 /// <summary>
-/// Offline <see cref="IProjectAnalyser"/> (ADR-0017). Reads exclusively through
+/// Offline <see cref="IProjectAnalyser"/> (ADR-0018). Reads exclusively through
 /// <see cref="IProjectReader"/>, so this adapter holds no reference to a sibling adapter and needs
 /// no XAE, no licence and no running runtime.
 ///

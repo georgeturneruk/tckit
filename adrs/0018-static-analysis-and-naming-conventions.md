@@ -1,5 +1,5 @@
 ---
-adr: 0017
+adr: 0018
 title: Static analysis and naming conventions
 status: Accepted
 created: 2026-08-09

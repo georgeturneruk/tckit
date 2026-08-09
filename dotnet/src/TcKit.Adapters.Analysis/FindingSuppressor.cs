@@ -4,7 +4,7 @@ using TcKit.Core.Models;
 namespace TcKit.Adapters.Analysis;
 
 /// <summary>
-/// Applies in-source suppression comments (ADR-0017). Every rule has legitimate exceptions:
+/// Applies in-source suppression comments (ADR-0018). Every rule has legitimate exceptions:
 /// TcOpen's <c>IsNearlyEqual</c> opens with an exact float comparison as a deliberate fast path,
 /// which <c>TCK2002</c> is right to notice and the author is right to keep. Without a way to say
 /// so in the code, the only options are to silence the whole rule or to live with the noise, and

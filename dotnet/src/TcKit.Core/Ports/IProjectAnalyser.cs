@@ -3,7 +3,7 @@ using TcKit.Core.Models;
 namespace TcKit.Core.Ports;
 
 /// <summary>
-/// Offline static analysis of a TwinCAT project (ADR-0017). Reads through
+/// Offline static analysis of a TwinCAT project (ADR-0018). Reads through
 /// <see cref="IProjectReader"/> only, so it needs no XAE, no licence, and no running runtime.
 /// </summary>
 public interface IProjectAnalyser

@@ -4,7 +4,7 @@ using TcKit.Core.Models;
 namespace TcKit.Adapters.Analysis;
 
 /// <summary>
-/// The naming conventions TcKit ships (ADR-0017). All three express the same schema with different
+/// The naming conventions TcKit ships (ADR-0018). All three express the same schema with different
 /// knobs, which is the point: a project picks a house style rather than a different mechanism.
 ///
 /// <c>hybrid</c> is the default. It keeps kind prefixes on program objects, because POUs, DUTs and
