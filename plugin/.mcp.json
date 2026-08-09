@@ -1,13 +1,9 @@
 {
   "mcpServers": {
     "tckit": {
-      "command": "powershell",
+      "command": "node",
       "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${CLAUDE_PLUGIN_ROOT}/start-server.ps1"
+        "${CLAUDE_PLUGIN_ROOT}/start-server.mjs"
       ]
     }
   }

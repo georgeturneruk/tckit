@@ -46,7 +46,7 @@ Requires Claude Code. The full stack (builds, deploys, live targets) needs TwinC
 > Set me up for TcKit.
 ```
 
-The bundled skills walk you through setup. No .NET SDK required: if the SDK is present the plugin builds the server from source, otherwise it downloads a self-contained prebuilt server (~74 MB, cached per version).
+The bundled skills walk you through setup. No .NET SDK required: if the SDK is present the plugin builds the server from source, otherwise it downloads the self-contained prebuilt server for your platform (~75 MB, cached per version). Windows and Linux install the same way.
 
 **From source.** With the .NET 8 SDK:
 
