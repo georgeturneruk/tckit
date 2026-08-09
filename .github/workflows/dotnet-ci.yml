@@ -53,6 +53,28 @@ jobs:
             analyse ../bench/fixtures/bug-hunting/T3-tckit-utils/T3TckitUtils.sln \
             --severity warning --format text --fail-on error
 
+      # SARIF is the format an external service consumes, so a malformed document fails at upload
+      # rather than here, where nobody is watching. Validating it in CI keeps that feedback local.
+      # --fail-on none because the gate above already decides the job's fate: a non-zero exit here
+      # would stop the workflow before the document was ever checked.
+      - name: Analyse a fixture as SARIF and validate it against the 2.1.0 schema
+        run: |
+          dotnet run --project src/TcKit.Cli/TcKit.Cli.csproj --configuration Release --no-build -- \
+            analyse ../bench/fixtures/bug-hunting/T3-tckit-utils/T3TckitUtils.sln \
+            --severity suggestion --format sarif --sarif-base .. --fail-on none > "$RUNNER_TEMP/tckit.sarif"
+          python3 -m pip install --quiet check-jsonschema
+          python3 -m check_jsonschema \
+            --schemafile https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json \
+            "$RUNNER_TEMP/tckit.sarif"
+
+      # Uploading would publish these findings to this repository's Security tab. They come from
+      # bench fixtures, which exist to contain bugs, so that would be noise here rather than signal.
+      # On a real codebase this is the step that earns SARIF its place; see the analysis docs.
+      #
+      # - uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: ${{ runner.temp }}/tckit.sarif
+
       - name: Skills drift check (.claude/skills/ vs plugin/skills/)
         working-directory: ${{ github.workspace }}
         run: python3 scripts/sync-skills.py --check

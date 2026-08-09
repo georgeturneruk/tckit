@@ -39,7 +39,10 @@ scopes the run. `tc-write-st` runs a scoped pass after each write;
 `tc-build-test-loop` runs a project pass before the first build. The same
 analyser is exposed as `tckit analyse` for CI, with `--fail-on`, text output in
 the compiler location format, and a baseline file so the check can be adopted on
-a codebase without fixing everything first.
+a codebase without fixing everything first. `--format sarif` emits SARIF 2.1.0
+for GitHub code scanning, with paths relative to `--sarif-base`; every finding
+carries the real file and line as well as the TwinCAT-native address, and rule
+metadata lives in one `RuleCatalogue`.
 
 **Open questions:**
 - `prefix_composition` and `recursive_type_prefix` were specified below but are not
@@ -47,8 +50,6 @@ a codebase without fixing everything first.
   composition (`gbEnable`) and no recursion into `POINTER TO POINTER`. `infer`
   learns a scope prefix and a type prefix separately and composes them, so the
   capability exists there; lifting it into the declarative schema is unfinished.
-- Finding location is reported as `(pou, item, line-within-item)`. Whether to also
-  compute a real file line in the `.TcPOU` is deferred until a consumer needs it.
 - Casing-only corrections are reference-safe (ST identifiers are case-insensitive),
   so they could become the first fixable rules. Deliberately deferred past v1.
 - Rules still unbuilt from the original list: pointer dereference with no validity
@@ -57,9 +58,11 @@ a codebase without fixing everything first.
   made precise, so none shipped rather than shipping noisy.
 - `TCK3001` sees qualified writes only. Unqualified global access would need
   shadowing analysis; the rule under-reports instead.
-- SARIF output would give GitHub code-scanning annotations and PR-inline comments
-  for free. `--format text` covers the log case; SARIF is the obvious next format
-  and nothing in the shape of `AnalysisResult` blocks it.
+- Whether to enable `upload-sarif` in this repository's own CI. The workflow
+  generates and schema-validates a SARIF document; the upload step is present but
+  commented, because these are bench fixtures that exist to contain bugs and
+  publishing them to the Security tab would be noise. The decision is the
+  repository's, not the analyser's.
 - Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are out of scope by
   decision, not oversight. `TCK3002` stands down on a project containing any, and
   no further support is planned.
@@ -406,3 +409,36 @@ are wanted.
     objects in the T3 fixture. `MentionsQualified` counts the qualified form, and
     `TCK3002` uses it throughout. The fixture now reports zero unreachable
     objects, and its total is 13 findings, all legitimate.
+- 2026-08-09: SARIF 2.1.0 output built (`--format sarif`), closing the deferred
+  "real file line" question. SARIF locates a result as file plus line in that
+  file, so the mapping had to be built before the writer: a finding at "line 4 of
+  `Execute`" is at line 4 of one CDATA block inside a `.TcPOU`, which is line 4 of
+  nothing on disk. The reader now parses with `LoadOptions.SetLineInfo` and
+  records where each block starts, and `FindingLocator` resolves that onto
+  findings beside `FindingSuppressor`, which already addressed source the same
+  way. Both now share a `SourceIndex`, keyed on the PLC name as well as the
+  object; the suppressor's key was not, so one PLC's suppression comment could
+  silence another's finding in a solution with one `MAIN` per project.
+  Rule metadata moved into a `RuleCatalogue` because SARIF must advertise a
+  `tool.driver.rules[]`, and assembling that from consts spread over two engines
+  is a parallel list waiting to drift. A reflection test pins the catalogue to
+  the ids the engines declare, and the `helpUri` anchors are checked against the
+  documentation page's own headings.
+  Three defects, all found by running over the corpus and none visible to a unit
+  test, all of them findings landing on the wrong line:
+  - Object and member findings were hardcoded to line 1 of their declaration
+    block. TwinCAT code conventionally opens with a comment banner, so they
+    annotated the banner. `StHeader` now carries the line its keyword is on.
+  - The `TYPE` header pattern was anchored on `\s*`, which crosses newlines, so
+    TcOpen's `{attribute 'qualified_only'}` banners pushed every DUT back to line
+    1. Fixing it exposed a second defect in the same expression: `TYPE INTERNAL
+    Foo` read the access specifier as the type name.
+  - An ACTION has no declaration element at all, so findings about action names
+    had nowhere to point. They resolve to the member element instead.
+  Verified against TcUnit and TcOpen: 2,230 results, zero errors against the
+  OASIS 2.1.0 schema, every result located, and 2,222 landing on a line that
+  contains the identifier reported. The remaining eight are GVLs, whose name is
+  the file's and appears nowhere in the declaration, so line 1 of the block is
+  the honest answer rather than a defect. CI generates and schema-validates a
+  SARIF document; the `upload-sarif` step is present but commented, since the
+  fixtures exist to contain bugs.

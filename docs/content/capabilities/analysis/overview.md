@@ -18,7 +18,26 @@ Analysis needs no XAE, no licence and no runtime, so unlike `Build` it runs anyw
 tckit analyse <path> --severity warning --format text --fail-on warning
 ```
 
-Exit codes are `0` clean, `2` findings at or above `--fail-on`, and `1` for a tool error, so a broken run is never mistaken for a failing one. `--format text` prints one finding per line in the `location(line): severity code: message` shape compilers use, which CI log parsers and editors already turn into annotations.
+Exit codes are `0` clean, `2` findings at or above `--fail-on`, and `1` for a tool error, so a broken run is never mistaken for a failing one. `--format text` prints one finding per line in the `location(line): severity code: message` shape compilers use, addressed the way TwinCAT is edited: object, item, and line within that item.
+
+### Annotating a pull request
+
+`--format sarif` writes [SARIF 2.1.0](https://sarifweb.azurewebsites.net/), which GitHub ingests directly. That is worth doing rather than parsing the log, because it buys three things a log line cannot: annotations on the diff itself, a Security tab that separates new findings from existing ones, and a dismissal that survives the next run.
+
+```yaml
+- name: Analyse
+  run: tckit analyse . --severity warning --format sarif --sarif-base . > tckit.sarif
+
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: tckit.sarif
+```
+
+`--sarif-base` is what result paths are made relative to, and it needs to be the repository root: GitHub matches a result to a file by its path in the checkout, so an absolute Windows path matches nothing and the upload silently annotates nothing. It defaults to the working directory. A project stored outside the repository falls back to an absolute `file://` URI, which is still valid SARIF and still useful locally.
+
+Because a finding's line inside a `.TcPOU` is a line of one CDATA block rather than of the file, every finding also carries the real file and line, which is what the annotation hangs on. Findings keep the baseline fingerprint as a SARIF `partialFingerprint`, so GitHub recognises one it has already seen even after the surrounding code moves.
+
+Run the analysis step with `--fail-on none` if you want the upload to happen even when the gate would fail; a non-zero exit stops the job before `upload-sarif` runs. GitHub caps an upload at 5,000 results per file, which a large first run on a mature codebase can exceed. The answer is a baseline rather than truncation.
 
 ### Adopting it on an existing codebase
 
@@ -71,7 +90,7 @@ Each of these compiles cleanly, which is the whole reason they are here.
 
 `TCK1005` covers a gap the others structurally cannot: `nCount` is already valid camelCase, so a casing rule never notices the `n`. Three things keep it precise. The prefix must agree with the declared type, so `nCount : INT` is reported and `nextValue : INT` is not. It fires only on names that otherwise conform, so a name failing the casing rule is reported once rather than twice. And a variable named after its own type is left alone: `aDINT : ARRAY OF DINT` is the type under test, not a tagged variable.
 
-Every finding carries the object, the item, the line within that item, and the offending identifier. Naming findings also carry a suggested name.
+Every finding carries the object, the item, the line within that item, the offending identifier, and the file and line on disk that the identifier is actually on. Naming findings also carry a suggested name.
 
 Suggestions are advisory. Nothing is rewritten for you, because renaming a symbol that is referenced elsewhere is a change you should agree to rather than discover.
 

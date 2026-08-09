@@ -64,6 +64,28 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   `location(line): severity code: message` shape compilers use, which CI log
   parsers already turn into annotations.
 
+  `--format sarif` emits SARIF 2.1.0 for GitHub code scanning, which buys three
+  things a log line cannot: annotations on the pull request diff, a Security tab
+  that separates new findings from existing ones, and a dismissal that survives
+  the next run.
+
+  ```bash
+  tckit analyse . --severity warning --format sarif --sarif-base . > tckit.sarif
+  ```
+
+  `--sarif-base` is what result paths are made relative to, and wants to be the
+  repository root: GitHub matches a result to a file by its path in the checkout,
+  so an absolute path matches nothing and the upload annotates nothing. A project
+  stored outside that base falls back to an absolute `file://` URI. Baseline
+  fingerprints double as SARIF `partialFingerprints`, so GitHub recognises a
+  finding it has seen before even once the surrounding code has moved.
+
+  Findings now also carry the file and the line within it, alongside the TwinCAT
+  address they already had. A line inside a `.TcPOU` is a line of one CDATA
+  block rather than of the file, so that mapping had to be computed rather than
+  assumed; it is verified against TcUnit and TcOpen, where all 2,230 results
+  resolve to a real line and the document validates against the OASIS schema.
+
   `--write-baseline <file>` records the current findings and `--baseline <file>`
   suppresses them, so the check can be adopted on a mature codebase without
   fixing everything first: the build then fails only on new findings. Baseline
@@ -95,6 +117,12 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ### Fixed
 
+- **DUT declarations opening with a pragma read their name from the wrong
+  line.** The `TYPE` header pattern was anchored on `\s*`, which crosses
+  newlines, so a DUT prefixed with `{attribute 'qualified_only'}` was reported
+  as declared on line 1 of its declaration block. The same expression also read
+  the access specifier as the type name, so `TYPE INTERNAL eMessageCondition`
+  parsed as a type called `INTERNAL`.
 - **POU type detection no longer substring-matches the whole declaration.** A
   `PROGRAM` declaring `WriteProtectedFunctions : FB_WriteProtectedFunctions` was
   reported as a `FUNCTION`, because the search looked for "FUNCTION" anywhere in
