@@ -1,11 +1,12 @@
 name: .NET CI
 
-# Build + unit-test TcKit on Linux. It works on ubuntu even though every project is
-# `net8.0-windows`: nothing here uses the Windows Desktop packs (WPF/WinForms/UI-Automation) — the
-# only Windows-bound code is COM + P/Invoke in the Automation adapter, which are compile-anywhere
-# externs exercised only behind in-memory fakes. EnableWindowsTargeting lets the SDK restore the
-# Windows reference assemblies on a non-Windows host. Live COM/ADS validation against a real 4026 is
-# inherently Windows + TwinCAT and stays a separate on-machine step, not CI.
+# Build + unit-test TcKit on Linux. Projects target plain net8.0; the COM/UIA-touching trio
+# (Automation, Server, Cli) multi-targets net8.0;net8.0-windows so shipped Windows artefacts keep
+# the WPF-profile UIA lane (ADR-0014). EnableWindowsTargeting lets the SDK restore the Windows
+# reference assemblies (including WPF, for the windows flavour) on a non-Windows host; the test
+# project is plain net8.0 so the test host never loads the desktop framework. Live COM/ADS
+# validation against a real 4026 is inherently Windows + TwinCAT and stays a separate on-machine
+# step, not CI; the xml writer backend (ADR-0017) is exercised here directly.
 
 on:
   push:
@@ -51,7 +52,7 @@ jobs:
           set -euo pipefail
           scratch="$(mktemp -d)"
           cp -r "${{ github.workspace }}/bench/fixtures/bug-hunting/B1-off-by-one/." "$scratch/"
-          cli() { dotnet run --project src/TcKit.Cli --configuration Release --no-build -- "$@"; }
+          cli() { dotnet run --project src/TcKit.Cli --configuration Release --framework net8.0 --no-build -- "$@"; }
           export TCKIT_SOLUTION="$scratch/B1RollingAverage.sln"
           export TCKIT_WRITER=xml
           plc=B1RollingAverage_Plc

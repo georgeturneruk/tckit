@@ -1,5 +1,6 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -9,6 +10,7 @@ namespace TcKit.Adapters.Automation;
 /// authoring to <see cref="ProjectAuthor"/> (which is COM-agnostic and unit-tested against a fake).
 /// Domain errors thrown by the author are mapped to the <see cref="Result"/> error contract.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
 {
     private readonly StaExecutor _sta = new();

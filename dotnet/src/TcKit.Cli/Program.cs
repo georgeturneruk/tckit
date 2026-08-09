@@ -100,6 +100,12 @@ async Task<int> RunBuildTestVerb()
     {
         case "build":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var runner = new AutomationBuildRunner();
             var result = await runner.BuildAsync(Opt("plc"), Flag("force-log"), ct).ConfigureAwait(false);
             return EmitObj(result, result.Success);
@@ -107,6 +113,12 @@ async Task<int> RunBuildTestVerb()
 
         case "deploy" when pos.Length >= 1:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var runner = new AutomationBuildRunner();
             var result = await runner.DeployAsync(pos[0], Opt("plc"), !Flag("no-autostart"), ct).ConfigureAwait(false);
             return EmitResult(result);
@@ -128,6 +140,12 @@ async Task<int> RunBuildTestVerb()
             }
 
             var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var testWriter = new AutomationProjectWriter();
             using var buildRunner = new AutomationBuildRunner();
             var result = await TcKit.Core.Workflows.TestWorkflow.RunAsync(
@@ -224,12 +242,24 @@ async Task<int> RunWriteVerb()
     {
         case "scan-hardware":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var scanner = new AutomationHardwareScanner();
             return Emit(await scanner.ScanHardwareAsync(Opt("project"), ct).ConfigureAwait(false));
         }
 
         case "scaffold-hardware-code":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var scanner = new AutomationHardwareScanner();
             var gvl = pos.Length >= 1 ? pos[0] : "HardwareIO";
             return EmitResult(await scanner
@@ -239,6 +269,12 @@ async Task<int> RunWriteVerb()
 
         case "add-ethercat-master":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             var name = pos.Length >= 1 ? pos[0] : "Device 1 (EtherCAT)";
             return EmitResult(await hw.AddEtherCatMasterAsync(name, Opt("project"), ct).ConfigureAwait(false));
@@ -246,6 +282,12 @@ async Task<int> RunWriteVerb()
 
         case "add-ethercat-box" when pos.Length >= 3:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             return EmitResult(await hw
                 .AddEtherCatBoxAsync(pos[0], pos[1], pos[2], OptOr("before", ""), Opt("project"), ct)
@@ -254,6 +296,12 @@ async Task<int> RunWriteVerb()
 
         case "delete-io-device" when pos.Length >= 1:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             return EmitResult(await hw
                 .DeleteIoDeviceAsync(pos[0], Opt("project"), Flag("confirmed"), ct).ConfigureAwait(false));
@@ -453,21 +501,23 @@ static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(stri
 static IProjectWriter CreateProjectWriter(string? flag)
 {
     var choice = (flag ?? Environment.GetEnvironmentVariable("TCKIT_WRITER"))?.Trim().ToLowerInvariant();
-    if (choice == "automation" && !OperatingSystem.IsWindows())
+    if (choice is not (null or "" or "automation" or "xml"))
+    {
+        throw new ArgumentException($"Unknown writer '{choice}'; use 'automation' or 'xml'.");
+    }
+
+    if (choice == "xml" || (string.IsNullOrEmpty(choice) && !OperatingSystem.IsWindows()))
+    {
+        return new XmlProjectWriter();
+    }
+
+    if (!OperatingSystem.IsWindows())
     {
         throw new InvalidOperationException(
             "--writer automation needs Windows with a running XAE; use --writer xml here.");
     }
 
-    return choice switch
-    {
-        "automation" => new AutomationProjectWriter(),
-        "xml" => new XmlProjectWriter(),
-        null or "" => OperatingSystem.IsWindows()
-            ? new AutomationProjectWriter()
-            : new XmlProjectWriter(),
-        _ => throw new ArgumentException($"Unknown writer '{choice}'; use 'automation' or 'xml'."),
-    };
+    return new AutomationProjectWriter();
 }
 
 static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch

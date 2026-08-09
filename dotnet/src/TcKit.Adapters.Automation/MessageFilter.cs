@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -10,6 +11,7 @@ namespace TcKit.Adapters.Automation;
 /// automation fix (lifted from the TcUnit-Runner pattern, per ADR-0015) and is far more robust than
 /// catching the exception after COM has already given up.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class MessageFilter : IOleMessageFilter
 {
     private const int Handled = 0;            // SERVERCALL_ISHANDLED

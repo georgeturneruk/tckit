@@ -1,10 +1,13 @@
 <Project>
 
-  <!-- Shared build settings for every TcKit .NET project. See CONVENTIONS.md. -->
+  <!-- Shared build settings for every TcKit .NET project. See CONVENTIONS.md.
+
+       Target frameworks are declared per project: plain net8.0 everywhere (the server and
+       the xml writer backend run on Linux, ADR-0017), with the COM/UIA-touching projects
+       (Automation, Server, Cli) multi-targeting net8.0;net8.0-windows so shipped Windows
+       artefacts keep the WPF-profile UIA lane (ADR-0014). The COM lane carries explicit
+       [SupportedOSPlatform("windows")] attributes; CA1416 guards the call sites. -->
   <PropertyGroup>
-    <!-- Windows-only product: COM Automation Interface + ADS. net8.0-windows
-         lets the platform analyser allow Marshal / COM APIs without CA1416. -->
-    <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

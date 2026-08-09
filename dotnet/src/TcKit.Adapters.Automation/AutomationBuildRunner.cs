@@ -1,5 +1,6 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -8,6 +9,7 @@ namespace TcKit.Adapters.Automation;
 /// worker thread, opens a COM-backed <see cref="ComTcSession"/>, and delegates to <see cref="ProjectBuilder"/>
 /// (COM-agnostic, unit-tested against a fake). Domain errors are mapped to the result contracts.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class AutomationBuildRunner : IBuildRunner, IDisposable
 {
     private readonly StaExecutor _sta = new();

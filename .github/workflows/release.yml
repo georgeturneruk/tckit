@@ -1,11 +1,11 @@
 name: Release
 
-# Publish self-contained, single-file Windows x64 builds of the MCP server and
-# the CLI as GitHub Release assets. Both target net8.0-windows and drive the
-# COM Automation Interface + ADS, so the release is Windows-x64 only and is
-# built on a Windows runner. The plugin launcher downloads the server asset
-# when no .NET SDK is present (see plugin/start-server.ps1); CI runners fetch
-# the CLI asset and pin a minimum version via `tckit --version`.
+# Publish self-contained, single-file builds of the MCP server and the CLI as
+# GitHub Release assets: win-x64 from the net8.0-windows flavour (COM Automation
+# Interface + the UIA lane), and linux-x64 from the plain net8.0 flavour (readers,
+# ADS, and the xml writer backend; ADR-0017). The plugin launcher downloads the
+# Windows server asset when no .NET SDK is present (see plugin/start-server.ps1);
+# CI runners fetch the CLI asset and pin a minimum version via `tckit --version`.
 
 on:
   push:
@@ -49,34 +49,41 @@ jobs:
           "tag=$tag" | Out-File -Append -Encoding ascii $env:GITHUB_OUTPUT
           "version=$version" | Out-File -Append -Encoding ascii $env:GITHUB_OUTPUT
 
-      - name: Publish self-contained single-file exes
+      - name: Publish self-contained single-file binaries
         shell: pwsh
+        env:
+          EnableWindowsTargeting: true
         run: |
           $version = "${{ steps.tag.outputs.version }}"
-          dotnet publish dotnet/src/TcKit.Server/TcKit.Server.csproj `
-            -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=none `
-            -p:Version=$version `
-            -o publish-server --nologo
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish (server) failed" }
-          dotnet publish dotnet/src/TcKit.Cli/TcKit.Cli.csproj `
-            -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=none `
-            -p:Version=$version `
-            -o publish-cli --nologo
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish (cli) failed" }
+          # Multi-target projects need the framework named per publish: the windows flavour
+          # carries the UIA lane, the plain net8.0 flavour is what runs on Linux.
+          $lanes = @(
+            @{ Project = 'dotnet/src/TcKit.Server/TcKit.Server.csproj'; Rid = 'win-x64';   Tfm = 'net8.0-windows'; Out = 'publish-server-win' },
+            @{ Project = 'dotnet/src/TcKit.Cli/TcKit.Cli.csproj';       Rid = 'win-x64';   Tfm = 'net8.0-windows'; Out = 'publish-cli-win' },
+            @{ Project = 'dotnet/src/TcKit.Server/TcKit.Server.csproj'; Rid = 'linux-x64'; Tfm = 'net8.0';         Out = 'publish-server-linux' },
+            @{ Project = 'dotnet/src/TcKit.Cli/TcKit.Cli.csproj';       Rid = 'linux-x64'; Tfm = 'net8.0';         Out = 'publish-cli-linux' }
+          )
+          foreach ($lane in $lanes) {
+            dotnet publish $lane.Project `
+              -c Release -r $lane.Rid -f $lane.Tfm --self-contained true `
+              -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:DebugType=none `
+              -p:Version=$version `
+              -o $lane.Out --nologo
+            if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $($lane.Out)" }
+          }
 
       - name: Stage artifacts + checksums
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item publish-server/TcKit.Server.exe dist/tckit-server-win-x64.exe
-          Copy-Item publish-cli/TcKit.Cli.exe dist/tckit-cli-win-x64.exe
-          foreach ($name in 'tckit-server-win-x64.exe', 'tckit-cli-win-x64.exe') {
+          Copy-Item publish-server-win/TcKit.Server.exe dist/tckit-server-win-x64.exe
+          Copy-Item publish-cli-win/TcKit.Cli.exe dist/tckit-cli-win-x64.exe
+          Copy-Item publish-server-linux/TcKit.Server dist/tckit-server-linux-x64
+          Copy-Item publish-cli-linux/TcKit.Cli dist/tckit-cli-linux-x64
+          foreach ($name in 'tckit-server-win-x64.exe', 'tckit-cli-win-x64.exe',
+                            'tckit-server-linux-x64', 'tckit-cli-linux-x64') {
             $hash = (Get-FileHash dist/$name -Algorithm SHA256).Hash.ToLower()
             "$hash  $name" | Out-File -Encoding ascii dist/$name.sha256
             Write-Host "SHA256 ($name): $hash"
@@ -90,7 +97,9 @@ jobs:
           $tag = "${{ steps.tag.outputs.tag }}"
           $assets = @(
             'dist/tckit-server-win-x64.exe', 'dist/tckit-server-win-x64.exe.sha256',
-            'dist/tckit-cli-win-x64.exe', 'dist/tckit-cli-win-x64.exe.sha256'
+            'dist/tckit-cli-win-x64.exe', 'dist/tckit-cli-win-x64.exe.sha256',
+            'dist/tckit-server-linux-x64', 'dist/tckit-server-linux-x64.sha256',
+            'dist/tckit-cli-linux-x64', 'dist/tckit-cli-linux-x64.sha256'
           )
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
