@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using TcKit.Core.Authoring;
 
 namespace TcKit.Adapters.Automation;
 

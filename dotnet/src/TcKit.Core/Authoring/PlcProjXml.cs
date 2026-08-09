@@ -1,18 +1,19 @@
 using System.Xml;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
-/// File-only (.plcproj) helpers for the library-placeholder lane. The Automation Interface exposes
-/// no documented surface for placeholder *parameter overrides* (the IDE's "Library Parameters"
-/// dialog has no programmatic counterpart on ITcPlcLibraryManager / ITcPlcPlaceholderRef, and the
-/// placeholder tree item's ConsumeXml schema is undocumented), so the MSBuild XML that XAE itself
-/// writes on disk is the only reliable target. This is the one documented exception to the
-/// never-edit-XML-directly rule. COM-free, so it is unit-tested against temp files. Mirrors
-/// Find-TcPlcProjFile / Test-TcPlcProjHasPlaceholder / Set-TcPlcProjPlaceholderParameters in
-/// bridge/harness/_TcDte.psm1.
+/// File-only (.plcproj) helpers shared by both writer backends: .plcproj resolution by PLC name
+/// and library reference/placeholder parameter blocks. For the automation backend this is the
+/// library-parameter lane's escape hatch (the Automation Interface exposes no documented surface
+/// for placeholder *parameter overrides*: the IDE's "Library Parameters" dialog has no
+/// programmatic counterpart on ITcPlcLibraryManager / ITcPlcPlaceholderRef, and the placeholder
+/// tree item's ConsumeXml schema is undocumented, so the MSBuild XML that XAE itself writes on
+/// disk is the only reliable target). For the XML backend it is simply part of the on-disk write
+/// path. COM-free, so it is unit-tested against temp files. Mirrors Find-TcPlcProjFile /
+/// Test-TcPlcProjHasPlaceholder / Set-TcPlcProjPlaceholderParameters in bridge/harness/_TcDte.psm1.
 /// </summary>
-internal static class PlcProjXml
+public static class PlcProjXml
 {
     /// <summary>
     /// Resolve the consumer PLC's .plcproj by name, searching recursively from the solution dir.

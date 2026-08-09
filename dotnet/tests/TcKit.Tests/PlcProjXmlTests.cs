@@ -1,5 +1,6 @@
 using System.Xml;
 using TcKit.Adapters.Automation;
+using TcKit.Core.Authoring;
 
 namespace TcKit.Tests;
 

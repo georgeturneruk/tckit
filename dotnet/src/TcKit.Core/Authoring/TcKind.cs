@@ -1,13 +1,14 @@
 using TcKit.Core.Models;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
 /// TwinCAT Automation Interface tree-item kind constants (the integer passed as the second
 /// argument to <c>ITcSmTreeItem.CreateChild</c>), plus the maps from the domain enums.
-/// Mirrors the bridge harness's <c>$script:TcKind</c> table.
+/// Both writer backends report these integers in delete-verb Results so tool output does not
+/// depend on the backend. Mirrors the bridge harness's <c>$script:TcKind</c> table.
 /// </summary>
-internal static class TcKind
+public static class TcKind
 {
     public const int Folder = 601;
     public const int Program = 602;

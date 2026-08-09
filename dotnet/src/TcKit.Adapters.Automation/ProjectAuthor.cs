@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Xml;
+using TcKit.Core.Authoring;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Automation;
@@ -163,7 +164,7 @@ internal static partial class ProjectAuthor
     {
         var (plc, sm) = Open(session, plcName);
         var pou = LocatePouUnderProject(sm, plc, pouName);
-        pou.DeclarationText = ApplyPatch(pou.DeclarationText, oldString, newString, $"{pouName} declaration");
+        pou.DeclarationText = PatchText.ApplyPatch(pou.DeclarationText, oldString, newString, $"{pouName} declaration");
         session.Save();
         return Ok(("pou_name", pouName), ("plc_name", plc), ("replacements", 1));
     }
@@ -173,7 +174,7 @@ internal static partial class ProjectAuthor
     {
         var (plc, sm) = Open(session, plcName);
         var pou = LocatePouUnderProject(sm, plc, pouName);
-        pou.ImplementationText = ApplyPatch(pou.ImplementationText, oldString, newString, $"{pouName} implementation");
+        pou.ImplementationText = PatchText.ApplyPatch(pou.ImplementationText, oldString, newString, $"{pouName} implementation");
         session.Save();
         return Ok(("pou_name", pouName), ("plc_name", plc), ("replacements", 1));
     }
@@ -183,7 +184,7 @@ internal static partial class ProjectAuthor
     {
         var (plc, sm) = Open(session, plcName);
         var item = LocateItem(sm, plc, pouName, methodName);
-        var patched = ApplyPatch(CombineSource(item), oldString, newString, $"{pouName}.{methodName}");
+        var patched = PatchText.ApplyPatch(CombineSource(item), oldString, newString, $"{pouName}.{methodName}");
         SetSourceFromCode(item, patched);
         session.Save();
         return Ok(("pou_name", pouName), ("method_name", methodName), ("plc_name", plc), ("replacements", 1));
@@ -1011,36 +1012,6 @@ internal static partial class ProjectAuthor
     {
         var implementation = item.ImplementationText;
         return string.IsNullOrEmpty(implementation) ? item.DeclarationText : $"{item.DeclarationText}\n{implementation}";
-    }
-
-    /// <summary>Anchored single-occurrence replacement, mirroring Claude Code's Edit semantics.</summary>
-    private static string ApplyPatch(string text, string oldString, string newString, string where)
-    {
-        if (string.IsNullOrEmpty(oldString))
-        {
-            throw new ArgumentException("OldString required.");
-        }
-
-        var count = 0;
-        for (var i = text.IndexOf(oldString, StringComparison.Ordinal); i >= 0;
-            i = text.IndexOf(oldString, i + oldString.Length, StringComparison.Ordinal))
-        {
-            count++;
-        }
-
-        if (count == 0)
-        {
-            throw new InvalidOperationException($"OldString not found in {where}.");
-        }
-
-        if (count > 1)
-        {
-            throw new InvalidOperationException(
-                $"OldString appears {count} times in {where}; anchor must be unique. Extend OldString with more surrounding context.");
-        }
-
-        var index = text.IndexOf(oldString, StringComparison.Ordinal);
-        return text[..index] + newString + text[(index + oldString.Length)..];
     }
 
     /// <summary>Walk a slash-separated path of child names under a root, returning the leaf item.</summary>

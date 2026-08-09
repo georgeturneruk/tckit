@@ -1,4 +1,5 @@
 using TcKit.Adapters.Automation;
+using TcKit.Core.Authoring;
 using TcKit.Core.Models;
 
 namespace TcKit.Tests;
