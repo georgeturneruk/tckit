@@ -10,7 +10,7 @@ namespace TcKit.Adapters.Analysis;
 public static class NamingRuleEngine
 {
     /// <summary>The naming category, used for <c>tckit_analyzer_diagnostic.category-naming.severity</c>.</summary>
-    public const string Category = "naming";
+    public const string Category = RuleCatalogue.NamingCategory;
 
     /// <summary>Object names: POUs, DUTs and GVLs.</summary>
     public const string ObjectRuleId = "TCK1001";
@@ -143,7 +143,9 @@ public static class NamingRuleEngine
             return;
         }
 
-        var severity = settings.SeverityFor(RedundantTypePrefixId, Category, DiagnosticSeverity.Suggestion);
+        var catalogued = RuleCatalogue.Require(RedundantTypePrefixId);
+        var severity = settings.SeverityFor(
+            RedundantTypePrefixId, catalogued.Category, catalogued.DefaultSeverity);
         if (severity is DiagnosticSeverity.None)
         {
             return;

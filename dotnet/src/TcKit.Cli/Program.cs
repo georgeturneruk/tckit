@@ -80,9 +80,30 @@ try
             var reported = AnalysisBaseline.Filter(
                 analysis.Findings, AnalysisBaseline.Load(Opt("baseline")));
 
-            Console.WriteLine(OptOr("format", "json") == "text"
-                ? AnalysisText.Render(analysis, reported)
-                : TckitJson.Serialize(analysis with { Findings = reported }));
+            var format = OptOr("format", "json");
+            if (format is not ("json" or "text" or "sarif"))
+            {
+                Console.WriteLine(TckitJson.Serialize(new
+                {
+                    error = $"Unknown --format '{format}'. Use json, text or sarif.",
+                }));
+                return 1;
+            }
+
+            Console.WriteLine(format switch
+            {
+                "text" => AnalysisText.Render(analysis, reported),
+
+                // Paths are made relative to --sarif-base so they match a GitHub checkout; the
+                // working directory is the right default because that is where CI runs the tool.
+                "sarif" => SarifWriter.Render(
+                    analysis,
+                    reported,
+                    OptOr("sarif-base", Directory.GetCurrentDirectory()),
+                    typeof(ProjectAnalyser).Assembly.GetName().Version?.ToString()),
+
+                _ => TckitJson.Serialize(analysis with { Findings = reported }),
+            });
 
             // A distinct code for "the code has findings" so CI can tell it apart from
             // "the tool fell over", which stays 1 in line with every other verb.
@@ -568,7 +589,8 @@ static void PrintUsage()
     Console.WriteLine("  get-gvl | get-dut <path> <name> [--plc <name>]");
     Console.WriteLine("analysis verb (offline; no XAE, no licence, safe in CI):");
     Console.WriteLine("  analyse <path> [--plc <name>] [--object <name>] [--severity warning]");
-    Console.WriteLine("          [--rules TCK1002,TCK2001] [--format json|text]");
+    Console.WriteLine("          [--rules TCK1002,TCK2001] [--format json|text|sarif]");
+    Console.WriteLine("          [--sarif-base <dir>] (paths relative to it; defaults to cwd)");
     Console.WriteLine("          [--baseline <file>] [--write-baseline <file>] [--fail-on warning]");
     Console.WriteLine("          exit 0 = clean, 1 = tool error, 2 = findings at or above --fail-on");
     Console.WriteLine("infosys docs verbs (network; results cached locally):");

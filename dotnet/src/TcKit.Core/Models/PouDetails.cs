@@ -96,7 +96,11 @@ public sealed record PouMember
     /// Only ST is stored as readable source, so anything else leaves <see cref="Body"/> empty.</summary>
     public string Language { get; init; } = "";
 
-    /// <summary>1-based file line where <see cref="Declaration"/> starts; 0 when unknown.</summary>
+    /// <summary>
+    /// 1-based file line where <see cref="Declaration"/> starts; 0 when unknown. An ACTION has no
+    /// declaration block at all, so this is the line of the member itself, and <see cref="Declaration"/>
+    /// is empty.
+    /// </summary>
     public int DeclarationLine { get; init; }
 
     /// <summary>1-based file line where <see cref="Body"/> starts; 0 when unknown or empty.</summary>

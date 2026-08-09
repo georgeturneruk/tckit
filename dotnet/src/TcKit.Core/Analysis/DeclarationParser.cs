@@ -118,6 +118,7 @@ public static partial class DeclarationParser
         return new StTypeDeclaration
         {
             Name = header.Success ? header.Groups["name"].Value : "",
+            Line = header.Success ? StSource.LineAt(mask, header.Groups["name"].Index) : 1,
             Members = members,
         };
     }
@@ -317,6 +318,7 @@ public static partial class DeclarationParser
         return new StHeader
         {
             Keyword = match.Groups["kw"].Value.ToUpperInvariant(),
+            Line = StSource.LineAt(mask, match.Index),
             Name = name,
             ReturnType = returnType,
             Accessibility = accessibility,
@@ -377,7 +379,14 @@ public static partial class DeclarationParser
         RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex HeaderLine();
 
-    [GeneratedRegex(@"^\s*TYPE\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
+    // Anchored with [ \t]* rather than \s*, which would cross newlines and report the header as
+    // starting at the top of the block: TcOpen prefixes its DUTs with {attribute 'qualified_only'}
+    // pragma lines, and those mask to blank lines that \s* would swallow.
+    //
+    // The access specifier is skipped so the name group is the type's name and not "INTERNAL".
+    [GeneratedRegex(
+        @"^[ \t]*TYPE\s+(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL|FINAL)\s+)*(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+        RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex TypeHeader();
 
     [GeneratedRegex(@"\b(?:STRUCT|UNION)\b(?<body>[\s\S]*?)\bEND_(?:STRUCT|UNION)\b", RegexOptions.IgnoreCase)]

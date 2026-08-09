@@ -13,9 +13,9 @@ namespace TcKit.Adapters.Analysis;
 /// </summary>
 public static class CorrectnessRules
 {
-    public const string CorrectnessCategory = "correctness";
+    public const string CorrectnessCategory = RuleCatalogue.CorrectnessCategory;
 
-    public const string StructureCategory = "structure";
+    public const string StructureCategory = RuleCatalogue.StructureCategory;
 
     /// <summary>A function block instance on a call stack, so its state resets every call.</summary>
     public const string StatelessInstanceId = "TCK2001";
@@ -102,7 +102,7 @@ public static class CorrectnessRules
                     continue;
                 }
 
-                Add(findings, settings, StatelessInstanceId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                Add(findings, settings, StatelessInstanceId,
                     $"'{variable.Name}' ({variable.TypeExpression}) needs to persist between calls, but "
                     + $"is declared in the VAR block of '{member.Source.Name}', which is stack storage. "
                     + "It is rebuilt on every call and never advances. Declare it in the function "
@@ -122,7 +122,7 @@ public static class CorrectnessRules
             if (variable.Section is VarSection.Var
                 && NeedsPersistentStorage(variable.TypeExpression, project))
             {
-                Add(findings, settings, StatelessInstanceId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                Add(findings, settings, StatelessInstanceId,
                     $"'{variable.Name}' ({variable.TypeExpression}) needs to persist between calls, but is "
                     + "declared in a FUNCTION, which has no instance storage. Use a FUNCTION_BLOCK instead.",
                     pou, "", CodePart.Declaration, variable.Line, variable.Name);
@@ -211,7 +211,7 @@ public static class CorrectnessRules
                     continue;
                 }
 
-                Add(findings, settings, RealEqualityId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                Add(findings, settings, RealEqualityId,
                     $"'{comparison.Left} {comparison.Operator} {comparison.Right}' compares a "
                     + "floating-point value for exact equality. Compare against a tolerance instead.",
                     pou, itemName, CodePart.Implementation,
@@ -234,7 +234,7 @@ public static class CorrectnessRules
                 if (variable.Qualifiers.HasFlag(VarQualifiers.Retain)
                     || variable.Qualifiers.HasFlag(VarQualifiers.Persistent))
                 {
-                    Add(findings, settings, MisplacedRetainId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                    Add(findings, settings, MisplacedRetainId,
                         $"'{variable.Name}' is declared RETAIN or PERSISTENT inside "
                         + $"'{member.Source.Name}', where it cannot survive a restart. Move it to the "
                         + "function block's VAR block or a VAR_GLOBAL RETAIN list.",
@@ -264,7 +264,7 @@ public static class CorrectnessRules
                 if (variable.Section is VarSection.Var or VarSection.VarTemp
                     && !StIdentifiers.Mentions(member.MaskedBody, variable.Name))
                 {
-                    Add(findings, settings, UnusedLocalId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                    Add(findings, settings, UnusedLocalId,
                         $"Local '{variable.Name}' is declared in '{member.Source.Name}' and never used.",
                         pou, member.Source.Name, CodePart.Declaration, variable.Line, variable.Name);
                 }
@@ -281,7 +281,7 @@ public static class CorrectnessRules
             if (variable.Section is VarSection.Var or VarSection.VarTemp
                 && !StIdentifiers.Mentions(pou.MaskedBody, variable.Name))
             {
-                Add(findings, settings, UnusedLocalId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                Add(findings, settings, UnusedLocalId,
                     $"Local '{variable.Name}' is declared in '{pou.Name}' and never used.",
                     pou, "", CodePart.Declaration, variable.Line, variable.Name);
             }
@@ -326,7 +326,7 @@ public static class CorrectnessRules
                 if (variable.Section is VarSection.VarInput
                     && !StIdentifiers.Mentions(pou.AllBodies, variable.Name))
                 {
-                    Add(findings, settings, UnreadInputId, CorrectnessCategory, DiagnosticSeverity.Warning,
+                    Add(findings, settings, UnreadInputId,
                         $"Input '{variable.Name}' of '{pou.Name}' is never read anywhere in the "
                         + "function block.",
                         pou, "", CodePart.Declaration, variable.Line, variable.Name);
@@ -355,7 +355,7 @@ public static class CorrectnessRules
 
                 if (writers.Count > 1)
                 {
-                    Add(findings, settings, MultiWriterGlobalId, StructureCategory, DiagnosticSeverity.Suggestion,
+                    Add(findings, settings, MultiWriterGlobalId,
                         $"Global '{gvl.Source.Name}.{variable.Name}' is written from "
                         + $"{writers.Count} POUs ({string.Join(", ", writers)}). Give it a single owner.",
                         gvl.PlcName, gvl.Source.Name, "", variable.Line, variable.Name);
@@ -388,10 +388,10 @@ public static class CorrectnessRules
                 continue;
             }
 
-            Add(findings, settings, UnreachableObjectId, StructureCategory, DiagnosticSeverity.Suggestion,
+            Add(findings, settings, UnreachableObjectId,
                 $"'{pou.Name}' is never instantiated, called, or bound to a task anywhere in the "
                 + "solution. It may be dead code, or intended for consumers outside this solution.",
-                pou, "", CodePart.Declaration, 1, pou.Name);
+                pou, "", CodePart.Declaration, pou.Declaration.Header.Line, pou.Name);
         }
     }
 
@@ -444,23 +444,19 @@ public static class CorrectnessRules
         List<AnalysisFinding> findings,
         AnalysisSettings settings,
         string ruleId,
-        string category,
-        DiagnosticSeverity fallback,
         string message,
         AnalysedPou pou,
         string itemName,
         CodePart part,
         int line,
         string symbol)
-        => Add(findings, settings, ruleId, category, fallback, message,
+        => Add(findings, settings, ruleId, message,
             pou.PlcName, pou.Name, itemName, line, symbol, part);
 
     private static void Add(
         List<AnalysisFinding> findings,
         AnalysisSettings settings,
         string ruleId,
-        string category,
-        DiagnosticSeverity fallback,
         string message,
         string plcName,
         string objectName,
@@ -469,7 +465,10 @@ public static class CorrectnessRules
         string symbol,
         CodePart part = CodePart.Declaration)
     {
-        var severity = settings.SeverityFor(ruleId, category, fallback);
+        // Category and default severity come from the catalogue rather than the call site, so the
+        // rules array a SARIF run advertises cannot disagree with the findings it reports.
+        var rule = RuleCatalogue.Require(ruleId);
+        var severity = settings.SeverityFor(ruleId, rule.Category, rule.DefaultSeverity);
         if (severity is DiagnosticSeverity.None)
         {
             return;
@@ -478,7 +477,7 @@ public static class CorrectnessRules
         findings.Add(new AnalysisFinding
         {
             RuleId = ruleId,
-            Category = category,
+            Category = rule.Category,
             Severity = severity,
             Message = message,
             PlcName = plcName,

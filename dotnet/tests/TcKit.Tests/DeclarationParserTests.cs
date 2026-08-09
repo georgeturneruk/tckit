@@ -182,4 +182,38 @@ public class DeclarationParserTests
         Assert.Equal("T_Speed", result.Name);
         Assert.Empty(result.Members);
     }
+
+    [Fact]
+    public void ParseType_AccessSpecifier_IsNotMistakenForTheTypeName()
+    {
+        // TcOpen writes `TYPE INTERNAL eMessageCondition :`. Reading the specifier as the name
+        // would report findings against a type called "INTERNAL".
+        var result = DeclarationParser.ParseType(
+            "TYPE INTERNAL eMessageCondition :\n(\n    Active := 10\n);\nEND_TYPE");
+
+        Assert.Equal("eMessageCondition", result.Name);
+        Assert.Equal(["Active"], result.Members.Select(m => m.Name));
+    }
+
+    [Fact]
+    public void ParseType_PragmaBanner_DoesNotPushTheHeaderLineToTheTopOfTheBlock()
+    {
+        // Pragmas mask to blank lines, so a header search anchored on \s* would match at the very
+        // start of the block and report the type as declared on line 1.
+        var result = DeclarationParser.ParseType(
+            "{attribute 'qualified_only'}\n{attribute 'strict'}\nTYPE E_State :\n(\n    Idle := 0\n);\nEND_TYPE");
+
+        Assert.Equal("E_State", result.Name);
+        Assert.Equal(3, result.Line);
+    }
+
+    [Fact]
+    public void Parse_CommentBanner_PutsTheHeaderOnItsOwnLineNotTheFirst()
+    {
+        var result = DeclarationParser.Parse(
+            "// Banner\n// More banner\nFUNCTION_BLOCK FB_Motor\nVAR\n    x : INT;\nEND_VAR");
+
+        Assert.Equal("FB_Motor", result.Header.Name);
+        Assert.Equal(3, result.Header.Line);
+    }
 }

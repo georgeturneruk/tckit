@@ -65,7 +65,7 @@ public static class SymbolCollector
                 Kind = KindOf(pou.Source.PouType),
                 PlcName = pou.PlcName,
                 ObjectName = pou.Name,
-                Line = 1,
+                Line = pou.Declaration.Header.Line,
                 Accessibility = pou.Declaration.Header.Accessibility,
             },
         };
@@ -93,7 +93,7 @@ public static class SymbolCollector
                     PlcName = pou.PlcName,
                     ObjectName = pou.Name,
                     ItemName = member.Source.Name,
-                    Line = 1,
+                    Line = member.Declaration.Header.Line,
                     Accessibility = member.Declaration.Header.Accessibility,
                 });
             }
@@ -119,6 +119,9 @@ public static class SymbolCollector
                 Kind = SymbolKind.Gvl,
                 PlcName = plcName,
                 ObjectName = gvl.Name,
+
+                // A GVL's name is the file's, not something written in the declaration, so there is
+                // no line holding it. The top of the block is the honest answer.
                 Line = 1,
             },
         };
@@ -142,6 +145,7 @@ public static class SymbolCollector
             _ => SymbolKind.Alias,
         };
 
+        var declaration = DeclarationParser.ParseType(dut.Declaration);
         var symbols = new List<NamedSymbol>
         {
             new()
@@ -150,12 +154,12 @@ public static class SymbolCollector
                 Kind = kind,
                 PlcName = plcName,
                 ObjectName = dut.Name,
-                Line = 1,
+                Line = declaration.Line,
             },
         };
 
         var memberKind = dut.DutKind is DutKind.Enum ? SymbolKind.EnumMember : SymbolKind.StructMember;
-        foreach (var member in DeclarationParser.ParseType(dut.Declaration).Members)
+        foreach (var member in declaration.Members)
         {
             symbols.Add(new NamedSymbol
             {

@@ -79,6 +79,13 @@ public sealed record StHeader
     public bool IsAbstract { get; init; }
 
     public bool IsFinal { get; init; }
+
+    /// <summary>
+    /// 1-based line of the declaration block the header keyword sits on. Rarely 1: TwinCAT code
+    /// conventionally opens with a comment banner, so a finding about the object's own name wants
+    /// the line the name is on rather than the top of the block.
+    /// </summary>
+    public int Line { get; init; } = 1;
 }
 
 /// <summary>A parsed declaration block: its header (when it has one) and every variable it declares.</summary>
@@ -106,4 +113,7 @@ public sealed record StTypeDeclaration
     public required string Name { get; init; }
 
     public IReadOnlyList<StTypeMember> Members { get; init; } = [];
+
+    /// <summary>1-based line of the declaration block the <c>TYPE</c> keyword sits on.</summary>
+    public int Line { get; init; } = 1;
 }

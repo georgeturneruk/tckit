@@ -215,6 +215,27 @@ public class SourceLineMappingTests
             Assert.Equal(paths[(finding.PlcName, finding.ObjectName)], finding.FilePath));
     }
 
+    /// <summary>
+    /// An ACTION is stored with an implementation and no declaration element at all, so its name
+    /// exists only in the XML attribute. Without a fallback, a finding about that name would have
+    /// nothing to point at, which is the finding a reader would most want to click through to.
+    /// </summary>
+    [Fact]
+    public async Task PouSource_Action_IsLocatedAtItsElementDespiteHavingNoDeclaration()
+    {
+        var reader = await Primed(Fixtures.SampleProject);
+        var pou = await reader.GetPouSourceAsync("FB_Example", null, CancellationToken.None);
+
+        var action = Assert.Single(pou.Members, member => member.Kind == PouMemberKind.Action);
+        Assert.Equal("", action.Declaration);
+        Assert.True(action.DeclarationLine > 0, "an action with no declaration still needs a line");
+
+        var lines = File.ReadAllLines(pou.Path);
+        Assert.Contains(action.Name, lines[action.DeclarationLine - 1], StringComparison.Ordinal);
+
+        AssertFirstLineMatches(pou.Path, action.BodyLine, action.Body, "LogState body");
+    }
+
     private static async Task<XmlProjectReader> Primed(string projectPath)
     {
         var reader = new XmlProjectReader();
@@ -270,7 +291,10 @@ public class SourceLineMappingTests
     {
         if (text.Length == 0)
         {
-            Assert.Equal(0, line);
+            // An empty block either has no line at all, or carries the line of the element it
+            // belongs to (an ACTION, which has no declaration block). Either way it must not name
+            // a line that does not exist.
+            Assert.InRange(line, 0, File.ReadAllLines(path).Length);
             return 0;
         }
 

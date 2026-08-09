@@ -78,11 +78,11 @@ internal static class TcFileParser
 
         var methods = container.Elements().Where(e => e.Name.LocalName == "Method")
             .Select(m => new MemberPart(
-                m.Attribute("Name")?.Value ?? "", Declaration(m), StBody(m), ImplementationLanguage(m)))
+                m.Attribute("Name")?.Value ?? "", MemberDeclaration(m), StBody(m), ImplementationLanguage(m)))
             .ToList();
         var actions = container.Elements().Where(e => e.Name.LocalName == "Action")
             .Select(a => new MemberPart(
-                a.Attribute("Name")?.Value ?? "", Declaration(a), StBody(a), ImplementationLanguage(a)))
+                a.Attribute("Name")?.Value ?? "", MemberDeclaration(a), StBody(a), ImplementationLanguage(a)))
             .ToList();
         var properties = container.Elements().Where(e => e.Name.LocalName == "Property")
             .Select(p =>
@@ -406,6 +406,20 @@ internal static class TcFileParser
     private static SourceText Declaration(XElement element)
         => TextAt(Child(element, "Declaration"));
 
+    /// <summary>
+    /// A member's declaration, falling back to the member element's own line when there is no
+    /// declaration text.
+    ///
+    /// An ACTION has no declaration block at all: TwinCAT stores only its implementation, and its
+    /// name lives in the <c>Name</c> attribute. Without this a finding about an action's name has
+    /// nowhere to point, which is the one finding a reader would most want to click through to.
+    /// </summary>
+    private static SourceText MemberDeclaration(XElement element)
+    {
+        var declaration = Declaration(element);
+        return declaration.Line > 0 ? declaration : declaration with { Line = LineOf(element) };
+    }
+
     private static SourceText StBody(XElement element)
     {
         var implementation = Child(element, "Implementation");
@@ -441,10 +455,13 @@ internal static class TcFileParser
 
         // The CDATA node carries the position of the text itself. Falling back to the element
         // covers content stored as a plain text node, where both sit on the same line anyway.
-        XObject carrier = element.Nodes().OfType<XCData>().FirstOrDefault() ?? (XObject)element;
-        var line = carrier is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
+        var line = LineOf(element.Nodes().OfType<XCData>().FirstOrDefault() ?? (XObject)element);
         return new SourceText(text, line == 0 ? 0 : line + skipped);
     }
+
+    /// <summary>The 1-based file line a node sits on, or 0 when the document was parsed without line info.</summary>
+    private static int LineOf(XObject node)
+        => node is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
 
     /// <summary>
     /// The implementation language of a POU or member, taken from the element under
