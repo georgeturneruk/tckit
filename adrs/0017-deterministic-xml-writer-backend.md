@@ -39,10 +39,6 @@ authored entirely by the xml backend, LineIds absent.**
 
 - Whether `CreateProject`/`AddPlcProject` can scaffold from embedded
   templates in a later phase (v1 fails explicitly).
-- ParameterGuard state is per process, so CLI-per-verb automation usage
-  loses spliced parameter blocks on the next verb's save (found by the
-  parity harness; the long-lived MCP server is unaffected). Worth a
-  follow-up: persist guard registrations, or re-verify from disk.
 
 ## Context
 
@@ -163,3 +159,9 @@ oracle.
   diverged. Live findings beyond the writer: XAE happily opens and builds
   files without LineIds, and the ParameterGuard per-process gap above.
   Implemented (+ `pr:`) once the PR merges.
+- 2026-08-09 (guard fix): The ParameterGuard per-process gap is closed:
+  every automation verb now seeds the guard registry from the on-disk
+  Parameters blocks before running (`ParameterGuard.SeedFromDisk`), so
+  CLI-per-verb hosts defend blocks spliced by earlier processes exactly
+  like the long-lived server. Live-verified: the parity sweep runs the
+  splice before further automation verbs again and stays 28/28 green.

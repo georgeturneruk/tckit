@@ -282,12 +282,12 @@ $sequence = @(
     @{ Label = 'update-pou-implementation-patch';  Args = @('update-pou-implementation-patch', 'FB_Parity', '+ 2;', '+ 3;', '--plc', $plc) },
     @{ Label = 'update-method-body-patch';         Args = @('update-method-body-patch', 'FB_Parity', 'Step', 'dt > 0.0', 'dt >= 0.0', '--plc', $plc) },
     @{ Label = 'add-library-placeholder';          Args = @('add-library-placeholder', 'Tc3_Module', 'Tc3_Module', '--distributor', 'Beckhoff Automation GmbH', '--plc', $plc) },
+    # The splice deliberately runs BEFORE further automation verbs: their saves once dropped the
+    # spliced block in CLI-per-verb usage (ParameterGuard state was process-only); the guard now
+    # seeds from disk each verb, and this ordering keeps that regression covered.
+    @{ Label = 'set-placeholder-parameters';       Args = @('set-placeholder-parameters', 'Tc3_Module', "@$paramsFile", '--plc', $plc) },
     @{ Label = 'add-library-reference';            Args = @('add-library-reference', 'Tc2_Utilities', '--version', '*', '--distributor', 'Beckhoff Automation GmbH', '--plc', $plc) },
     @{ Label = 'delete-library-reference';         Args = @('delete-library-reference', 'Tc2_Utilities', '--version', '*', '--distributor', 'Beckhoff Automation GmbH', '--plc', $plc) },
-    # Parameter splice runs last in the library lane: ParameterGuard state is per process, so in
-    # CLI-per-verb usage any LATER automation verb's save would silently drop the spliced block
-    # (a real automation-lane limitation the parity run surfaced; see ADR-0017 status notes).
-    @{ Label = 'set-placeholder-parameters';       Args = @('set-placeholder-parameters', 'Tc3_Module', "@$paramsFile", '--plc', $plc) },
     @{ Label = 'delete-placeholder';               Args = @('delete-placeholder', 'Tc3_Module', '--plc', $plc) },
     @{ Label = 'delete-variable';                  Args = @('delete-variable', 'FB_Parity', 'bEnable', '--plc', $plc) },
     @{ Label = 'delete-property';                  Args = @('delete-property', 'FB_Parity', 'Value', '--plc', $plc) },

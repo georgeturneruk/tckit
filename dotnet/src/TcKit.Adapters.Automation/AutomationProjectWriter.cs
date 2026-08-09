@@ -180,6 +180,10 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
             return Task.FromResult(_sta.Run(() =>
             {
                 using var session = new ComTcSession();
+                // Adopt the Parameters blocks already on disk before the verb runs: the guard's
+                // registry is process state, and a one-verb-per-process host (the CLI) must keep
+                // defending blocks spliced by earlier processes.
+                ParameterGuard.SeedFromDisk(Path.GetDirectoryName(session.SolutionPath));
                 var result = author(session);
                 // Any verb's save can silently drop spliced library-parameter blocks from the
                 // .plcproj (XAE's in-memory model never learns them); re-check and restore here so

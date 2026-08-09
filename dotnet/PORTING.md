@@ -271,6 +271,8 @@ canonicalised trees against the automation backend on a live 4026).
   iterations: property shapes `PROPERTY PUBLIC` / accessor `Name` attrs /
   `PUBLIC`+VAR accessor declaration, then the library-lane shapes above).
   XAE opens and compiles an xml-authored project clean (CheckAllObjects,
-  LineIds absent). Side finding: ParameterGuard state is per process, so
-  CLI-per-verb automation usage loses spliced parameter blocks on the next
-  verb's save (the long-lived server is unaffected; ADR-0017 open item).
+  LineIds absent). Side finding, since fixed: ParameterGuard state was per
+  process, so CLI-per-verb automation usage lost spliced parameter blocks
+  on the next verb's save; the guard now seeds its registry from the
+  on-disk Parameters blocks before every verb (live-verified: the sweep
+  splices before further automation verbs and stays green).

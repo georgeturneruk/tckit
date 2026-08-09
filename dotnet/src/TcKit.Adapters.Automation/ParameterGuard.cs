@@ -14,6 +14,12 @@ namespace TcKit.Adapters.Automation;
 ///
 /// Entries whose file or reference element vanished are dropped silently: that is a deliberate
 /// delete, not a lost parameter.
+///
+/// The registry is process state, but the disk is the durable store: every verb seeds the
+/// registry from the on-disk Parameters blocks before running (<see cref="SeedFromDisk"/>), so a
+/// one-verb-per-process host (the CLI) protects blocks spliced by earlier processes exactly like
+/// the long-lived server protects its own. In-process registrations take precedence over the
+/// seed; they may carry values newer than what is on disk mid-verb.
 /// </summary>
 internal static class ParameterGuard
 {
@@ -65,6 +71,29 @@ internal static class ParameterGuard
 
     /// <summary>Drop everything (test isolation).</summary>
     public static void Clear() => Entries.Clear();
+
+    /// <summary>
+    /// Adopt every Parameters block already on disk under the solution as a guarded entry
+    /// (existing registrations win). Run before each verb: whatever the previous verb's
+    /// VerifyOrRestore left on disk is the truth a fresh process must keep defending.
+    /// </summary>
+    public static void SeedFromDisk(string? solutionDir)
+    {
+        if (string.IsNullOrEmpty(solutionDir) || !Directory.Exists(solutionDir))
+        {
+            return;
+        }
+
+        foreach (var plcProjPath in Directory.EnumerateFiles(solutionDir, "*.plcproj", SearchOption.AllDirectories))
+        {
+            foreach (var block in PlcProjXml.ReadReferenceParameters(plcProjPath))
+            {
+                Entries.TryAdd(
+                    Key(plcProjPath, block.ElementName, block.ReferenceName),
+                    new Entry(plcProjPath, block.ElementName, block.ReferenceName, Copy(block.Parameters)));
+            }
+        }
+    }
 
     /// <summary>
     /// Re-check every registered block on disk and restore any an XAE save dropped. Returns the

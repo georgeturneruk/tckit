@@ -132,6 +132,79 @@ public static class PlcProjXml
         return true;
     }
 
+    /// <summary>One reference's on-disk parameter overrides, as read back from a .plcproj.</summary>
+    public sealed record ReferenceParameters(
+        string ElementName, string ReferenceName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Parameters);
+
+    /// <summary>
+    /// Read every &lt;Parameters&gt; override block in a .plcproj: each placeholder or library
+    /// reference that carries one, with its (ListName, Key, Value) entries. A missing or
+    /// malformed file reads as "no overrides" (the splice path surfaces the real error).
+    /// </summary>
+    public static IReadOnlyList<ReferenceParameters> ReadReferenceParameters(string plcProjPath)
+    {
+        if (!File.Exists(plcProjPath))
+        {
+            return [];
+        }
+
+        XmlDocument doc;
+        try
+        {
+            doc = Load(plcProjPath);
+        }
+#pragma warning disable CA1031 // A malformed file means "no overrides to protect"; the splice path errors properly.
+        catch (Exception)
+        {
+            return [];
+        }
+#pragma warning restore CA1031
+
+        var results = new List<ReferenceParameters>();
+        foreach (var elementName in new[] { PlaceholderElement, LibraryElement })
+        {
+            foreach (var reference in doc.SelectNodes($"//*[local-name()='{elementName}']")!.OfType<XmlElement>())
+            {
+                var wrapper = reference.ChildNodes.Cast<XmlNode>()
+                    .FirstOrDefault(c => c.NodeType == XmlNodeType.Element && c.LocalName == "Parameters");
+                if (wrapper is null)
+                {
+                    continue;
+                }
+
+                var parameters = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var parameter in wrapper.ChildNodes.OfType<XmlElement>().Where(e => e.LocalName == "Parameter"))
+                {
+                    var listName = parameter.GetAttribute("ListName");
+                    var key = parameter.ChildNodes.OfType<XmlElement>().FirstOrDefault(c => c.LocalName == "Key")?.InnerText;
+                    var value = parameter.ChildNodes.OfType<XmlElement>().FirstOrDefault(c => c.LocalName == "Value")?.InnerText;
+                    if (string.IsNullOrEmpty(listName) || string.IsNullOrEmpty(key) || value is null)
+                    {
+                        continue;
+                    }
+
+                    if (parameters.TryGetValue(listName, out var keys))
+                    {
+                        ((Dictionary<string, string>)keys)[key] = value;
+                    }
+                    else
+                    {
+                        parameters[listName] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [key] = value };
+                    }
+                }
+
+                if (parameters.Count > 0)
+                {
+                    var name = reference.GetAttribute("Include").Split(',')[0].Trim();
+                    results.Add(new ReferenceParameters(elementName, name, parameters));
+                }
+            }
+        }
+
+        return results;
+    }
+
     /// <summary>
     /// Splice or replace a &lt;Parameters&gt; override block under a named &lt;PlaceholderReference&gt;.
     /// See <see cref="SetReferenceParameters"/> for semantics.
