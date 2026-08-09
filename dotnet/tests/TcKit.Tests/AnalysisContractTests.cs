@@ -28,6 +28,8 @@ public class AnalysisContractTests
                 ItemName = "Execute",
                 Part = CodePart.Declaration,
                 Line = 4,
+                FilePath = @"C:\proj\Plc\POUs\FB_Host.TcPOU",
+                FileLine = 27,
                 Symbol = "delay",
                 Suggestion = "",
             },
@@ -43,6 +45,8 @@ public class AnalysisContractTests
     [InlineData("rule_id")]
     [InlineData("object_name")]
     [InlineData("item_name")]
+    [InlineData("file_path")]
+    [InlineData("file_line")]
     [InlineData("config_warnings")]
     [InlineData("rules_not_run")]
     public void Serialize_UsesSnakeCaseKeys(string key)

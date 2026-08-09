@@ -22,19 +22,29 @@ internal static class TcFileParser
 
     internal sealed record TaskRaw(string Name, int? CycleTimeUs, int? Priority, IReadOnlyList<string> Programs);
 
-    internal sealed record AccessorPart(string Declaration, string Body);
+    /// <summary>
+    /// A block of source text lifted out of the XML, with the 1-based line of the file its first
+    /// character sits on. Everything a rule reports is located relative to one of these, so the
+    /// line is what turns "line 4 of <c>Execute</c>" into a line a reader or an editor can open.
+    /// </summary>
+    internal readonly record struct SourceText(string Text, int Line)
+    {
+        internal static readonly SourceText Empty = new("", 0);
+    }
 
-    internal sealed record MemberPart(string Name, string Declaration, string Body, string Language);
+    internal sealed record AccessorPart(SourceText Declaration, SourceText Body);
 
-    internal sealed record PropertyPart(string Name, string Declaration, AccessorPart? Get, AccessorPart? Set);
+    internal sealed record MemberPart(string Name, SourceText Declaration, SourceText Body, string Language);
+
+    internal sealed record PropertyPart(string Name, SourceText Declaration, AccessorPart? Get, AccessorPart? Set);
 
     internal sealed record PouFull(
-        string Name, PouType Type, string Declaration, string Body, string Language,
+        string Name, PouType Type, SourceText Declaration, SourceText Body, string Language,
         IReadOnlyList<MemberPart> Methods, IReadOnlyList<MemberPart> Actions, IReadOnlyList<PropertyPart> Properties);
 
-    internal sealed record GvlFull(string Name, string Declaration);
+    internal sealed record GvlFull(string Name, SourceText Declaration);
 
-    internal sealed record DutFull(string Name, string Declaration, DutKind Kind, string BaseType);
+    internal sealed record DutFull(string Name, SourceText Declaration, DutKind Kind, string BaseType);
 
     /// <summary>Parse a .TcPOU for its name and POU type. Handles &lt;POU&gt; and &lt;Itf&gt; roots.</summary>
     internal static PouMeta ParsePou(string path)
@@ -43,7 +53,7 @@ internal static class TcFileParser
         var container = Child(root, "POU") ?? Child(root, "Itf")
             ?? throw new InvalidDataException($"No <POU> or <Itf> element found in {path}");
         var name = container.Attribute("Name")?.Value ?? "";
-        var declaration = Declaration(container);
+        var declaration = Declaration(container).Text;
         return new PouMeta(name, DetectPouType(declaration, container.Name.LocalName));
     }
 
@@ -64,7 +74,7 @@ internal static class TcFileParser
             ?? throw new InvalidDataException($"No <POU> or <Itf> element found in {path}");
         var name = container.Attribute("Name")?.Value ?? "";
         var declaration = Declaration(container);
-        var type = DetectPouType(declaration, container.Name.LocalName);
+        var type = DetectPouType(declaration.Text, container.Name.LocalName);
 
         var methods = container.Elements().Where(e => e.Name.LocalName == "Method")
             .Select(m => new MemberPart(
@@ -108,7 +118,7 @@ internal static class TcFileParser
         var dut = Child(root, "DUT")
             ?? throw new InvalidDataException($"No <DUT> element found in {path}");
         var declaration = Declaration(dut);
-        var (kind, baseType) = ClassifyDutFull(declaration);
+        var (kind, baseType) = ClassifyDutFull(declaration.Text);
         return new DutFull(dut.Attribute("Name")?.Value ?? "", declaration, kind, baseType);
     }
 
@@ -119,7 +129,7 @@ internal static class TcFileParser
         var dut = Child(root, "DUT")
             ?? throw new InvalidDataException($"No <DUT> element found in {path}");
         var name = dut.Attribute("Name")?.Value ?? "";
-        return new DutMeta(name, ClassifyDut(Declaration(dut)));
+        return new DutMeta(name, ClassifyDut(Declaration(dut).Text));
     }
 
     /// <summary>Parse a .plcproj for its library references.</summary>
@@ -379,7 +389,9 @@ internal static class TcFileParser
     {
         try
         {
-            return XDocument.Load(path).Root
+            // SetLineInfo is what lets a finding be reported against a line of the file on disk
+            // rather than only a line within one CDATA block.
+            return XDocument.Load(path, LoadOptions.SetLineInfo).Root
                 ?? throw new InvalidDataException($"Empty XML document: {path}");
         }
         catch (XmlException exc)
@@ -391,13 +403,47 @@ internal static class TcFileParser
     private static XElement? Child(XElement parent, string localName)
         => parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName);
 
-    private static string Declaration(XElement element)
-        => (Child(element, "Declaration")?.Value ?? "").Trim();
+    private static SourceText Declaration(XElement element)
+        => TextAt(Child(element, "Declaration"));
 
-    private static string StBody(XElement element)
+    private static SourceText StBody(XElement element)
     {
         var implementation = Child(element, "Implementation");
-        return implementation is null ? "" : (Child(implementation, "ST")?.Value ?? "").Trim();
+        return implementation is null ? SourceText.Empty : TextAt(Child(implementation, "ST"));
+    }
+
+    /// <summary>
+    /// The trimmed text of an element together with the file line its first character sits on.
+    ///
+    /// TwinCAT stores every declaration and body in a CDATA section, and the reader reports that
+    /// section's position, so a finding at line N of the block is at <c>Line + N - 1</c> in the
+    /// file. The offset accounts for the trim: a <c>&lt;![CDATA[</c> opener followed by a newline
+    /// would otherwise place the first line of code one line too high.
+    /// </summary>
+    private static SourceText TextAt(XElement? element)
+    {
+        if (element is null)
+        {
+            return SourceText.Empty;
+        }
+
+        var raw = element.Value;
+        var text = raw.Trim();
+        if (text.Length == 0)
+        {
+            return SourceText.Empty;
+        }
+
+        // XML end-of-line normalisation has already collapsed CRLF to LF here, so counting '\n'
+        // agrees with the file's own line numbering whichever the file uses.
+        var leading = raw.Length - raw.AsSpan().TrimStart().Length;
+        var skipped = raw.AsSpan(0, leading).Count('\n');
+
+        // The CDATA node carries the position of the text itself. Falling back to the element
+        // covers content stored as a plain text node, where both sit on the same line anyway.
+        XObject carrier = element.Nodes().OfType<XCData>().FirstOrDefault() ?? (XObject)element;
+        var line = carrier is IXmlLineInfo info && info.HasLineInfo() ? info.LineNumber : 0;
+        return new SourceText(text, line == 0 ? 0 : line + skipped);
     }
 
     /// <summary>

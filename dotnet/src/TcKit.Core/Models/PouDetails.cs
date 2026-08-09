@@ -52,6 +52,9 @@ public sealed record Gvl
     public required string Name { get; init; }
     public required string Path { get; init; }
     public required string Declaration { get; init; }
+
+    /// <summary>1-based line of <see cref="Path"/> where <see cref="Declaration"/> starts; 0 when unknown.</summary>
+    public int DeclarationLine { get; init; }
 }
 
 /// <summary>A Data Unit Type's declaration; <see cref="BaseType"/> is the aliased type for ALIAS DUTs, empty otherwise.</summary>
@@ -62,6 +65,9 @@ public sealed record Dut
     public required string Declaration { get; init; }
     public DutKind DutKind { get; init; } = DutKind.Struct;
     public string BaseType { get; init; } = "";
+
+    /// <summary>1-based line of <see cref="Path"/> where <see cref="Declaration"/> starts; 0 when unknown.</summary>
+    public int DeclarationLine { get; init; }
 }
 
 /// <summary>What a <see cref="PouMember"/> is. Property accessors are separate members from the property header.</summary>
@@ -89,6 +95,12 @@ public sealed record PouMember
     /// <summary>ST, LD, FBD, SFC, CFC or IL; empty when there is no implementation.
     /// Only ST is stored as readable source, so anything else leaves <see cref="Body"/> empty.</summary>
     public string Language { get; init; } = "";
+
+    /// <summary>1-based file line where <see cref="Declaration"/> starts; 0 when unknown.</summary>
+    public int DeclarationLine { get; init; }
+
+    /// <summary>1-based file line where <see cref="Body"/> starts; 0 when unknown or empty.</summary>
+    public int BodyLine { get; init; }
 }
 
 /// <summary>
@@ -106,6 +118,12 @@ public sealed record PouSource
 
     /// <summary>ST, LD, FBD, SFC, CFC or IL; empty when there is no implementation.</summary>
     public string Language { get; init; } = "";
+
+    /// <summary>1-based line of <see cref="Path"/> where <see cref="Declaration"/> starts; 0 when unknown.</summary>
+    public int DeclarationLine { get; init; }
+
+    /// <summary>1-based line of <see cref="Path"/> where <see cref="Body"/> starts; 0 when unknown or empty.</summary>
+    public int BodyLine { get; init; }
 
     public IReadOnlyList<PouMember> Members { get; init; } = [];
 

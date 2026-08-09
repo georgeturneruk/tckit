@@ -157,7 +157,11 @@ public sealed class ProjectAnalyser(IProjectReader reader) : IProjectAnalyser
             .Concat(CorrectnessRules.Run(project, settings))
             .ToList();
 
-        var findings = FindingSuppressor.Apply(raw, project)
+        var suppressed = FindingSuppressor.Apply(raw, project);
+
+        // Located after suppression and before filtering, so the cost is paid once per finding that
+        // actually survives to be reported.
+        var findings = FindingLocator.Apply(suppressed, project)
             .Where(finding => finding.Severity >= request.MinimumSeverity)
             .Where(finding => request.RuleIds.Count == 0
                 || request.RuleIds.Contains(finding.RuleId, StringComparer.OrdinalIgnoreCase))

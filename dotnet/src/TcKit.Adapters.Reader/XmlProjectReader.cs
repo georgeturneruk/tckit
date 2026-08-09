@@ -41,15 +41,15 @@ public sealed class XmlProjectReader : IProjectReader
             var methods = pou.Methods.Select(m => new MethodSignature
             {
                 Name = m.Name,
-                ReturnType = TcFileParser.ExtractMethodReturnType(m.Declaration),
+                ReturnType = TcFileParser.ExtractMethodReturnType(m.Declaration.Text),
                 // Method locals are implementation detail, not API surface; get_pou_item keeps them.
-                Declaration = TcFileParser.StripMethodLocals(m.Declaration),
+                Declaration = TcFileParser.StripMethodLocals(m.Declaration.Text),
             }).ToList();
             var properties = pou.Properties.Select(p => new PropertySignature
             {
                 Name = p.Name,
-                ReturnType = TcFileParser.ExtractPropertyReturnType(p.Declaration),
-                Declaration = p.Declaration,
+                ReturnType = TcFileParser.ExtractPropertyReturnType(p.Declaration.Text),
+                Declaration = p.Declaration.Text,
                 HasGet = p.Get is not null,
                 HasSet = p.Set is not null,
             }).ToList();
@@ -58,7 +58,7 @@ public sealed class XmlProjectReader : IProjectReader
             {
                 PouName = pouName,
                 PouType = pou.Type,
-                Declaration = pou.Declaration,
+                Declaration = pou.Declaration.Text,
                 Methods = methods,
                 Properties = properties,
                 Actions = pou.Actions.Select(a => a.Name).ToList(),
@@ -77,7 +77,7 @@ public sealed class XmlProjectReader : IProjectReader
             {
                 PouName = pouName,
                 PouType = pou.Type,
-                Declaration = pou.Declaration,
+                Declaration = pou.Declaration.Text,
             });
         }
     }
@@ -117,8 +117,8 @@ public sealed class XmlProjectReader : IProjectReader
                 {
                     PouName = pouName,
                     ItemName = itemName,
-                    Declaration = part.Declaration,
-                    Body = part.Body,
+                    Declaration = part.Declaration.Text,
+                    Body = part.Body.Text,
                 });
             }
 
@@ -131,8 +131,8 @@ public sealed class XmlProjectReader : IProjectReader
                 {
                     PouName = pouName,
                     ItemName = itemName,
-                    Declaration = member.Declaration,
-                    Body = member.Body,
+                    Declaration = member.Declaration.Text,
+                    Body = member.Body.Text,
                 });
             }
 
@@ -143,7 +143,7 @@ public sealed class XmlProjectReader : IProjectReader
                 {
                     PouName = pouName,
                     ItemName = itemName,
-                    Declaration = bareProperty.Declaration,
+                    Declaration = bareProperty.Declaration.Text,
                     Body = "",
                 });
             }
@@ -166,16 +166,20 @@ public sealed class XmlProjectReader : IProjectReader
             {
                 Name = m.Name,
                 Kind = PouMemberKind.Method,
-                Declaration = m.Declaration,
-                Body = m.Body,
+                Declaration = m.Declaration.Text,
+                DeclarationLine = m.Declaration.Line,
+                Body = m.Body.Text,
+                BodyLine = m.Body.Line,
                 Language = m.Language,
             }));
             members.AddRange(pou.Actions.Select(a => new PouMember
             {
                 Name = a.Name,
                 Kind = PouMemberKind.Action,
-                Declaration = a.Declaration,
-                Body = a.Body,
+                Declaration = a.Declaration.Text,
+                DeclarationLine = a.Declaration.Line,
+                Body = a.Body.Text,
+                BodyLine = a.Body.Line,
                 Language = a.Language,
             }));
 
@@ -187,7 +191,8 @@ public sealed class XmlProjectReader : IProjectReader
                 {
                     Name = property.Name,
                     Kind = PouMemberKind.Property,
-                    Declaration = property.Declaration,
+                    Declaration = property.Declaration.Text,
+                    DeclarationLine = property.Declaration.Line,
                     Body = "",
                 });
 
@@ -197,8 +202,10 @@ public sealed class XmlProjectReader : IProjectReader
                     {
                         Name = $"{property.Name}.Get",
                         Kind = PouMemberKind.PropertyGet,
-                        Declaration = property.Get.Declaration,
-                        Body = property.Get.Body,
+                        Declaration = property.Get.Declaration.Text,
+                        DeclarationLine = property.Get.Declaration.Line,
+                        Body = property.Get.Body.Text,
+                        BodyLine = property.Get.Body.Line,
                     });
                 }
 
@@ -208,8 +215,10 @@ public sealed class XmlProjectReader : IProjectReader
                     {
                         Name = $"{property.Name}.Set",
                         Kind = PouMemberKind.PropertySet,
-                        Declaration = property.Set.Declaration,
-                        Body = property.Set.Body,
+                        Declaration = property.Set.Declaration.Text,
+                        DeclarationLine = property.Set.Declaration.Line,
+                        Body = property.Set.Body.Text,
+                        BodyLine = property.Set.Body.Line,
                     });
                 }
             }
@@ -219,8 +228,10 @@ public sealed class XmlProjectReader : IProjectReader
                 PouName = pou.Name.Length > 0 ? pou.Name : pouName,
                 PouType = pou.Type,
                 Path = path,
-                Declaration = pou.Declaration,
-                Body = pou.Body,
+                Declaration = pou.Declaration.Text,
+                DeclarationLine = pou.Declaration.Line,
+                Body = pou.Body.Text,
+                BodyLine = pou.Body.Line,
                 Language = pou.Language,
                 Members = members,
             });
@@ -234,7 +245,13 @@ public sealed class XmlProjectReader : IProjectReader
         {
             var path = Resolve(gvlName, ".TcGVL", plcName);
             var gvl = TcFileParser.ParseGvlFull(path);
-            return Task.FromResult(new Gvl { Name = gvlName, Path = path, Declaration = gvl.Declaration });
+            return Task.FromResult(new Gvl
+            {
+                Name = gvlName,
+                Path = path,
+                Declaration = gvl.Declaration.Text,
+                DeclarationLine = gvl.Declaration.Line,
+            });
         }
     }
 
@@ -249,7 +266,8 @@ public sealed class XmlProjectReader : IProjectReader
             {
                 Name = dutName,
                 Path = path,
-                Declaration = dut.Declaration,
+                Declaration = dut.Declaration.Text,
+                DeclarationLine = dut.Declaration.Line,
                 DutKind = dut.Kind,
                 BaseType = dut.BaseType,
             });

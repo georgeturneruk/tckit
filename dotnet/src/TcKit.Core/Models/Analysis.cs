@@ -69,6 +69,20 @@ public sealed record AnalysisFinding
     /// <summary>1-based line within the item's declaration or implementation.</summary>
     public required int Line { get; init; }
 
+    /// <summary>
+    /// Absolute path of the file this finding is in, or empty when it could not be resolved.
+    /// Absolute rather than relative because there is no one base directory that suits every
+    /// consumer: a solution may sit outside the repository, so whoever needs a relative path
+    /// (SARIF, for one) makes it relative to the base it was given.
+    /// </summary>
+    public string FilePath { get; init; } = "";
+
+    /// <summary>
+    /// 1-based line of <see cref="FilePath"/>, or 0 when unknown. <see cref="Line"/> counts within
+    /// one CDATA block of the TwinCAT XML, so it is not a line of anything on disk; this is.
+    /// </summary>
+    public int FileLine { get; init; }
+
     /// <summary>The identifier the finding is about.</summary>
     public required string Symbol { get; init; }
 
