@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
@@ -23,7 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TcKit.Core\TcKit.Core.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Ads\TcKit.Ads.csproj" />
-    <ProjectReference Include="..\..\src\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
+    <ProjectReference Include="..\..\src\TcKit.Adapters.Xml\TcKit.Adapters.Xml.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Adapters.Ads\TcKit.Adapters.Ads.csproj" />
     <ProjectReference Include="..\..\src\TcKit.Adapters.Analysis\TcKit.Adapters.Analysis.csproj" />

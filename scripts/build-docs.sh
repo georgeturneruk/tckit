@@ -27,9 +27,9 @@ echo "==> Installing .NET 8 SDK"
 curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0 --install-dir "${DOTNET_DIR}"
 export PATH="${DOTNET_DIR}:${PATH}"
 export DOTNET_NOLOGO=true DOTNET_CLI_TELEMETRY_OPTOUT=true
-# The projects target net8.0-windows; the SDK needs this to restore the
-# Windows reference assemblies on Linux. The doc generator itself is pure
-# managed code and runs fine here.
+# The CLI multi-targets net8.0;net8.0-windows; restore evaluates both flavours,
+# and the windows one needs this to pull its reference assemblies on Linux.
+# The doc generator itself is pure managed code and runs fine here.
 export EnableWindowsTargeting=true
 
 echo "==> Installing mkdocs-material"
@@ -41,7 +41,8 @@ git clone --depth 1 --branch "${TCUNIT_REF}" "${TCUNIT_REPO}" "${TCUNIT_DIR}"
 
 echo "==> Generating TcUnit doc tree"
 rm -rf "${TCUNIT_DOCS_DIR}"
-dotnet run --project dotnet/src/TcKit.Cli -c Release -- generate-docs "${TCUNIT_DIR}" "${TCUNIT_DOCS_DIR}"
+# --framework: the CLI multi-targets; the plain net8.0 flavour is the Linux one.
+dotnet run --project dotnet/src/TcKit.Cli -c Release --framework net8.0 -- generate-docs "${TCUNIT_DIR}" "${TCUNIT_DOCS_DIR}"
 
 echo "==> Building MkDocs site"
 cd docs

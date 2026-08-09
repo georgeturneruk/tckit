@@ -4,7 +4,7 @@ using System.Xml.Linq;
 using TcKit.Core.Analysis;
 using TcKit.Core.Models;
 
-namespace TcKit.Adapters.Reader;
+namespace TcKit.Adapters.Xml;
 
 /// <summary>
 /// Metadata extractors for TwinCAT project files (.TcPOU / .TcGVL / .TcDUT / .TcTTO /

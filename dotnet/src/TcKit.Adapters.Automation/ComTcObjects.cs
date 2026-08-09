@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -6,6 +7,7 @@ namespace TcKit.Adapters.Automation;
 /// COM-backed <see cref="ITcTreeItem"/> over a late-bound ITcSmTreeItem. Every call is wrapped in
 /// <see cref="ComRetry"/> for the XAE-busy rejections. Assumes it runs on the STA worker thread.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
 {
     private readonly dynamic _item = item;
@@ -70,6 +72,7 @@ internal sealed class ComTcTreeItem(dynamic item) : ITcTreeItem
 }
 
 /// <summary>COM-backed <see cref="ITcSysManager"/> over a late-bound ITcSysManager.</summary>
+[SupportedOSPlatform("windows")]
 internal sealed class ComTcSysManager(string projectName, dynamic sysManager, dynamic dteProject) : ITcSysManager
 {
     private readonly dynamic _sm = sysManager;
@@ -94,6 +97,7 @@ internal sealed class ComTcSysManager(string projectName, dynamic sysManager, dy
 /// bridge harness's solution-open, lazy-load wait, and sysmanager probing. Created and used only
 /// on the STA worker thread; does not release the live DTE (it is the user's running instance).
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class ComTcSession : ITcSession
 {
     private static string ProgId

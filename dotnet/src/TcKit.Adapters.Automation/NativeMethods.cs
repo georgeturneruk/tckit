@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -7,6 +8,7 @@ namespace TcKit.Adapters.Automation;
 /// was removed from .NET Core/8, so net8 must call the underlying <c>GetActiveObject</c> (oleaut32)
 /// plus <c>CLSIDFromProgID</c> (ole32) directly. Proven against live 4026 in the Phase-0 spike.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal static class NativeMethods
 {
     [DllImport("ole32.dll", PreserveSig = true)]

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -8,6 +9,7 @@ namespace TcKit.Adapters.Automation;
 /// COM interop in TcKit (see CONVENTIONS.md). Wrap every Automation Interface object
 /// in a <c>using</c> over one of these.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class ComScope : IDisposable
 {
     private object? _comObject;

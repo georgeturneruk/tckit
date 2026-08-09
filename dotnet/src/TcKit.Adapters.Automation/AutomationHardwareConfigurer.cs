@@ -1,5 +1,6 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -8,6 +9,7 @@ namespace TcKit.Adapters.Automation;
 /// marshals each verb onto the STA worker, opens a COM-backed <see cref="ComTcSession"/>, and delegates
 /// to <see cref="ProjectAuthor"/> (COM-agnostic, unit-tested against a fake).
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class AutomationHardwareConfigurer : IHardwareConfigurer, IDisposable
 {
     private readonly StaExecutor _sta = new();

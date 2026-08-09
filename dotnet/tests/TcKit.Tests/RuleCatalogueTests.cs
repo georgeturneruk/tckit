@@ -1,6 +1,6 @@
 using System.Reflection;
 using TcKit.Adapters.Analysis;
-using TcKit.Adapters.Reader;
+using TcKit.Adapters.Xml;
 using TcKit.Core.Models;
 
 namespace TcKit.Tests;

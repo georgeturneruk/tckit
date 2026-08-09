@@ -1,4 +1,5 @@
 using TcKit.Adapters.Automation;
+using TcKit.Core.Authoring;
 using TcKit.Core.Models;
 
 namespace TcKit.Tests;
@@ -155,6 +156,30 @@ public class ProjectAuthorTests
 
         ProjectAuthor.AddPou(session, "FB_X", PouType.FunctionBlock, "", "", "Tests");
         Assert.NotNull(pous["Tests"].FindDirect("FB_X"));
+    }
+
+    [Fact]
+    public void ResolvePlcName_EnvDefaultMatchingAPlc_Wins()
+    {
+        var (session, _, _) = FakeProject.Build("Library", "Tests");
+
+        Assert.Equal("Tests", ProjectAuthor.ResolvePlcName(session, null, "Tests"));
+    }
+
+    [Fact]
+    public void ResolvePlcName_EnvDefaultNotInSolution_FallsThroughToSolePlc()
+    {
+        var (session, _, _) = FakeProject.Build("Plc");
+
+        Assert.Equal("Plc", ProjectAuthor.ResolvePlcName(session, null, "OtherProject"));
+    }
+
+    [Fact]
+    public void ResolvePlcName_ExplicitName_BeatsEnvDefault()
+    {
+        var (session, _, _) = FakeProject.Build("Library", "Tests");
+
+        Assert.Equal("Library", ProjectAuthor.ResolvePlcName(session, "Library", "Tests"));
     }
 
     [Fact]

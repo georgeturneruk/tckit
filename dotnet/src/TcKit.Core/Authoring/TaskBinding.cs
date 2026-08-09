@@ -1,15 +1,15 @@
 using System.Xml;
 using System.Xml.Linq;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
 /// File-side scan for PLC task bindings, used to refuse deleting a PROGRAM that a task still calls.
 /// Reads the .TcTTO task-object files under the solution directory (the binding lives in
-/// &lt;PouCall&gt;&lt;Name&gt;), independent of COM. Self-contained so the automation adapter does not
-/// import the reader adapter (adapter isolation).
+/// &lt;PouCall&gt;&lt;Name&gt;), independent of COM. Lives in Core because both writer backends
+/// apply the same guard and adapters cannot reference each other.
 /// </summary>
-internal static class TaskBinding
+public static class TaskBinding
 {
     /// <summary>The first task that calls <paramref name="pouName"/>, or null if none does.</summary>
     public static (string Task, string File)? Find(string solutionDir, string pouName)
