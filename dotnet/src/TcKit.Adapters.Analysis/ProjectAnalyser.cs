@@ -116,6 +116,21 @@ public sealed class ProjectAnalyser(IProjectReader reader) : IProjectAnalyser
                 + "without objectName to include them.");
         }
 
+        if (!scoped && project.HasUnreadableBodies)
+        {
+            var languages = pous
+                .Where(pou => pou.Source.HasUnreadableBody)
+                .Select(pou => pou.Name)
+                .Take(5)
+                .ToList();
+
+            rulesNotRun.Add(
+                $"{CorrectnessRules.UnreachableObjectId}: this project contains POUs written in a "
+                + "language other than ST, whose bodies are not stored as readable source, so a "
+                + "call made from one is invisible. Reachability would be unreliable. Affected: "
+                + string.Join(", ", languages) + (pous.Count(p => p.Source.HasUnreadableBody) > 5 ? ", ..." : ""));
+        }
+
         if (settings.Profile == NamingProfiles.Infer)
         {
             if (scoped)

@@ -168,6 +168,7 @@ public sealed class XmlProjectReader : IProjectReader
                 Kind = PouMemberKind.Method,
                 Declaration = m.Declaration,
                 Body = m.Body,
+                Language = m.Language,
             }));
             members.AddRange(pou.Actions.Select(a => new PouMember
             {
@@ -175,6 +176,7 @@ public sealed class XmlProjectReader : IProjectReader
                 Kind = PouMemberKind.Action,
                 Declaration = a.Declaration,
                 Body = a.Body,
+                Language = a.Language,
             }));
 
             foreach (var property in pou.Properties)
@@ -219,6 +221,7 @@ public sealed class XmlProjectReader : IProjectReader
                 Path = path,
                 Declaration = pou.Declaration,
                 Body = pou.Body,
+                Language = pou.Language,
                 Members = members,
             });
         }

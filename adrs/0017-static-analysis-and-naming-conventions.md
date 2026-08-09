@@ -54,6 +54,10 @@ scopes the run. `tc-write-st` runs a scoped pass after each write;
   made precise, so none shipped rather than shipping noisy.
 - `TCK3001` sees qualified writes only. Unqualified global access would need
   shadowing analysis; the rule under-reports instead.
+- Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are handled defensively
+  but have never been run against. Validating on a Ladder-heavy project is the
+  next real-world test worth doing, along with a project large enough to say
+  anything about performance; TcUnit at 75 objects says nothing.
 
 ## Context
 
@@ -333,6 +337,16 @@ are wanted.
   Net effect on TcUnit: 1360 findings to 370 under `infer`, with the remainder
   spot-checked as genuine (unused locals appearing exactly once in their file,
   inputs never read, globals with four writers). TcOpen: 302 to 286.
+
+  All 120 POUs across both projects are ST, so **non-ST implementation languages
+  remain untested**. That is a real hole rather than a theoretical one: only ST
+  is stored as readable source, so a call made from a Ladder or FBD network is
+  invisible and `TCK3002` would report anything called only from one as dead.
+  `PouSource.Language` now records the implementation language and `TCK3002`
+  stands down on any project containing a non-ST body, reporting why in
+  `rules_not_run`. The body-scanning rules fail safe in the other direction:
+  they under-report rather than inventing findings. Validating against a real
+  Ladder-heavy project is still outstanding.
 - 2026-08-09: `infer` and `TCK1005` built, closing the last two gaps.
   - `infer` learns type prefixes per type family and capitalisation plus scope
     prefixes per declaration kind, separately, because a Hungarian project uses

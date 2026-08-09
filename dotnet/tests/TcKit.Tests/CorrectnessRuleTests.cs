@@ -431,6 +431,35 @@ public class CorrectnessRuleTests
     }
 
     [Fact]
+    public void UnreachableObject_ProjectContainingLadder_StandsDown()
+    {
+        // A ladder network's contents are not stored as source, so a call made from one is
+        // invisible. Reporting dead code on that evidence would be confidently wrong.
+        var orphan = Pou("FB_Orphan", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Orphan\nVAR\nEND_VAR", "n := 1;");
+        var ladder = AnalysedProject.Analyse(
+            new PouSource
+            {
+                PouName = "PRG_Ladder",
+                PouType = PouType.Program,
+                Path = "PRG_Ladder.TcPOU",
+                Declaration = "PROGRAM PRG_Ladder\nVAR\nEND_VAR",
+                Body = "",
+                Language = "LD",
+            },
+            "Plc");
+
+        Assert.Empty(OfRule(Run([orphan, ladder]), CorrectnessRules.UnreachableObjectId));
+    }
+
+    [Fact]
+    public void UnreachableObject_AllStProject_StillRuns()
+    {
+        var orphan = Pou("FB_Orphan", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Orphan\nVAR\nEND_VAR", "n := 1;");
+
+        Assert.Single(OfRule(Run([orphan]), CorrectnessRules.UnreachableObjectId));
+    }
+
+    [Fact]
     public void Run_ScopedProject_SkipsTheCrossFileRules()
     {
         var orphan = Pou("FB_Orphan", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Orphan\nVAR\nEND_VAR", "n := 1;");

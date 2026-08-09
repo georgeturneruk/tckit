@@ -85,6 +85,10 @@ public sealed record PouMember
     public required string Declaration { get; init; }
 
     public required string Body { get; init; }
+
+    /// <summary>ST, LD, FBD, SFC, CFC or IL; empty when there is no implementation.
+    /// Only ST is stored as readable source, so anything else leaves <see cref="Body"/> empty.</summary>
+    public string Language { get; init; } = "";
 }
 
 /// <summary>
@@ -99,5 +103,19 @@ public sealed record PouSource
     public required string Path { get; init; }
     public required string Declaration { get; init; }
     public required string Body { get; init; }
+
+    /// <summary>ST, LD, FBD, SFC, CFC or IL; empty when there is no implementation.</summary>
+    public string Language { get; init; } = "";
+
     public IReadOnlyList<PouMember> Members { get; init; } = [];
+
+    /// <summary>
+    /// Whether any part of this POU is written in a language other than ST. Those bodies are not
+    /// stored as source, so a rule that scans bodies is blind to them rather than finding nothing.
+    /// </summary>
+    public bool HasUnreadableBody
+        => IsUnreadable(Language) || Members.Any(member => IsUnreadable(member.Language));
+
+    private static bool IsUnreadable(string language)
+        => language.Length > 0 && !language.Equals("ST", StringComparison.OrdinalIgnoreCase);
 }

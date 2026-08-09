@@ -79,6 +79,13 @@ public sealed record AnalysedProject
     /// </summary>
     public bool IsWholeProject { get; init; } = true;
 
+    /// <summary>
+    /// Whether any POU is written in Ladder, FBD, SFC, CFC or IL. Only ST is stored as source
+    /// text, so those bodies are invisible to us: a call made from a ladder network reads as no
+    /// call at all. Reachability cannot be trusted on such a project.
+    /// </summary>
+    public bool HasUnreadableBodies => Pous.Any(pou => pou.Source.HasUnreadableBody);
+
     /// <summary>Build the parsed model for one POU.</summary>
     public static AnalysedPou Analyse(PouSource source, string plcName)
     {

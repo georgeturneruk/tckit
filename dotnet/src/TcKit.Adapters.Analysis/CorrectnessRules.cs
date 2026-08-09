@@ -65,7 +65,14 @@ public static class CorrectnessRules
 
         UnreadInputs(project, settings, findings);
         MultiWriterGlobals(project, settings, findings);
-        UnreachableObjects(project, settings, findings);
+
+        // Reachability is a whole-project claim, and a project containing Ladder or FBD hides part
+        // of the evidence. Reporting a POU as dead when the only call to it is in a ladder network
+        // would be confidently wrong, so the rule stands down instead.
+        if (!project.HasUnreadableBodies)
+        {
+            UnreachableObjects(project, settings, findings);
+        }
 
         return findings;
     }

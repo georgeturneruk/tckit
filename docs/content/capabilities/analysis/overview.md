@@ -63,6 +63,7 @@ Each rule carries a guard, because a false positive is worse than a miss: it inv
 - `TCK3002` cannot tell dead code from a library intended for consumers outside the solution, which is why it is a suggestion rather than a warning.
 
 - `TCK3002` counts a namespace-qualified reference (`LibraryPlc.F_Trim`) as a use, which is how one PLC project calls into another. A library consumed only by a sibling test project is reached, not dead.
+- `TCK3002` stands down entirely on a project containing Ladder, FBD, SFC, CFC or IL. Only ST is stored as readable source, so a call made from a ladder network is invisible, and reporting dead code on that evidence would be wrong. The result says so in `rules_not_run`. The body-scanning rules are unaffected in the dangerous direction: they under-report rather than inventing findings.
 
 `TCK2005`, `TCK3001` and `TCK3002` need the whole solution in view, so they are skipped when `objectName` scopes the run, as is the `infer` profile. The result says which in `rules_not_run` rather than letting a partial pass look clean.
 

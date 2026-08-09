@@ -24,12 +24,12 @@ internal static class TcFileParser
 
     internal sealed record AccessorPart(string Declaration, string Body);
 
-    internal sealed record MemberPart(string Name, string Declaration, string Body);
+    internal sealed record MemberPart(string Name, string Declaration, string Body, string Language);
 
     internal sealed record PropertyPart(string Name, string Declaration, AccessorPart? Get, AccessorPart? Set);
 
     internal sealed record PouFull(
-        string Name, PouType Type, string Declaration, string Body,
+        string Name, PouType Type, string Declaration, string Body, string Language,
         IReadOnlyList<MemberPart> Methods, IReadOnlyList<MemberPart> Actions, IReadOnlyList<PropertyPart> Properties);
 
     internal sealed record GvlFull(string Name, string Declaration);
@@ -67,10 +67,12 @@ internal static class TcFileParser
         var type = DetectPouType(declaration, container.Name.LocalName);
 
         var methods = container.Elements().Where(e => e.Name.LocalName == "Method")
-            .Select(m => new MemberPart(m.Attribute("Name")?.Value ?? "", Declaration(m), StBody(m)))
+            .Select(m => new MemberPart(
+                m.Attribute("Name")?.Value ?? "", Declaration(m), StBody(m), ImplementationLanguage(m)))
             .ToList();
         var actions = container.Elements().Where(e => e.Name.LocalName == "Action")
-            .Select(a => new MemberPart(a.Attribute("Name")?.Value ?? "", Declaration(a), StBody(a)))
+            .Select(a => new MemberPart(
+                a.Attribute("Name")?.Value ?? "", Declaration(a), StBody(a), ImplementationLanguage(a)))
             .ToList();
         var properties = container.Elements().Where(e => e.Name.LocalName == "Property")
             .Select(p =>
@@ -85,7 +87,9 @@ internal static class TcFileParser
             })
             .ToList();
 
-        return new PouFull(name, type, declaration, StBody(container), methods, actions, properties);
+        return new PouFull(
+            name, type, declaration, StBody(container), ImplementationLanguage(container),
+            methods, actions, properties);
     }
 
     /// <summary>Parse a .TcGVL for its name and declaration block.</summary>
@@ -394,6 +398,20 @@ internal static class TcFileParser
     {
         var implementation = Child(element, "Implementation");
         return implementation is null ? "" : (Child(implementation, "ST")?.Value ?? "").Trim();
+    }
+
+    /// <summary>
+    /// The implementation language of a POU or member, taken from the element under
+    /// &lt;Implementation&gt;: ST, LD, FBD, SFC, CFC or IL. Empty when there is no implementation.
+    ///
+    /// Callers need this to know when a body is invisible to them: only ST is stored as source
+    /// text, so a ladder network's contents cannot be read, and any analysis that scans bodies is
+    /// blind to it rather than merely finding nothing.
+    /// </summary>
+    internal static string ImplementationLanguage(XElement element)
+    {
+        var implementation = Child(element, "Implementation");
+        return implementation?.Elements().FirstOrDefault()?.Name.LocalName ?? "";
     }
 
     private static string ChildText(XElement element, string localName)
