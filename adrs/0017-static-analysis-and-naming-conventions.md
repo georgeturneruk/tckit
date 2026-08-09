@@ -14,10 +14,11 @@ related: [0001, 0005, 0008, 0015]
 **Decision (live):** Ship an offline static analyser as `TcKit.Adapters.Analysis`
 behind an `IProjectAnalyser` port, surfaced as a single `AnalyseProject` MCP tool.
 Rules carry `TCK<n>` ids in four bands (1xxx naming, 2xxx correctness, 3xxx
-structure, 4xxx metrics). Configuration is `.editorconfig`-shaped and follows the
-Roslyn schema (`tckit_naming_symbols` / `tckit_naming_style` / `tckit_naming_rule`,
-plus `tckit_analyzer_diagnostic.category-<name>.severity`). Four shipped naming
-profiles: **`hybrid` (default)**, `dotnet`, `hungarian`, `infer`, plus `none`.
+structure, 4xxx metrics reserved but unused). Configuration is
+`.editorconfig`-shaped and follows the Roslyn schema (`tckit_naming_symbols` /
+`tckit_naming_style` / `tckit_naming_rule`, plus
+`tckit_analyzer_diagnostic.category-<name>.severity`). Five naming profiles:
+**`hybrid` (default)**, `dotnet`, `hungarian`, `infer`, `none`.
 Scope rule: only ship rules the TwinCAT compiler does not already catch. Nothing
 is auto-fixable in v1.
 
