@@ -76,7 +76,7 @@ public sealed class XmlProjectWriterTests : IDisposable
             "", null, CancellationToken.None);
 
         AssertOk(result);
-        Assert.Equal("TIPC^Plc^Plc Project^POUs^FB_X.TcPOU", result.Details["path"]);
+        Assert.Equal("TIPC^Plc^Plc Project^POUs^FB_X", result.Details["path"]);
         var text = File.ReadAllText(XmlScratch.PouPath(_root, "FB_X.TcPOU"));
         Assert.Contains("<POU Name=\"FB_X\"", text);
         Assert.Contains("n : INT;", text);

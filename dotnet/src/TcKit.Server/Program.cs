@@ -22,7 +22,11 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 builder.Services.AddSingleton<IPermissionGate>(_ => new FilePermissionGate());
 
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
-builder.Services.AddSingleton<IProjectWriter, AutomationProjectWriter>();
+
+// Writer backend selection (ADR-0017): resolved once at startup, never per call. An attached
+// XAE regenerates files from its stale in-memory tree on its next save, so interleaving the two
+// backends within a session would silently revert on-disk edits.
+builder.Services.AddSingleton<IProjectWriter>(_ => CreateProjectWriter());
 builder.Services.AddSingleton<IBuildRunner, AutomationBuildRunner>();
 builder.Services.AddSingleton<IRuntimeControl, AdsRuntimeControl>();
 builder.Services.AddSingleton<ITestRunner, TcUnitTestRunner>();
@@ -39,3 +43,26 @@ builder.Services
     .WithToolsFromAssembly();
 
 await builder.Build().RunAsync();
+
+// TCKIT_WRITER = automation | xml. Default: automation where XAE can exist (Windows), the
+// deterministic xml backend everywhere else.
+static IProjectWriter CreateProjectWriter()
+{
+    var choice = Environment.GetEnvironmentVariable("TCKIT_WRITER")?.Trim().ToLowerInvariant();
+    if (choice == "automation" && !OperatingSystem.IsWindows())
+    {
+        throw new InvalidOperationException(
+            "TCKIT_WRITER=automation needs Windows with a running XAE; use TCKIT_WRITER=xml here.");
+    }
+
+    return choice switch
+    {
+        "automation" => new AutomationProjectWriter(),
+        "xml" => new XmlProjectWriter(),
+        null or "" => OperatingSystem.IsWindows()
+            ? new AutomationProjectWriter()
+            : new XmlProjectWriter(),
+        _ => throw new InvalidOperationException(
+            $"Unknown TCKIT_WRITER value '{choice}'; use 'automation' or 'xml'."),
+    };
+}

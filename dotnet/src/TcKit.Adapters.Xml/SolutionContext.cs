@@ -83,10 +83,22 @@ internal sealed class SolutionContext
         return suffix.Length == 0 ? head : $"{head}^{string.Join('^', suffix)}";
     }
 
-    /// <summary>Tree path for an on-disk location under the PLC root.</summary>
+    /// <summary>
+    /// Tree path for an on-disk location under the PLC root. Tree items carry no file extension,
+    /// so a TwinCAT object file's extension is stripped from the leaf segment.
+    /// </summary>
     public string TreePathOf(string fullPath)
-        => TreePath(Path.GetRelativePath(PlcDir, fullPath)
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries));
+    {
+        var segments = Path.GetRelativePath(PlcDir, fullPath)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length > 0
+            && Path.GetExtension(segments[^1]).StartsWith(".Tc", StringComparison.OrdinalIgnoreCase))
+        {
+            segments[^1] = Path.GetFileNameWithoutExtension(segments[^1]);
+        }
+
+        return TreePath(segments);
+    }
 
     /// <summary>The .plcproj-relative Include value (backslashes, as XAE writes them).</summary>
     public string IncludeFor(string fullPath)

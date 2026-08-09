@@ -1,12 +1,14 @@
 // TcKit CLI entry point. The init / config / doctor subcommands port here in a
 // later phase via System.CommandLine. For now it exposes the read verbs (which
-// share the reader + serialiser with the MCP tools) and the writer verbs (which
-// drive the COM Automation lane), so the parity oracle and the writer smoke can
-// exercise the whole surface without scripting the MCP stdio handshake.
+// share the reader + serialiser with the MCP tools) and the writer verbs, so the
+// parity oracle and the writer smoke can exercise the whole surface without
+// scripting the MCP stdio handshake.
 //
 // Read verbs are self-contained: they prime the symbol index with get_structure,
-// then read. Write verbs target the solution open in the attached TcXaeShell;
-// code-bearing args accept either a literal string or '@<path>' to read a file.
+// then read. Write verbs go through the selected backend (--writer / TCKIT_WRITER,
+// ADR-0017): the automation backend targets the solution open in the attached
+// TcXaeShell, the xml backend targets the solution named by --sln / TCKIT_SOLUTION.
+// Code-bearing args accept either a literal string or '@<path>' to read a file.
 using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
@@ -258,7 +260,15 @@ async Task<int> RunWriteVerb()
         }
     }
 
-    using var writer = new AutomationProjectWriter();
+    // --sln seeds the xml backend's solution for this one-shot process (the automation backend
+    // gets its solution from the attached XAE instead, so it ignores this).
+    if (Opt("sln") is { } slnOption)
+    {
+        Environment.SetEnvironmentVariable("TCKIT_SOLUTION", slnOption);
+    }
+
+    var writer = CreateProjectWriter(Opt("writer"));
+    using var writerLifetime = writer as IDisposable;
     switch (args[0])
     {
         case "open-project" when pos.Length >= 1:
@@ -437,6 +447,29 @@ static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(stri
     return (positionals.ToArray(), options);
 }
 
+// Writer backend selection (ADR-0017): --writer beats TCKIT_WRITER beats the platform default.
+// Chosen once per invocation; never a per-call fallback (an attached XAE would regenerate files
+// from its stale in-memory tree and silently revert interleaved on-disk edits).
+static IProjectWriter CreateProjectWriter(string? flag)
+{
+    var choice = (flag ?? Environment.GetEnvironmentVariable("TCKIT_WRITER"))?.Trim().ToLowerInvariant();
+    if (choice == "automation" && !OperatingSystem.IsWindows())
+    {
+        throw new InvalidOperationException(
+            "--writer automation needs Windows with a running XAE; use --writer xml here.");
+    }
+
+    return choice switch
+    {
+        "automation" => new AutomationProjectWriter(),
+        "xml" => new XmlProjectWriter(),
+        null or "" => OperatingSystem.IsWindows()
+            ? new AutomationProjectWriter()
+            : new XmlProjectWriter(),
+        _ => throw new ArgumentException($"Unknown writer '{choice}'; use 'automation' or 'xml'."),
+    };
+}
+
 static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch
 {
     "function_block" or "functionblock" or "fb" => PouType.FunctionBlock,
@@ -518,7 +551,9 @@ static void PrintUsage()
     Console.WriteLine("  get-doc-page <url>");
     Console.WriteLine("doc generator verbs (local ST comments; no network):");
     Console.WriteLine("  generate-docs <projectDir> <outputDir> [--format html|markdown]");
-    Console.WriteLine("write verbs (target the open XAE solution; code args accept '@<file>'):");
+    Console.WriteLine("write verbs (code args accept '@<file>'):");
+    Console.WriteLine("  [--writer automation|xml]  backend (default: automation on Windows, xml elsewhere)");
+    Console.WriteLine("  [--sln <path>]             solution for the xml backend (or set TCKIT_SOLUTION)");
     Console.WriteLine("  create-project <name> <path>");
     Console.WriteLine("  add-plc-project <plcName> [--sln <path>] [--type standard]");
     Console.WriteLine("  open-project <sln>");
