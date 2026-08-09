@@ -49,55 +49,57 @@ public static class SymbolCollector
 
     /// <summary>Collect the POU itself, its members, and every variable declared in either.</summary>
     public static List<NamedSymbol> FromPou(PouSource pou, string plcName, TypeClassifier classifier)
+        => FromPou(AnalysedProject.Analyse(pou, plcName), classifier);
+
+    /// <summary>Collect from an already-parsed POU, so a run does not parse the same source twice.</summary>
+    public static List<NamedSymbol> FromPou(AnalysedPou pou, TypeClassifier classifier)
     {
         ArgumentNullException.ThrowIfNull(pou);
         ArgumentNullException.ThrowIfNull(classifier);
 
-        var symbols = new List<NamedSymbol>();
-        var declaration = DeclarationParser.Parse(pou.Declaration);
-
-        symbols.Add(new NamedSymbol
+        var symbols = new List<NamedSymbol>
         {
-            Name = pou.PouName,
-            Kind = KindOf(pou.PouType),
-            PlcName = plcName,
-            ObjectName = pou.PouName,
-            Line = 1,
-            Accessibility = declaration.Header.Accessibility,
-        });
+            new()
+            {
+                Name = pou.Name,
+                Kind = KindOf(pou.Source.PouType),
+                PlcName = pou.PlcName,
+                ObjectName = pou.Name,
+                Line = 1,
+                Accessibility = pou.Declaration.Header.Accessibility,
+            },
+        };
 
         // A FUNCTION has no instance surface: its VAR_INPUT is a parameter list and its VAR is
         // locals, exactly like a method, so its variables are collected at member scope.
-        var ownScope = pou.PouType is PouType.Function ? SymbolScope.Member : SymbolScope.Object;
-        symbols.AddRange(Variables(declaration, pou.PouName, "", plcName, ownScope, classifier));
+        var ownScope = pou.Source.PouType is PouType.Function ? SymbolScope.Member : SymbolScope.Object;
+        symbols.AddRange(Variables(pou.Declaration, pou.Name, "", pou.PlcName, ownScope, classifier));
 
         foreach (var member in pou.Members)
         {
-            var memberDeclaration = DeclarationParser.Parse(member.Declaration);
-
             // Property accessors are not separately named by the user ("Status.Get"), so only the
             // property header earns a name finding; the accessors still contribute their locals.
-            if (member.Kind is PouMemberKind.Method or PouMemberKind.Action or PouMemberKind.Property)
+            if (member.Source.Kind is PouMemberKind.Method or PouMemberKind.Action or PouMemberKind.Property)
             {
                 symbols.Add(new NamedSymbol
                 {
-                    Name = member.Name,
-                    Kind = member.Kind switch
+                    Name = member.Source.Name,
+                    Kind = member.Source.Kind switch
                     {
                         PouMemberKind.Method => SymbolKind.Method,
                         PouMemberKind.Action => SymbolKind.Action,
                         _ => SymbolKind.Property,
                     },
-                    PlcName = plcName,
-                    ObjectName = pou.PouName,
-                    ItemName = member.Name,
+                    PlcName = pou.PlcName,
+                    ObjectName = pou.Name,
+                    ItemName = member.Source.Name,
                     Line = 1,
-                    Accessibility = memberDeclaration.Header.Accessibility,
+                    Accessibility = member.Declaration.Header.Accessibility,
                 });
             }
 
             symbols.AddRange(Variables(
-                memberDeclaration, pou.PouName, member.Name, plcName, SymbolScope.Member, classifier));
+                member.Declaration, pou.Name, member.Source.Name, pou.PlcName, SymbolScope.Member, classifier));
         }
 
         return symbols;

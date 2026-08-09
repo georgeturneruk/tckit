@@ -1,10 +1,21 @@
 ---
 name: tc-build-test-loop
 description: Use when building a TwinCAT project, deploying to a target, running TcUnit tests, or iterating on build/test failures through TcKit (Build, Deploy, StartRuntime, RunTests, GetTestResults). Triggers on requests like "build it", "run the tests", "fix the build errors", "deploy to <NetId>", "make the tests pass". Enforces the build-before-deploy ordering, the 2-attempt-per-error build fix limit, the 5-iteration test loop limit, the permission-gate rules for Deploy and StartRuntime (surface denials, never self-elevate), and the save+install rule for multi-PLC solutions with library references. Do NOT use for the initial code write itself (that is tc-write-st).
-allowed-tools: mcp__tckit__Build, mcp__tckit__Deploy, mcp__tckit__StartRuntime, mcp__tckit__RunTests, mcp__tckit__GetTestResults, mcp__tckit__UpdateMethodBody, mcp__tckit__UpdateMethodBodyPatch, mcp__tckit__UpdatePouImplementation, mcp__tckit__UpdatePouImplementationPatch, mcp__tckit__GetPouItem, mcp__tckit__GetPouInterface, mcp__tckit__SavePlcAsLibrary
+allowed-tools: mcp__tckit__Build, mcp__tckit__Deploy, mcp__tckit__StartRuntime, mcp__tckit__RunTests, mcp__tckit__GetTestResults, mcp__tckit__UpdateMethodBody, mcp__tckit__UpdateMethodBodyPatch, mcp__tckit__UpdatePouImplementation, mcp__tckit__UpdatePouImplementationPatch, mcp__tckit__GetPouItem, mcp__tckit__GetPouInterface, mcp__tckit__SavePlcAsLibrary, mcp__tckit__AnalyseProject
 ---
 
 # Build / deploy / test loop
+
+## Analyse first
+
+Before the first `Build` of a cycle, call `AnalyseProject(projectPath, severity: "warning")`. It parses the project files offline, so it needs no XAE and returns in under a second against a build's tens of seconds, and it catches a class of defect a green build cannot rule out: a function block instance on a call stack whose state resets every call, floating-point equality, retention that cannot retain, a global with two writers.
+
+- `severity: "warning"` keeps naming suggestions out of the way. Raise it to `suggestion` only when the user asked about conventions.
+- Fix what it reports before building. These are not build errors, so building first tells you nothing about them.
+- Check `skipped` and `config_warnings`. A short finding list next to a long `skipped` list means coverage was partial, not that the project is clean.
+- One pass per cycle, not per fix. Re-run it after the build-fix loop settles if you changed much.
+
+This does not replace the build. It is cheaper, so it goes first.
 
 ## Build-fix loop
 
@@ -67,6 +78,7 @@ If the solution has only one PLC project, or the consumer uses Source-Only refer
 ## Never
 
 - Deploy without a green build.
+- Treat a green build as evidence that the analysis findings were wrong. Everything `AnalyseProject` reports compiles; that is the entire reason it exists.
 - Raise the permission mode or extend the NetId allowlist yourself to get a denied Deploy or StartRuntime through. Stance changes happen only when the user explicitly asks. (A plain success means the gate cleared under the user's standing configuration — proceeding on that is fine.)
 - Continue past test iteration 5.
 - Modify safety-critical code in a fix loop without escalating to `tc-write-st` for the human-review check.

@@ -21,12 +21,19 @@ profiles: **`hybrid` (default)**, `dotnet`, `hungarian`, `infer`, plus `none`.
 Scope rule: only ship rules the TwinCAT compiler does not already catch. Nothing
 is auto-fixable in v1.
 
-**Where it lives:** Naming lane implemented, PR open.
-`TcKit.Core/Analysis` (`StSource` masker, `DeclarationParser`, DTOs),
-`TcKit.Core/Ports/IProjectAnalyser.cs`, `IProjectReader.GetPouSourceAsync`,
-`dotnet/src/TcKit.Adapters.Analysis` (config loader, profiles, rule engine),
-`TcKit.Server/Tools/AnalysisTools.cs`. Four rule ids ship: `TCK1001` objects,
-`TCK1002` variables, `TCK1003` members, `TCK1004` struct/enum members.
+**Where it lives:** Naming, correctness and structure lanes implemented; PR open.
+`TcKit.Core/Analysis` (`StSource` masker, `DeclarationParser`, `StIdentifiers`,
+DTOs), `TcKit.Core/Ports/IProjectAnalyser.cs`,
+`IProjectReader.GetPouSourceAsync`, `dotnet/src/TcKit.Adapters.Analysis`
+(config loader, profiles, `NamingRuleEngine`, `CorrectnessRules`),
+`TcKit.Server/Tools/AnalysisTools.cs`. Eleven rules ship: `TCK1001`-`TCK1004`
+naming; `TCK2001` FB instance on a call stack, `TCK2002` REAL equality,
+`TCK2003` misplaced retention, `TCK2004` unused local, `TCK2005` unread input;
+`TCK3001` multi-writer global, `TCK3002` unreachable POU. Correctness defaults
+to `warning`, naming and structure to `suggestion`. `TCK2005`/`TCK3001`/`TCK3002`
+need the whole solution and are skipped (and reported in `rules_not_run`) when
+`objectName` scopes the run. `tc-write-st` runs a scoped pass after each write;
+`tc-build-test-loop` runs a project pass before the first build.
 
 **Open questions:**
 - `infer` is accepted but not implemented; it warns and falls back to `hybrid`.
@@ -41,7 +48,12 @@ is auto-fixable in v1.
   cannot: a Hungarian-prefixed method local is already camelCase, so it conforms.
   Gating the rule on prefix/type agreement (`nCount : INT`) makes it precise; the
   same agreement test already gates suggestion stripping.
-- Correctness rules (`TCK2xxx`) are specified but land after the naming lane.
+- Rules still unbuilt from the original list: pointer dereference with no validity
+  check, unbounded loop in a cyclic POU, unchecked array index, missing `SUPER^()`
+  in an override. Each needs either scope analysis or a heuristic that could not be
+  made precise, so none shipped rather than shipping noisy.
+- `TCK3001` sees qualified writes only. Unqualified global access would need
+  shadowing analysis; the rule under-reports instead.
 
 ## Context
 
@@ -269,3 +281,20 @@ are wanted.
   `prefix_composition` / `recursive_type_prefix` dropped from the shipped schema
   rather than accepted-but-ignored, and `infer` warns instead of silently
   returning an empty rule set.
+- 2026-08-09: Correctness and structure lanes built (`TCK2001`-`TCK2005`,
+  `TCK3001`-`TCK3002`), and the skills wired to call the tool. Notes:
+  - The streaming symbol list was replaced by a retained `AnalysedProject`.
+    Cross-file rules need every POU's declarations and masked bodies at once,
+    which is the thing a per-file validator structurally cannot do.
+  - A scoped run (`objectName`) cannot see enough for the cross-file rules, so
+    they are skipped and named in `rules_not_run`. Skipping them silently would
+    make a partial pass read as clean.
+  - An unimplemented stub is exempt from the unused-declaration rules. Running
+    over the T1 fixture flagged all three inputs of a deliberately empty TDD
+    skeleton, which is noise in exactly the workflow the bench exists to test.
+  - Rule scope was cut twice for precision: `TCK2004` covers locals only,
+    because TC3 leaves FB `VAR` members externally reachable so an unused one may
+    be API; `TCK3001` matches qualified writes only, because unqualified global
+    access needs shadowing analysis.
+  - Across all four bench fixtures the correctness lane reports one finding, and
+    it is genuine. The guards, not the rules, are what took it there.

@@ -82,15 +82,35 @@ public class ProjectAnalyserTests
     }
 
     [Fact]
-    public async Task AnalyseAsync_MinimumSeverityAboveSuggestion_FiltersNamingOut()
+    public async Task AnalyseAsync_MinimumSeverityAboveSuggestion_LeavesOnlyCorrectnessFindings()
     {
-        // Naming ships at suggestion, so asking for warnings and above should come back clean
-        // without the analyser having skipped anything.
+        // Naming ships at suggestion and correctness at warning, so raising the floor to warning
+        // is how you ask for "only the things that are actually wrong".
         var request = Request() with { MinimumSeverity = DiagnosticSeverity.Warning };
 
         var result = await Analyser().AnalyseAsync(request, CancellationToken.None);
 
-        Assert.Empty(result.Findings);
         Assert.Empty(result.Skipped);
+        Assert.All(result.Findings, finding =>
+            Assert.Equal(CorrectnessRules.CorrectnessCategory, finding.Category));
+    }
+
+    [Fact]
+    public async Task AnalyseAsync_ScopedRun_SkipsCrossFileRulesAndSaysSo()
+    {
+        var result = await Analyser().AnalyseAsync(Request("FB_RingBuffer"), CancellationToken.None);
+
+        Assert.DoesNotContain(
+            result.Findings,
+            finding => CorrectnessRules.WholeProjectRules.Contains(finding.RuleId));
+        Assert.NotEmpty(result.RulesNotRun);
+    }
+
+    [Fact]
+    public async Task AnalyseAsync_WholeProjectRun_RunsTheCrossFileRules()
+    {
+        var result = await Analyser().AnalyseAsync(Request(), CancellationToken.None);
+
+        Assert.Empty(result.RulesNotRun);
     }
 }

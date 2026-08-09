@@ -110,4 +110,10 @@ public sealed record AnalysisResult
 
     /// <summary>Configuration that could not be applied, surfaced rather than silently ignored.</summary>
     public IReadOnlyList<string> ConfigWarnings { get; init; } = [];
+
+    /// <summary>
+    /// Rules deliberately not run, with the reason. A scoped run cannot see enough of the project
+    /// for the cross-file rules, and skipping them silently would make a partial pass look clean.
+    /// </summary>
+    public IReadOnlyList<string> RulesNotRun { get; init; } = [];
 }

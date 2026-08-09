@@ -1,7 +1,7 @@
 ---
 name: tc-write-st
 description: Use when writing or modifying Structured Text (ST) code in a TwinCAT 3 project. Triggers on requests like "add a method to FB_Motor", "add a property to FB_Pid", "create FB_PumpControl", "add ST_Config struct", "add E_State enum", "tweak the Execute body", "rename X to Y inside Execute", "add a VAR_INPUT to FB_PumpControl", "change one line in this method", or any other ST edit. Uses TcKit's writer MCP tools (OpenProject, CreateProject, AddPou, AddGvl, AddDut, AddMethod, AddProperty, UpdatePouDeclaration, UpdatePouImplementation, UpdateMethodBody, UpdatePouDeclarationPatch, UpdatePouImplementationPatch, UpdateMethodBodyPatch, AddVariable). Use these tools INSTEAD of Edit/Write on .TcPOU or .plcproj files; the MCP tools route through XAE so GUIDs and project cross-references stay consistent. Enforces comment style, naming conventions, the bError propagation pattern, the rename guard, and the safety-critical naming guard. If the code uses an unfamiliar Beckhoff library FB, hand off to tc-beckhoff-docs first. Do NOT use for read-only inspection or for build/test orchestration.
-allowed-tools: mcp__tckit__OpenProject, mcp__tckit__CreateProject, mcp__tckit__AddPou, mcp__tckit__AddGvl, mcp__tckit__AddDut, mcp__tckit__AddMethod, mcp__tckit__AddProperty, mcp__tckit__UpdatePouDeclaration, mcp__tckit__UpdatePouImplementation, mcp__tckit__UpdateMethodBody, mcp__tckit__UpdatePouDeclarationPatch, mcp__tckit__UpdatePouImplementationPatch, mcp__tckit__UpdateMethodBodyPatch, mcp__tckit__AddVariable, mcp__tckit__GetPouInterface, mcp__tckit__GetPouDeclaration, mcp__tckit__GetPouItem, Read
+allowed-tools: mcp__tckit__OpenProject, mcp__tckit__CreateProject, mcp__tckit__AddPou, mcp__tckit__AddGvl, mcp__tckit__AddDut, mcp__tckit__AddMethod, mcp__tckit__AddProperty, mcp__tckit__UpdatePouDeclaration, mcp__tckit__UpdatePouImplementation, mcp__tckit__UpdateMethodBody, mcp__tckit__UpdatePouDeclarationPatch, mcp__tckit__UpdatePouImplementationPatch, mcp__tckit__UpdateMethodBodyPatch, mcp__tckit__AddVariable, mcp__tckit__GetPouInterface, mcp__tckit__GetPouDeclaration, mcp__tckit__GetPouItem, mcp__tckit__AnalyseProject, Read
 ---
 
 # Writing ST through TcKit
@@ -48,6 +48,7 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 ## Style
 
 - **Project conventions.** Follow the conventions in the project's `CLAUDE.md` if it specifies any (naming, error pattern, public/private boundaries, etc.). Where the project does not specify, match the existing style of the file you are editing. The skill does not impose a default naming or error-handling convention.
+- **Naming is checkable, so do not guess at it.** If the project configures a convention (`tckit_analysis_profile` in its `.editorconfig`), `AnalyseProject` is the authority on what that convention is. Write in the style of the surrounding code, then let the post-write check below correct you rather than arguing from memory about prefixes.
 - **Comments.** The doc generator detects both RST line comments (`// :Description:`, `// :param x:`, `// :returns:`) and Beckhoff XML (`(*~ <docu> ~*)`). Match the file's existing style.
 
 ## Write procedure
@@ -56,7 +57,16 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 2. **Pick the smallest write that does the job** using the Tool selection table above. Small edit on a method -> `UpdateMethodBodyPatch`. Small edit on the FB-level decl / cyclic body -> `UpdatePouDeclarationPatch` / `UpdatePouImplementationPatch`. Single new variable -> `AddVariable`. Full method-body rewrite -> `UpdateMethodBody`. Full POU declaration / implementation rewrite -> `UpdatePouDeclaration` / `UpdatePouImplementation`. New unit -> `AddPou` / `AddMethod` / `CreateProject`.
 3. For patch-based edits, fetch the current item with `GetPouItem` (or `GetPouDeclaration` if only the FB-level VAR block matters) so the anchor you choose is grounded in the real text, not your memory of it.
 4. NEVER edit `.TcPOU` or `.plcproj` XML directly. GUIDs and cross-references go through the automation interface.
-5. After the writer returns success, summarise what changed (POU, item, lines). The writer's success response is the confirmation; do not read the change back to "verify" it landed. Whether to build / deploy / test next is driven by the user's request: if they asked for tests to pass, a behaviour to be verified, or the project to build, hand off to `tc-build-test-loop` and run the cycle through to actual results. If they only asked for the edit, stop here.
+5. **Check what you wrote.** Call `AnalyseProject(projectPath, objectName: "<the POU you edited>")`. This is offline, needs no XAE, and returns in well under a second, so it costs nothing next to a build. It catches what the compiler will not: a function block instance declared in a method's `VAR` (its state resets every call), floating-point equality, an unused local, `RETAIN` where it cannot retain, and naming that departs from the project's configured convention.
+
+   Fix what it reports, then re-run it on the same POU. Two rules apply:
+
+   - **Never act on a naming finding for an existing symbol without asking.** The suggestion is advisory, and renaming something already referenced is exactly what the rename guard above reserves for the user. Naming findings on the symbols *you just introduced* are yours to fix freely.
+   - Stop after two rounds. If a finding survives two attempts, report it to the user rather than continuing to edit.
+
+   Cross-file rules (unread inputs, multi-writer globals, unreachable POUs) are skipped when `objectName` scopes the run, and the result says so in `rules_not_run`. Analysing the whole project is worth it once at the end of a larger change, not after every edit.
+
+6. After the writer returns success, summarise what changed (POU, item, lines). The writer's success response is the confirmation; do not read the change back to "verify" it landed. Whether to build / deploy / test next is driven by the user's request: if they asked for tests to pass, a behaviour to be verified, or the project to build, hand off to `tc-build-test-loop` and run the cycle through to actual results. If they only asked for the edit, stop here.
 
 ## Anti-patterns
 
@@ -67,6 +77,9 @@ These TcKit writer tools route through the XAE automation interface, which keeps
 - Reading the full FB declaration, hand-editing the VAR block, and writing it back. Use `AddVariable` instead.
 - Concluding "TcKit isn't working" because a reader tool succeeded but a writer tool failed. Writer tools require XAE open with the solution loaded; reader tools do not. Surface the COM error to the user rather than reaching for stock-tool edits.
 - Re-reading the changed item with `GetPouItem` / `GetPouDeclaration` / `Read` immediately after a successful writer call to confirm it landed. The writer already told you it succeeded. (This is about verifying the *write itself*, not about running the build / test cycle the user asked for — that's a hand-off to `tc-build-test-loop`, not a re-read.)
+- Skipping the post-write `AnalyseProject` because the edit "was small". The state-losing declaration and the floating-point comparison it catches both compile, so a clean build is not evidence they are absent.
+- Renaming an existing symbol because an analysis finding suggested a name. Suggestions are advisory; a rename on referenced code needs the user's approval.
+- Running `AnalyseProject` across the whole project after every single edit. Scope it to the POU you touched; save the full pass for the end of a larger change.
 
 ## Next
 

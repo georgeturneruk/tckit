@@ -8,13 +8,34 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ### Added
 
-- **`AnalyseProject`: offline static analysis of naming conventions.** Checks
-  POU, DUT, GVL, member and variable names against a configurable convention
-  without XAE, a licence or a running runtime, so it costs far less than a
-  build and can run first. Pass `objectName` to check only the POU you just
-  edited. Findings carry a rule id, a location (`object`, `item`, line) and a
-  suggested name; nothing is rewritten automatically, because renaming a
-  referenced symbol is a decision for you rather than the tool.
+- **`AnalyseProject`: offline static analysis.** Runs against the project files
+  without XAE, a licence or a running runtime, so it costs far less than a build
+  and can run first. Pass `objectName` to check only the POU you just edited.
+  Findings carry a rule id and a location (`object`, `item`, line); nothing is
+  rewritten automatically, because renaming a referenced symbol is a decision
+  for you rather than the tool.
+
+  Every rule catches something the compiler does not, so a green build is not
+  evidence against a finding:
+
+  - `TCK2001` a function block instance on a call stack (declared in a method's
+    `VAR`, or in a `FUNCTION`), so its state resets on every call
+  - `TCK2002` `REAL`/`LREAL` compared with `=` or `<>`
+  - `TCK2003` `RETAIN`/`PERSISTENT` on a local, where it cannot retain
+  - `TCK2004` a local declared and never used
+  - `TCK2005` a function block input nothing reads
+  - `TCK3001` a global written from more than one POU
+  - `TCK3002` a POU nothing instantiates, calls, or binds to a task
+  - `TCK1001`–`TCK1004` names departing from the project's convention
+
+  `TCK2005`, `TCK3001` and `TCK3002` need the whole solution, so they are
+  skipped when `objectName` scopes the run, and the result says so in
+  `rules_not_run`. Unimplemented stubs are exempt from the unused-declaration
+  rules, and objects that could not be parsed come back in `skipped`, so a short
+  finding list never quietly means partial coverage.
+
+  The `tc-write-st` and `tc-build-test-loop` skills now run it: scoped to the
+  edited POU after a write, and across the project before the first build.
 
   Configuration lives in the project's own `.editorconfig` under
   `[*.{TcPOU,TcGVL,TcDUT}]`, using the same three-part schema as .NET's naming

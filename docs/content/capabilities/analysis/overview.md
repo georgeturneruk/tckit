@@ -12,6 +12,29 @@ Pass `objectName` to check a single POU, GVL or DUT. That is the intended use wh
 
 ## Rules
 
+Correctness rules default to `warning`, naming and structure to `suggestion`. Asking for `severity: "warning"` is how you say "only the things that are actually wrong".
+
+### Correctness
+
+Each of these compiles cleanly, which is the whole reason they are here.
+
+| Id | Catches |
+|---|---|
+| `TCK2001` | A function block instance declared in a method's `VAR`, or in a `FUNCTION`. It sits on the call stack, so it is reconstructed every call and any timer, edge detection or internal state silently resets. Use `VAR_INST`, or declare it on the function block. |
+| `TCK2002` | `REAL` or `LREAL` compared with `=` or `<>`. Usually appears to work until a value is not exactly representable. |
+| `TCK2003` | `RETAIN` or `PERSISTENT` on a local, where it cannot survive a restart. |
+| `TCK2004` | A local declared and never used. |
+| `TCK2005` | A function block input nothing ever reads, which normally means a wiring mistake. |
+
+### Structure
+
+| Id | Catches |
+|---|---|
+| `TCK3001` | A global written from more than one POU. On separate tasks that is a race; on one task the last writer in scan order silently wins. |
+| `TCK3002` | A POU nothing instantiates, calls, or binds to a task, searched across every PLC project in the solution. |
+
+### Naming
+
 | Id | Covers |
 |---|---|
 | `TCK1001` | POU, DUT and GVL names |
@@ -19,9 +42,22 @@ Pass `objectName` to check a single POU, GVL or DUT. That is the intended use wh
 | `TCK1003` | Method, property and action names |
 | `TCK1004` | Struct fields and enumeration constants |
 
-Every finding carries the object, the item, the line within that item, the offending identifier, and a suggested name.
+Every finding carries the object, the item, the line within that item, and the offending identifier. Naming findings also carry a suggested name.
 
 Suggestions are advisory. Nothing is rewritten for you, because renaming a symbol that is referenced elsewhere is a change you should agree to rather than discover.
+
+### What the rules will not do
+
+Each rule carries a guard, because a false positive is worse than a miss: it invites a "fix" that breaks working code.
+
+- An unimplemented stub is not reported for unused locals or unread inputs. It reads none of them by definition.
+- `TCK2005` is skipped when anything extends the function block, since a child may be the reader.
+- `TCK2004` covers locals only. TwinCAT 3 leaves a function block's `VAR` members reachable from outside, so an apparently unused one may be part of its API.
+- `TCK3001` detects qualified writes (`GVL_State.Mode := 1`). It under-reports rather than guessing at unqualified access, which would need shadowing analysis.
+- `TCK2002` reads simple operands only. A comparison through a dotted path is left alone.
+- `TCK3002` cannot tell dead code from a library intended for consumers outside the solution, which is why it is a suggestion rather than a warning.
+
+`TCK2005`, `TCK3001` and `TCK3002` need the whole solution in view, so they are skipped when `objectName` scopes the run. The result says which in `rules_not_run` rather than letting a partial pass look clean.
 
 ## Profiles
 
@@ -94,6 +130,6 @@ Configuration that cannot be applied comes back in `config_warnings` rather than
 
 ## Why this shape
 
-The compiler already tells you what does not build. Analysis only earns its place in the gap between "compiles" and "correct", so a rule ships only if `Build` would not have caught it.
+The compiler already tells you what does not build. Analysis only earns its place in the gap between "compiles" and "correct", so a rule ships only if `Build` would not have caught it. A green build is therefore not evidence against a finding.
 
-That gap is wide in TwinCAT, and naming is the least of it. Rules for the mistakes that compile perfectly and still fail (a function block instance declared in a method, so its state resets every call; `REAL` compared with `=`; a global written from two tasks) are next.
+Because the whole solution is parsed at once, the structure rules can ask questions a per-file checker cannot: whether a global has two writers, whether anything anywhere reaches a POU. A library consumed only by a sibling test project counts as reached.
