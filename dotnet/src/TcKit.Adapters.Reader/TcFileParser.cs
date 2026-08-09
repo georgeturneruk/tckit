@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using TcKit.Core.Analysis;
 using TcKit.Core.Models;
 
 namespace TcKit.Adapters.Reader;
@@ -233,10 +234,18 @@ internal static class TcFileParser
         return new TaskRaw(name, cycleUs, priority, programs);
     }
 
+    private static readonly Regex s_pouKeyword = new(
+        @"^[ \t]*(FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE)\b",
+        RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>
-    /// Detect the POU type from the element tag and declaration text. &lt;Itf&gt; is always
-    /// an interface; otherwise the first keyword in the declaration wins. FUNCTION_BLOCK must
-    /// be tested before FUNCTION because it contains it.
+    /// Detect the POU type from the element tag and declaration text. &lt;Itf&gt; is always an
+    /// interface; otherwise the first header keyword wins.
+    ///
+    /// The keyword must start a line and end on a word boundary, and comments are masked out
+    /// first. A substring search over the whole declaration is not good enough: TcUnit's
+    /// <c>PRG_TEST</c> declares <c>WriteProtectedFunctions : FB_WriteProtectedFunctions</c>, whose
+    /// "Functions" made a PROGRAM read as a FUNCTION.
     /// </summary>
     internal static PouType DetectPouType(string declaration, string elementTag)
     {
@@ -245,28 +254,19 @@ internal static class TcFileParser
             return PouType.Interface;
         }
 
-        var text = declaration.ToUpperInvariant();
-        if (text.Contains("FUNCTION_BLOCK", StringComparison.Ordinal))
+        var match = s_pouKeyword.Match(StSource.Mask(declaration));
+        if (!match.Success)
         {
             return PouType.FunctionBlock;
         }
 
-        if (text.Contains("FUNCTION", StringComparison.Ordinal))
+        return match.Groups[1].Value.ToUpperInvariant() switch
         {
-            return PouType.Function;
-        }
-
-        if (text.Contains("PROGRAM", StringComparison.Ordinal))
-        {
-            return PouType.Program;
-        }
-
-        if (text.Contains("INTERFACE", StringComparison.Ordinal))
-        {
-            return PouType.Interface;
-        }
-
-        return PouType.FunctionBlock;
+            "FUNCTION" => PouType.Function,
+            "PROGRAM" => PouType.Program,
+            "INTERFACE" => PouType.Interface,
+            _ => PouType.FunctionBlock,
+        };
     }
 
     private static readonly Regex s_blockComment = new(@"\(\*[\s\S]*?\*\)", RegexOptions.Compiled);

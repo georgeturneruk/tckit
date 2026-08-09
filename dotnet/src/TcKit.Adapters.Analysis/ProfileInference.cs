@@ -29,7 +29,8 @@ public static partial class ProfileInference
         ArgumentNullException.ThrowIfNull(symbols);
 
         var candidates = symbols
-            .Where(symbol => !NamingRuleEngine.IsReserved(symbol.Name))
+            .Where(symbol => !NamingRuleEngine.IsReserved(symbol.Name)
+                && !NamingRuleEngine.IsReservedMember(symbol.ItemName))
             .ToList();
 
         var typePrefixes = InferTypePrefixes(candidates);
@@ -153,15 +154,38 @@ public static partial class ProfileInference
 
         // A style with no prefix and no capitalisation requirement cannot be violated, so emitting
         // it would only be noise in the rule list.
-        return prefix.Length == 0 && casing is Capitalisation.Any
-            ? null
-            : new NamingStyle
-            {
-                Name = $"inferred_{slotName}",
-                Capitalisation = casing,
-                RequiredPrefix = prefix,
-            };
+        if (prefix.Length == 0 && casing is Capitalisation.Any)
+        {
+            return null;
+        }
+
+        var style = new NamingStyle
+        {
+            Name = $"inferred_{slotName}",
+            Capitalisation = casing,
+            RequiredPrefix = prefix,
+        };
+
+        if (ConformingShare(names, style) >= MinimumAgreement)
+        {
+            return style;
+        }
+
+        // Underscore-separated words still look PascalCase to a first-character test, so a
+        // convention like TcUnit's "AssertArrayEquals_BOOL" would otherwise infer a rule that two
+        // thirds of its own sample violate. Retry allowing the separator before giving up.
+        var separated = style with { WordSeparator = "_" };
+        if (ConformingShare(names, separated) >= MinimumAgreement)
+        {
+            return separated;
+        }
+
+        // An inferred rule its own evidence contradicts is worse than no rule at all.
+        return null;
     }
+
+    private static double ConformingShare(IReadOnlyList<string> names, NamingStyle style)
+        => names.Count(name => NameChecker.Conforms(name, style)) / (double)names.Count;
 
     /// <summary>The value shared by enough of the sample to be treated as the convention, or null.</summary>
     private static string? Dominant(IReadOnlyList<string> values)
@@ -224,6 +248,16 @@ public static partial class ProfileInference
 
     private static IEnumerable<Slot> VariableSlots()
     {
+        // Constants get their own slot, and the modifier constraint outranks every section rule.
+        // Without it a project's SCREAMING_SNAKE constants are judged against its instance-field
+        // convention and every one of them is reported.
+        yield return new Slot("constant", new SymbolGroup
+        {
+            Name = "constant",
+            Kinds = [SymbolKind.Variable],
+            RequiredModifiers = VarQualifiers.Constant,
+        });
+
         yield return Variables("fb_interface", SymbolScope.Object,
             VarSection.VarInput, VarSection.VarOutput, VarSection.VarInOut);
         yield return Variables("parameter", SymbolScope.Member,

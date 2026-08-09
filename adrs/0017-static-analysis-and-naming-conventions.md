@@ -298,6 +298,41 @@ are wanted.
     access needs shadowing analysis.
   - Across all four bench fixtures the correctness lane reports one finding, and
     it is genuine. The guards, not the rules, are what took it there.
+- 2026-08-09: Validated against TcUnit (75 objects), TcUnit-Verifier and TcOpen
+  (87 objects). This found five defects that 642 passing unit tests and four
+  in-repo fixtures did not, and is now the standard this feature is held to: the
+  fixtures are too small and too self-authored to exercise real ST.
+  - **`TCK2001` was far too broad.** It flagged every function block on a call
+    stack. Declaring a synchronous helper local to one method is a correct and
+    very common idiom (TcUnit builds an `FB_XmlControl`, uses it and asserts
+    inside a single call), so this produced 18 false positives on TcUnit alone.
+    Narrowed to instances that genuinely cannot work on a stack: the standard
+    stateful blocks (`TON`, `R_TRIG`, `CTU`…) and function blocks with a
+    `Busy`/`Done` handshake. Now zero findings on all three projects.
+  - **A pre-existing reader bug.** `TcFileParser.DetectPouType` substring-matched
+    the whole declaration, so TcUnit's `PRG_TEST`, which declares
+    `WriteProtectedFunctions : FB_WriteProtectedFunctions`, read as a `FUNCTION`.
+    That cascaded into 36 wrong findings. Fixed to a line-anchored, word-bounded
+    keyword match over masked text. `GetStructure` was wrong about this too.
+  - **`FB_init` parameters were being renamed.** `bInitRetains` and `bInCopyCode`
+    are matched by name by the compiler, so the advice broke the build.
+    `FB_init`/`FB_exit`/`FB_reinit` join `MAIN` as reserved.
+  - **`infer` emitted rules its own sample violated.** TcUnit names 182 methods
+    like `AssertArrayEquals_BOOL`, which a first-character test reads as
+    PascalCase; the resulting rule was then failed by two thirds of the sample it
+    came from. Inference now verifies a candidate style against its own evidence,
+    retries allowing `_` as a word separator, and emits nothing if it still does
+    not hold. Also added the missing constant slot, without which SCREAMING_SNAKE
+    constants were judged against the instance-field convention.
+  - **Suppression comments were specified but never built.** `TCK2002` correctly
+    flags the deliberate exact-equality fast path in TcOpen's `IsNearlyEqual`.
+    With no way to record an exception in code, the only choices were disabling
+    the rule or ignoring the tool. `// tckit-disable-next-line TCK2002` and the
+    trailing `-line` form now work, with comma-separated ids or a bare form.
+
+  Net effect on TcUnit: 1360 findings to 370 under `infer`, with the remainder
+  spot-checked as genuine (unused locals appearing exactly once in their file,
+  inputs never read, globals with four writers). TcOpen: 302 to 286.
 - 2026-08-09: `infer` and `TCK1005` built, closing the last two gaps.
   - `infer` learns type prefixes per type family and capitalisation plus scope
     prefixes per declaration kind, separately, because a Hungarian project uses

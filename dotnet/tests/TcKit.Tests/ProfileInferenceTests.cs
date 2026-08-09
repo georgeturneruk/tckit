@@ -153,6 +153,49 @@ public class ProfileInferenceTests
     }
 
     [Fact]
+    public void Infer_UnderscoreSeparatedNames_AreLearnedNotFlagged()
+    {
+        // TcUnit names 182 of its methods like "AssertArrayEquals_BOOL". A first-character test
+        // reads those as PascalCase, and without allowing the separator the inferred rule would be
+        // violated by two thirds of the sample it came from.
+        var symbols = new List<NamedSymbol>
+        {
+            Object("AssertArrayEquals_BOOL", SymbolKind.Method),
+            Object("AssertArrayEquals_BYTE", SymbolKind.Method),
+            Object("AssertArrayEquals_DINT", SymbolKind.Method),
+            Object("AssertEquals_LREAL", SymbolKind.Method),
+        };
+
+        Assert.Empty(NamingRuleEngine.Run(symbols, Settings(symbols)));
+    }
+
+    [Fact]
+    public void Infer_NeverEmitsARuleItsOwnSampleViolates()
+    {
+        var samples = new[]
+        {
+            new[] { "AssertEquals_BOOL", "AssertEquals_INT", "AssertEquals_REAL", "Reset" },
+            new[] { "bEnable", "bReset", "bDone", "Started" },
+            new[] { "_count", "_total", "_index", "stray" },
+        };
+
+        foreach (var names in samples)
+        {
+            var symbols = names.Select(name => Object(name, SymbolKind.Method)).ToList();
+            var rules = ProfileInference.Infer(symbols);
+
+            foreach (var rule in rules)
+            {
+                var conforming = names.Count(name => NameChecker.Conforms(name, rule.Style));
+                Assert.True(
+                    conforming / (double)names.Length >= ProfileInference.MinimumAgreement,
+                    $"Rule '{rule.Name}' is satisfied by only {conforming}/{names.Length} of the "
+                    + "sample it was inferred from.");
+            }
+        }
+    }
+
+    [Fact]
     public void Infer_ReservedNames_DoNotSkewTheSample()
     {
         // MAIN is all-upper and would drag a small PROGRAM sample towards UPPER_CASE.

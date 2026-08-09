@@ -35,8 +35,20 @@ public static class NamingRuleEngine
     private static readonly HashSet<string> ReservedNames =
         new(StringComparer.OrdinalIgnoreCase) { "MAIN" };
 
+    /// <summary>
+    /// Members whose name and whose parameter names TwinCAT fixes. <c>FB_init</c> is declared as
+    /// <c>FB_init(bInitRetains : BOOL, bInCopyCode : BOOL)</c> and the compiler matches on those
+    /// names, so a naming finding anywhere inside one is advice that breaks the build.
+    /// </summary>
+    private static readonly HashSet<string> ReservedMembers =
+        new(StringComparer.OrdinalIgnoreCase) { "FB_init", "FB_exit", "FB_reinit" };
+
     /// <summary>Whether TwinCAT mandates this name, making any rule about it unactionable.</summary>
     public static bool IsReserved(string name) => ReservedNames.Contains(name);
+
+    /// <summary>Whether this symbol sits in, or is, a member whose naming TwinCAT fixes.</summary>
+    public static bool IsReservedMember(string itemName)
+        => itemName.Length > 0 && ReservedMembers.Contains(itemName);
 
     /// <summary>Check every symbol and return one finding per non-conforming name.</summary>
     public static List<AnalysisFinding> Run(IEnumerable<NamedSymbol> symbols, AnalysisSettings settings)
@@ -47,7 +59,7 @@ public static class NamingRuleEngine
         var findings = new List<AnalysisFinding>();
         foreach (var symbol in symbols)
         {
-            if (ReservedNames.Contains(symbol.Name))
+            if (IsReserved(symbol.Name) || IsReservedMember(symbol.ItemName))
             {
                 continue;
             }

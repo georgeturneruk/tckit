@@ -18,8 +18,12 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   Every rule catches something the compiler does not, so a green build is not
   evidence against a finding:
 
-  - `TCK2001` a function block instance on a call stack (declared in a method's
-    `VAR`, or in a `FUNCTION`), so its state resets on every call
+  - `TCK2001` a function block that must persist between calls, declared on a
+    call stack (a method's `VAR`, or a `FUNCTION`), so it is rebuilt every call
+    and never advances. Restricted to instances that genuinely cannot work that
+    way: a standard stateful block (`TON`, `R_TRIG`, `CTU`) or one with a
+    `Busy`/`Done` handshake. A synchronous helper scoped to one method call is a
+    correct idiom and is not reported
   - `TCK2002` `REAL`/`LREAL` compared with `=` or `<>`
   - `TCK2003` `RETAIN`/`PERSISTENT` on a local, where it cannot retain
   - `TCK2004` a local declared and never used
@@ -37,6 +41,12 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   `rules_not_run`. Unimplemented stubs are exempt from the unused-declaration
   rules, and objects that could not be parsed come back in `skipped`, so a short
   finding list never quietly means partial coverage.
+
+  Suppress a finding in the code with `// tckit-disable-next-line TCK2002` or a
+  trailing `// tckit-disable-line TCK2002`; rule ids are comma-separated, and
+  omitting them suppresses every rule on that line. Names TwinCAT mandates are
+  never reported: `MAIN`, and anything inside `FB_init`, `FB_exit` or
+  `FB_reinit`, whose parameter names the compiler matches on.
 
   The `tc-write-st` and `tc-build-test-loop` skills now run it: scoped to the
   edited POU after a write, and across the project before the first build.
@@ -66,6 +76,13 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
 
 ### Fixed
 
+- **POU type detection no longer substring-matches the whole declaration.** A
+  `PROGRAM` declaring `WriteProtectedFunctions : FB_WriteProtectedFunctions` was
+  reported as a `FUNCTION`, because the search looked for "FUNCTION" anywhere in
+  the declaration rather than as a header keyword. This affected `GetStructure`
+  for any POU whose VAR block or comments happened to contain a keyword
+  substring, and TcUnit's `PRG_TEST` is one. The keyword must now start a line
+  and end on a word boundary, and comments are excluded.
 - **TcUnit results resolution on TwinCAT 4026 local runtimes.** The resolver
   only knew the pre-4026 kernel boot root (`C:\TwinCAT\3.1\Boot`) and the
   UmRT installs under `Runtimes\`, so results published by a 4026 local

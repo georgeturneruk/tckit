@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using TcKit.Core.Analysis;
 using TcKit.Core.Models;
 
@@ -51,7 +52,7 @@ public static class CorrectnessRules
 
         foreach (var pou in project.Pous)
         {
-            StatelessInstances(pou, project.Classifier, settings, findings);
+            StatelessInstances(pou, project, settings, findings);
             RealEquality(pou, project.Classifier, settings, findings);
             MisplacedRetain(pou, settings, findings);
             UnusedLocals(pou, settings, findings);
@@ -70,12 +71,17 @@ public static class CorrectnessRules
     }
 
     /// <summary>
-    /// TCK2001: a function block instance declared on a call stack. A method's <c>VAR</c> is stack
-    /// storage, so the instance is constructed fresh on every call and any edge detection, timer or
-    /// internal state silently resets. Compiles perfectly; the classic TwinCAT trap.
+    /// TCK2001: a function block that needs to persist across calls, declared on a call stack. A
+    /// method's <c>VAR</c> is stack storage, so the instance is rebuilt on every call and never
+    /// advances. Compiles perfectly; the classic TwinCAT trap.
+    ///
+    /// Only instances that genuinely cannot work this way are reported. Declaring a synchronous
+    /// helper local to one method is a common and correct idiom (TcUnit does it throughout: a
+    /// string builder is created, used and asserted inside a single call), so flagging every
+    /// function block on a stack produces far more noise than signal.
     /// </summary>
     private static void StatelessInstances(
-        AnalysedPou pou, TypeClassifier classifier, AnalysisSettings settings, List<AnalysisFinding> findings)
+        AnalysedPou pou, AnalysedProject project, AnalysisSettings settings, List<AnalysisFinding> findings)
     {
         foreach (var member in pou.Members)
         {
@@ -84,15 +90,16 @@ public static class CorrectnessRules
                 // VAR_INST is the correct construct for per-instance state in a method, and
                 // VAR_TEMP states the intent explicitly, so neither is a mistake.
                 if (variable.Section is not VarSection.Var
-                    || classifier.Classify(variable.TypeExpression) is not TypeClass.FbInstance)
+                    || !NeedsPersistentStorage(variable.TypeExpression, project))
                 {
                     continue;
                 }
 
                 Add(findings, settings, StatelessInstanceId, CorrectnessCategory, DiagnosticSeverity.Warning,
-                    $"Function block instance '{variable.Name}' is declared in the VAR block of "
-                    + $"'{member.Source.Name}', so it is reconstructed on every call and loses its state. "
-                    + "Declare it in the function block's own VAR block, or use VAR_INST.",
+                    $"'{variable.Name}' ({variable.TypeExpression}) needs to persist between calls, but "
+                    + $"is declared in the VAR block of '{member.Source.Name}', which is stack storage. "
+                    + "It is rebuilt on every call and never advances. Declare it in the function "
+                    + "block's own VAR block, or use VAR_INST.",
                     pou, member.Source.Name, CodePart.Declaration, variable.Line, variable.Name);
             }
         }
@@ -106,14 +113,83 @@ public static class CorrectnessRules
         foreach (var variable in pou.Declaration.Variables)
         {
             if (variable.Section is VarSection.Var
-                && classifier.Classify(variable.TypeExpression) is TypeClass.FbInstance)
+                && NeedsPersistentStorage(variable.TypeExpression, project))
             {
                 Add(findings, settings, StatelessInstanceId, CorrectnessCategory, DiagnosticSeverity.Warning,
-                    $"Function block instance '{variable.Name}' is declared in a FUNCTION, which has no "
-                    + "instance storage, so its state is reset on every call. Use a FUNCTION_BLOCK instead.",
+                    $"'{variable.Name}' ({variable.TypeExpression}) needs to persist between calls, but is "
+                    + "declared in a FUNCTION, which has no instance storage. Use a FUNCTION_BLOCK instead.",
                     pou, "", CodePart.Declaration, variable.Line, variable.Name);
             }
         }
+    }
+
+    /// <summary>
+    /// The IEC standard function blocks whose entire purpose is to carry state between calls. A
+    /// timer on a stack never times and an edge detector never sees an edge, so there is no
+    /// reading of these under which a stack declaration is correct.
+    /// </summary>
+    private static readonly HashSet<string> StatefulStandardBlocks =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "TON", "TOF", "TP", "RS", "SR", "R_TRIG", "F_TRIG",
+            "CTU", "CTD", "CTUD",
+            "CTU_DINT", "CTU_LINT", "CTU_UDINT", "CTU_ULINT",
+            "CTD_DINT", "CTD_LINT", "CTD_UDINT", "CTD_ULINT",
+            "CTUD_DINT", "CTUD_LINT", "CTUD_UDINT", "CTUD_ULINT",
+        };
+
+    /// <summary>
+    /// Whether an instance of this type has to survive between calls: either a standard stateful
+    /// block, or a project function block carrying a multi-cycle handshake. An output named Busy or
+    /// Done means the caller is expected to keep calling until it completes, which a stack instance
+    /// can never do.
+    /// </summary>
+    private static bool NeedsPersistentStorage(string typeExpression, AnalysedProject project)
+    {
+        var baseName = BaseTypeName(typeExpression);
+        if (baseName.Length == 0)
+        {
+            return false;
+        }
+
+        if (StatefulStandardBlocks.Contains(baseName))
+        {
+            return true;
+        }
+
+        var declared = project.Pous.FirstOrDefault(
+            candidate => candidate.Name.Equals(baseName, StringComparison.OrdinalIgnoreCase));
+
+        return declared is not null
+            && declared.Source.PouType is PouType.FunctionBlock
+            && declared.Declaration.Variables.Any(variable =>
+                variable.Section is VarSection.VarOutput && IsHandshakeOutput(variable.Name));
+    }
+
+    // Tolerates a Hungarian prefix, so bBusy, xDone and Busy all count.
+    private static bool IsHandshakeOutput(string name)
+        => Regex.IsMatch(name, "^[a-z]{0,3}(busy|done)$", RegexOptions.IgnoreCase);
+
+    /// <summary>Strip array, pointer and reference wrappers and any namespace qualifier.</summary>
+    private static string BaseTypeName(string typeExpression)
+    {
+        var text = (typeExpression ?? "").Trim();
+        var arrayOf = text.LastIndexOf(" OF ", StringComparison.OrdinalIgnoreCase);
+        if (arrayOf >= 0)
+        {
+            text = text[(arrayOf + 4)..].Trim();
+        }
+
+        foreach (var wrapper in new[] { "POINTER TO ", "REFERENCE TO ", "REF_TO " })
+        {
+            if (text.StartsWith(wrapper, StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[wrapper.Length..].Trim();
+            }
+        }
+
+        var dot = text.LastIndexOf('.');
+        return dot >= 0 ? text[(dot + 1)..] : text;
     }
 
     /// <summary>

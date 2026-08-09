@@ -70,17 +70,66 @@ public class CorrectnessRuleTests
 
     // --- TCK2001: function block instance on a call stack ---
 
+    /// <summary>A multi-cycle function block: the caller must keep calling it until Busy clears.</summary>
+    private static AnalysedPou HandshakeFb() => Pou(
+        "FB_Async", PouType.FunctionBlock,
+        "FUNCTION_BLOCK FB_Async\nVAR_INPUT\n    Execute : BOOL;\nEND_VAR\n"
+        + "VAR_OUTPUT\n    Busy : BOOL;\n    Done : BOOL;\nEND_VAR", "n := 1;");
+
+    /// <summary>A synchronous helper: everything it does completes inside one call.</summary>
+    private static AnalysedPou SynchronousFb() => Pou(
+        "FB_Builder", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Builder\nVAR\n    n : INT;\nEND_VAR", "n := 1;");
+
     [Fact]
-    public void StatelessInstance_FbInMethodVar_IsFlagged()
+    public void StatelessInstance_StandardTimerInMethodVar_IsFlagged()
+    {
+        // A TON on a stack is rebuilt every call, so it never times. There is no reading of this
+        // under which it is correct, which is why the rule is restricted to cases like it.
+        var pou = Pou(
+            "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    delay : TON;\nEND_VAR", "delay(IN := TRUE);"));
+
+        var finding = Assert.Single(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
+        Assert.Equal("delay", finding.Symbol);
+        Assert.Equal("Execute", finding.ItemName);
+        Assert.Equal(DiagnosticSeverity.Warning, finding.Severity);
+    }
+
+    [Fact]
+    public void StatelessInstance_HandshakeFbInMethodVar_IsFlagged()
+    {
+        var host = Pou(
+            "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    job : FB_Async;\nEND_VAR", "job(Execute := TRUE);"));
+
+        var finding = Assert.Single(
+            OfRule(Run([host, HandshakeFb()]), CorrectnessRules.StatelessInstanceId));
+        Assert.Equal("job", finding.Symbol);
+    }
+
+    [Fact]
+    public void StatelessInstance_SynchronousHelperInMethodVar_IsNotFlagged()
+    {
+        // The TcUnit idiom: build a helper, use it, assert, all inside one call. Rebuilding it per
+        // call is the intent, and flagging it produced 18 false positives on TcUnit alone.
+        var host = Pou(
+            "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
+            Method(
+                "Execute",
+                "METHOD Execute : BOOL\nVAR\n    builder : FB_Builder;\nEND_VAR",
+                "builder.Append('x');"));
+
+        Assert.Empty(OfRule(Run([host, SynchronousFb()]), CorrectnessRules.StatelessInstanceId));
+    }
+
+    [Fact]
+    public void StatelessInstance_UnknownLibraryType_IsNotFlagged()
     {
         var pou = Pou(
             "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
-            Method("Execute", "METHOD Execute : BOOL\nVAR\n    drive : FB_Drive;\nEND_VAR", "drive();"));
+            Method("Execute", "METHOD Execute : BOOL\nVAR\n    thing : FB_FromSomeLibrary;\nEND_VAR", "thing();"));
 
-        var finding = Assert.Single(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
-        Assert.Equal("drive", finding.Symbol);
-        Assert.Equal("Execute", finding.ItemName);
-        Assert.Equal(DiagnosticSeverity.Warning, finding.Severity);
+        Assert.Empty(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
     }
 
     [Fact]
@@ -88,27 +137,39 @@ public class CorrectnessRuleTests
     {
         var pou = Pou(
             "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
-            Method("Execute", "METHOD Execute : BOOL\nVAR_INST\n    drive : FB_Drive;\nEND_VAR", "drive();"));
+            Method("Execute", "METHOD Execute : BOOL\nVAR_INST\n    delay : TON;\nEND_VAR", "delay(IN := TRUE);"));
 
         Assert.Empty(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
     }
 
     [Fact]
-    public void StatelessInstance_FbAtFunctionBlockLevel_IsNotFlagged()
+    public void StatelessInstance_TimerAtFunctionBlockLevel_IsNotFlagged()
     {
         var pou = Pou(
             "FB_Host", PouType.FunctionBlock,
-            "FUNCTION_BLOCK FB_Host\nVAR\n    drive : FB_Drive;\nEND_VAR", "drive();");
+            "FUNCTION_BLOCK FB_Host\nVAR\n    delay : TON;\nEND_VAR", "delay(IN := TRUE);");
 
         Assert.Empty(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
     }
 
     [Fact]
-    public void StatelessInstance_FbInsideAFunction_IsFlagged()
+    public void StatelessInstance_TimerInsideAFunction_IsFlagged()
     {
         var pou = Pou(
             "F_Compute", PouType.Function,
-            "FUNCTION F_Compute : BOOL\nVAR\n    drive : FB_Drive;\nEND_VAR", "drive();");
+            "FUNCTION F_Compute : BOOL\nVAR\n    delay : TON;\nEND_VAR", "delay(IN := TRUE);");
+
+        Assert.Single(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
+    }
+
+    [Theory]
+    [InlineData("ARRAY [0..3] OF TON")]
+    [InlineData("Tc2_Standard.TON")]
+    public void StatelessInstance_WrappedOrQualifiedTimerType_IsStillRecognised(string typeExpression)
+    {
+        var pou = Pou(
+            "FB_Host", PouType.FunctionBlock, "FUNCTION_BLOCK FB_Host\nVAR\nEND_VAR", "",
+            Method("Execute", $"METHOD Execute : BOOL\nVAR\n    delay : {typeExpression};\nEND_VAR", "n := 1;"));
 
         Assert.Single(OfRule(Run([pou]), CorrectnessRules.StatelessInstanceId));
     }

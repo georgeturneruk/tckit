@@ -138,8 +138,11 @@ public sealed class ProjectAnalyser(IProjectReader reader) : IProjectAnalyser
             }
         }
 
-        var findings = NamingRuleEngine.Run(symbols, settings)
+        var raw = NamingRuleEngine.Run(symbols, settings)
             .Concat(CorrectnessRules.Run(project, settings))
+            .ToList();
+
+        var findings = FindingSuppressor.Apply(raw, project)
             .Where(finding => finding.Severity >= request.MinimumSeverity)
             .Where(finding => request.RuleIds.Count == 0
                 || request.RuleIds.Contains(finding.RuleId, StringComparer.OrdinalIgnoreCase))

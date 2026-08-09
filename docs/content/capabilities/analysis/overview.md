@@ -20,7 +20,7 @@ Each of these compiles cleanly, which is the whole reason they are here.
 
 | Id | Catches |
 |---|---|
-| `TCK2001` | A function block instance declared in a method's `VAR`, or in a `FUNCTION`. It sits on the call stack, so it is reconstructed every call and any timer, edge detection or internal state silently resets. Use `VAR_INST`, or declare it on the function block. |
+| `TCK2001` | A function block that must persist between calls, declared on a call stack (a method's `VAR`, or a `FUNCTION`). It is rebuilt every call and never advances. Use `VAR_INST`, or declare it on the function block. |
 | `TCK2002` | `REAL` or `LREAL` compared with `=` or `<>`. Usually appears to work until a value is not exactly representable. |
 | `TCK2003` | `RETAIN` or `PERSISTENT` on a local, where it cannot survive a restart. |
 | `TCK2004` | A local declared and never used. |
@@ -53,6 +53,8 @@ Suggestions are advisory. Nothing is rewritten for you, because renaming a symbo
 
 Each rule carries a guard, because a false positive is worse than a miss: it invites a "fix" that breaks working code.
 
+- `TCK2001` only fires for instances that genuinely cannot work on a stack: a standard stateful block (`TON`, `R_TRIG`, `CTU` and friends), or a function block with a `Busy`/`Done` handshake, where the caller is expected to keep calling until it finishes. Declaring a synchronous helper local to one method is a common and correct idiom, and flagging it produced 18 false positives on TcUnit alone.
+- Names TwinCAT mandates are never reported: `MAIN`, and anything inside `FB_init`, `FB_exit` or `FB_reinit`, whose parameters the compiler matches by name.
 - An unimplemented stub is not reported for unused locals or unread inputs. It reads none of them by definition.
 - `TCK2005` is skipped when anything extends the function block, since a child may be the reader.
 - `TCK2004` covers locals only. TwinCAT 3 leaves a function block's `VAR` members reachable from outside, so an apparently unused one may be part of its API.
@@ -117,6 +119,19 @@ A vendored library folder can opt out on its own:
 [vendor/**.{TcPOU,TcGVL,TcDUT}]
 tckit_analysis_profile = none
 ```
+
+### Suppressing a finding
+
+Every rule has legitimate exceptions. A `nearlyEqual` implementation opens with an exact float comparison on purpose, and `TCK2002` is right to notice it. Say so in the code:
+
+```iecst
+// tckit-disable-next-line TCK2002
+IF Coordinate1 = Coordinate2 THEN
+
+IF a = b THEN // tckit-disable-line TCK2002
+```
+
+Rule ids are comma-separated, and omitting them suppresses every rule on that line. Without this the only options are silencing a whole rule or living with the noise, and both end with the analyser being ignored.
 
 ### Custom rules
 
