@@ -1,11 +1,11 @@
 ---
 adr: 0017
 title: Deterministic XML writer backend for IProjectWriter
-status: Accepted
+status: Implemented
 created: 2026-08-09
 last_reviewed: 2026-08-09
 issue:
-pr:
+pr: 140
 supersedes:
 superseded_by:
 related: [0004, 0005, 0013, 0015]
@@ -24,16 +24,15 @@ TaskBinding, TcKind, PlcProjXml) live in `TcKit.Core/Authoring`; the writer
 joins the reader in `TcKit.Adapters.Xml` (renamed from
 `TcKit.Adapters.Reader`) so both share one file-format layer.
 
-**Where it lives:** All implemented on the feature branch: `TcKit.Core/Authoring/`
-(shared primitives), `TcKit.Adapters.Xml` (XmlProjectWriter + TcPlcObjectFile /
-PlcProjFile / TcXmlFormat / GuidSource / SolutionContext), backend selection in
-`TcKit.Server/Program.cs` + `TcKit.Cli` (`--writer` / `--sln`), the net8.0
-retarget with the multi-targeted COM lane, linux-x64 release artefacts, a Linux
-CI integration step, and `dotnet/oracle/parity-writer.ps1`. Interfaces are
-emitted as `.TcIO` and the reader now indexes them. **The promotion gate has
-passed on a live 4026: the full parity sweep is green (28 verbs, 0 diverged),
-and XAE opens and compiles (CheckAllObjects, zero errors/warnings) a project
-authored entirely by the xml backend, LineIds absent.**
+**Where it lives:** Merged in #140. `TcKit.Core/Authoring/` (shared primitives),
+`TcKit.Adapters.Xml` (XmlProjectWriter + the TcPlcObjectFile / PlcProjFile /
+TcXmlFormat / GuidSource / SolutionContext file-format layer), backend
+selection in `TcKit.Server/Program.cs` + `TcKit.Cli` (`--writer` / `--sln`),
+the net8.0 retarget with the multi-targeted COM lane, linux-x64 release
+artefacts, the Linux CI integration step, and
+`dotnet/oracle/parity-writer.ps1` (the promotion gate: 28 verbs in parity on
+a live 4026, and XAE compiles an xml-authored project clean). Interfaces are
+emitted as `.TcIO` and the reader indexes them.
 
 **Open questions:**
 
@@ -139,29 +138,17 @@ oracle.
 
 ## Status notes
 
-- 2026-08-09: Drafted as Proposed. Groundwork landed alongside: shared
-  primitives promoted to `TcKit.Core/Authoring`, `TcKit.Adapters.Reader`
-  renamed to `TcKit.Adapters.Xml`, and `ResolvePlcName` now honours
-  `PLC_PROJECT_NAME` (reader-consistent: only when it names a PLC in the
-  open solution).
-- 2026-08-09 (later): Full implementation on the feature branch: writer,
-  backend selection, net8.0 retarget + linux-x64 artefacts, Linux CI
-  integration step, parity harness. 522 tests green; CLI xml-backend
-  sequence verified locally against a B1 fixture copy. Promotion to
-  Accepted/Implemented gates on the live parity sweep on the bench box.
-- 2026-08-09 (live sweep): Promoted to Accepted. Three sweep iterations on
-  a live 4026: first run 14/28 diverged, all but two from one root cause
-  (property shapes; XAE emits `PROPERTY PUBLIC`, `Name="Get"/"Set"` on
-  accessors, and a `PUBLIC` + empty VAR accessor declaration). Second run
-  isolated the library lane: XAE records a `*` version as `newest` in
-  LibraryReference Includes, keeps LibraryReferences in their own
-  ItemGroup, and drops an emptied group. Third run: 28 in parity, 0
-  diverged. Live findings beyond the writer: XAE happily opens and builds
-  files without LineIds, and the ParameterGuard per-process gap above.
-  Implemented (+ `pr:`) once the PR merges.
-- 2026-08-09 (guard fix): The ParameterGuard per-process gap is closed:
-  every automation verb now seeds the guard registry from the on-disk
-  Parameters blocks before running (`ParameterGuard.SeedFromDisk`), so
-  CLI-per-verb hosts defend blocks spliced by earlier processes exactly
-  like the long-lived server. Live-verified: the parity sweep runs the
-  splice before further automation verbs again and stays 28/28 green.
+- 2026-08-09: Implementation outcome (merged in #140, same day as drafting).
+  The parity oracle earned its keep immediately: three sweep iterations on a
+  live 4026 locked the shapes guesses got wrong (FB properties are
+  `PROPERTY PUBLIC` with `Name="Get"/"Set"` accessor attributes and a
+  `PUBLIC` + empty VAR accessor declaration; a `*` library version is
+  recorded as `newest`; LibraryReferences live in their own ItemGroup, and
+  an emptied group is dropped). Final sweep: 28 in parity, 0 diverged; XAE
+  compiles an xml-authored project clean (CheckAllObjects, LineIds absent).
+  Two findings beyond the writer, both addressed in the same PR: the
+  ParameterGuard registry was process-only, so CLI-per-verb hosts lost
+  spliced parameter blocks on the next verb's save (the guard now seeds
+  from the on-disk blocks before every verb), and the multi-target retarget
+  broke the Cloudflare Pages doc build's `dotnet run` (fixed with an
+  explicit `--framework net8.0` in `scripts/build-docs.sh`).
