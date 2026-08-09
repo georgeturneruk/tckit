@@ -58,11 +58,15 @@ metadata lives in one `RuleCatalogue`.
   made precise, so none shipped rather than shipping noisy.
 - `TCK3001` sees qualified writes only. Unqualified global access would need
   shadowing analysis; the rule under-reports instead.
-- Whether to enable `upload-sarif` in this repository's own CI. The workflow
-  generates and schema-validates a SARIF document; the upload step is present but
-  commented, because these are bench fixtures that exist to contain bugs and
-  publishing them to the Security tab would be noise. The decision is the
-  repository's, not the analyser's.
+- `upload-sarif` in this repository's own CI is manual-dispatch only, behind an
+  `upload_sarif` input. The document is generated and schema-validated on every
+  run; only the upload is gated. The only TwinCAT code here is bench fixtures
+  that exist to contain bugs, so uploading on push would leave a public
+  repository permanently advertising alerts that read as TcKit's own defects and
+  that can never be resolved, since fixing the fixtures is what destroys them.
+  It stays reachable on demand because schema-valid is not the same as
+  GitHub-accepted: ingest also enforces a result cap and resolves every URI
+  against the checkout, and nothing else exercises that path.
 - Non-ST implementation languages (LD, FBD, SFC, CFC, IL) are out of scope by
   decision, not oversight. `TCK3002` stands down on a project containing any, and
   no further support is planned.
@@ -440,5 +444,5 @@ are wanted.
   contains the identifier reported. The remaining eight are GVLs, whose name is
   the file's and appears nowhere in the declaration, so line 1 of the block is
   the honest answer rather than a defect. CI generates and schema-validates a
-  SARIF document; the `upload-sarif` step is present but commented, since the
-  fixtures exist to contain bugs.
+  SARIF document on every run, and uploads it only on a manual dispatch that
+  asks for it, so the fixtures' findings never become permanent public alerts.

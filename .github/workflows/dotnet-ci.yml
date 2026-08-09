@@ -12,11 +12,27 @@ on:
     branches: [main, feat/csharp-rewrite]
   pull_request:
     branches: [main]
+  # Manual only, and the one thing it adds is the SARIF upload. See the step at the end for why
+  # that is not on by default.
+  workflow_dispatch:
+    inputs:
+      upload_sarif:
+        description: "Upload the fixture analysis to the Security tab"
+        type: boolean
+        default: false
+
+# Least privilege by default; the upload step is the only thing that writes anything, and it only
+# runs on a manual dispatch that asks for it.
+permissions:
+  contents: read
 
 jobs:
   dotnet:
     name: Build + unit tests (.NET / Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     defaults:
       run:
         working-directory: dotnet
@@ -67,13 +83,25 @@ jobs:
             --schemafile https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json \
             "$RUNNER_TEMP/tckit.sarif"
 
-      # Uploading would publish these findings to this repository's Security tab. They come from
-      # bench fixtures, which exist to contain bugs, so that would be noise here rather than signal.
-      # On a real codebase this is the step that earns SARIF its place; see the analysis docs.
+      # Deliberately opt-in, and never on push or pull_request.
       #
-      # - uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: ${{ runner.temp }}/tckit.sarif
+      # The only TwinCAT code in this repository is bench fixtures, which exist to contain bugs so
+      # the analyser can be measured against them. Uploading on every run would leave this public
+      # repository permanently showing a dozen code-scanning alerts that read as "TcKit has
+      # problems" rather than "the analyser found what it was built to find", and they could never
+      # be resolved, because fixing the fixtures is what destroys them.
+      #
+      # It stays available on demand because a schema-valid document is not the same as one GitHub
+      # accepts: ingest also enforces a result cap and resolves every URI against the checkout, and
+      # nothing else here exercises that. Run the workflow manually with `upload_sarif` ticked to
+      # prove the whole path, then dismiss the alerts it raises.
+      - name: Upload SARIF to code scanning (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_sarif
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ runner.temp }}/tckit.sarif
+          # Namespaces the results, so this never collides with another tool's alerts.
+          category: tckit-analysis
 
       - name: Skills drift check (.claude/skills/ vs plugin/skills/)
         working-directory: ${{ github.workspace }}
