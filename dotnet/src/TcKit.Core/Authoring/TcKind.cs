@@ -47,4 +47,11 @@ public static class TcKind
         DutKind.Alias => throw new NotSupportedException("Alias DUT creation is not supported."),
         _ => throw new ArgumentOutOfRangeException(nameof(dutKind), dutKind, "Unknown DUT kind."),
     };
+
+    /// <summary>Kind integer for an existing DUT (aliases included; deletes report these).</summary>
+    public static int ForDutItem(DutKind dutKind) => dutKind switch
+    {
+        DutKind.Alias => Alias,
+        _ => ForDut(dutKind),
+    };
 }
