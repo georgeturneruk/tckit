@@ -850,6 +850,15 @@ internal static partial class ProjectAuthor
     }
 
     public static string ResolvePlcName(ITcSession session, string? explicitName)
+        => ResolvePlcName(session, explicitName, Environment.GetEnvironmentVariable("PLC_PROJECT_NAME"));
+
+    /// <summary>
+    /// Precedence per the port contract (ADR-0005): explicit name, then the PLC_PROJECT_NAME
+    /// session default, then sole-PLC auto-resolution. Reader-consistent: the env default only
+    /// applies when it names a PLC in the open solution, so a stale value from another project
+    /// cannot break sole-PLC resolution. The env value is a parameter so tests stay race-free.
+    /// </summary>
+    internal static string ResolvePlcName(ITcSession session, string? explicitName, string? envDefault)
     {
         if (!string.IsNullOrEmpty(explicitName))
         {
@@ -864,6 +873,12 @@ internal static partial class ProjectAuthor
             {
                 names.Add(tipc.Child(i).Name);
             }
+        }
+
+        var envName = envDefault?.Trim();
+        if (!string.IsNullOrEmpty(envName) && names.Contains(envName))
+        {
+            return envName;
         }
 
         return names.Count switch

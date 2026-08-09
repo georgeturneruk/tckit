@@ -146,7 +146,8 @@ internal static partial class ProjectAuthor
     }
 
     /// <summary>
-    /// The system manager that owns the target I/O tree. Mirrors <see cref="ResolvePlcName"/>: an explicit
+    /// The system manager that owns the target I/O tree. Mirrors
+    /// <see cref="ResolvePlcName(ITcSession, string?)"/>: an explicit
     /// <paramref name="projectName"/> selects that project; a single-project solution needs no name; a
     /// multi-project solution with no name is refused (listing the projects) so I/O never lands in the
     /// wrong project silently.

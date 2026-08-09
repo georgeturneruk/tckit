@@ -159,6 +159,30 @@ public class ProjectAuthorTests
     }
 
     [Fact]
+    public void ResolvePlcName_EnvDefaultMatchingAPlc_Wins()
+    {
+        var (session, _, _) = FakeProject.Build("Library", "Tests");
+
+        Assert.Equal("Tests", ProjectAuthor.ResolvePlcName(session, null, "Tests"));
+    }
+
+    [Fact]
+    public void ResolvePlcName_EnvDefaultNotInSolution_FallsThroughToSolePlc()
+    {
+        var (session, _, _) = FakeProject.Build("Plc");
+
+        Assert.Equal("Plc", ProjectAuthor.ResolvePlcName(session, null, "OtherProject"));
+    }
+
+    [Fact]
+    public void ResolvePlcName_ExplicitName_BeatsEnvDefault()
+    {
+        var (session, _, _) = FakeProject.Build("Library", "Tests");
+
+        Assert.Equal("Library", ProjectAuthor.ResolvePlcName(session, "Library", "Tests"));
+    }
+
+    [Fact]
     public void AddMethod_UnknownPou_Throws()
     {
         var (session, _, _) = FakeProject.Build("Plc");
