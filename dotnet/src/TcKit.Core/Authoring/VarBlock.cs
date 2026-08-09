@@ -1,14 +1,15 @@
 using System.Text.RegularExpressions;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
 /// Pure text manipulation of a POU/method declaration's VAR scope blocks. Adds a single variable
 /// line into the named scope (creating the block at its conventional rank if absent) and removes a
-/// single variable line (refusing multi-name lists and line-continued declarations). Faithful port
-/// of the bridge harness's Add-VariableToDeclaration / Remove-VariableFromDeclaration.
+/// single variable line (refusing multi-name lists and line-continued declarations). Shared by
+/// both writer backends. Faithful port of the bridge harness's Add-VariableToDeclaration /
+/// Remove-VariableFromDeclaration.
 /// </summary>
-internal static class VarBlock
+public static class VarBlock
 {
     /// <summary>Insert <paramref name="variableLine"/> into the <paramref name="scopeName"/> block.</summary>
     public static string AddVariable(string declarationText, string scopeName, string variableLine)

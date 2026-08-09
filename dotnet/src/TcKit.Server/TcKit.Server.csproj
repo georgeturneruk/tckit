@@ -6,7 +6,7 @@
     <ProjectReference Include="..\TcKit.Adapters.Automation\TcKit.Adapters.Automation.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.DocGen\TcKit.Adapters.DocGen.csproj" />
     <ProjectReference Include="..\TcKit.Adapters.Docs\TcKit.Adapters.Docs.csproj" />
-    <ProjectReference Include="..\TcKit.Adapters.Reader\TcKit.Adapters.Reader.csproj" />
+    <ProjectReference Include="..\TcKit.Adapters.Xml\TcKit.Adapters.Xml.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,7 +16,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

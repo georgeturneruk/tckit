@@ -1,4 +1,5 @@
 using TcKit.Adapters.Automation;
+using TcKit.Core.Authoring;
 
 namespace TcKit.Tests;
 
@@ -120,6 +121,58 @@ public sealed class ParameterGuardTests : IDisposable
         Assert.Equal(["TcUnit"], restored);
         Assert.True(session.Closed); // the restore reloads the solution so XAE re-reads the block
         Assert.True(PlcProjXml.HasParameters(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", parameters));
+    }
+
+    [Fact]
+    public void ReadReferenceParameters_RoundTripsSplicedBlocks()
+    {
+        PlcProjXml.SetReferenceParameters(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", Params("L1", "K1", "TRUE"));
+        PlcProjXml.SetReferenceParameters(_plcProj, PlcProjXml.LibraryElement, "Tc2_Standard", Params("L2", "K2", "42"));
+
+        var blocks = PlcProjXml.ReadReferenceParameters(_plcProj);
+
+        Assert.Equal(2, blocks.Count);
+        var placeholder = Assert.Single(blocks, b => b.ElementName == PlcProjXml.PlaceholderElement);
+        Assert.Equal("TcUnit", placeholder.ReferenceName);
+        Assert.Equal("TRUE", placeholder.Parameters["L1"]["K1"]);
+        var library = Assert.Single(blocks, b => b.ElementName == PlcProjXml.LibraryElement);
+        Assert.Equal("Tc2_Standard", library.ReferenceName);
+        Assert.Equal("42", library.Parameters["L2"]["K2"]);
+    }
+
+    [Fact]
+    public void SeedFromDisk_AdoptsBlocksFromAnEarlierProcess_AndRestoresAfterDrop()
+    {
+        // Process 1 splices and dies (Clear simulates the CLI's one-verb process boundary).
+        var parameters = Params("GVL_Param_TcUnit", "xUnitEnablePublish", "TRUE");
+        PlcProjXml.SetReferenceParameters(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", parameters);
+        ParameterGuard.Clear();
+
+        // Process 2 seeds from disk, then an XAE save regenerates the file without the block.
+        ParameterGuard.SeedFromDisk(_dir);
+        File.WriteAllText(_plcProj, PlcProjTemplate);
+        var session = new FakeSession { SolutionPath = Path.Combine(_dir, "Fake.sln") };
+
+        var restored = ParameterGuard.VerifyOrRestore(session);
+
+        Assert.Equal(["TcUnit"], restored);
+        Assert.True(PlcProjXml.HasParameters(
+            _plcProj, PlcProjXml.PlaceholderElement, "TcUnit",
+            Params("GVL_PARAM_TCUNIT", "XUNITENABLEPUBLISH", "TRUE")));
+    }
+
+    [Fact]
+    public void SeedFromDisk_ExistingRegistrationWins()
+    {
+        // Disk carries a stale TRUE; this process has already registered the newer FALSE.
+        PlcProjXml.SetReferenceParameters(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", Params("L", "K", "TRUE"));
+        ParameterGuard.Register(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", Params("L", "K", "FALSE"));
+
+        ParameterGuard.SeedFromDisk(_dir);
+        var session = new FakeSession { SolutionPath = Path.Combine(_dir, "Fake.sln") };
+        ParameterGuard.VerifyOrRestore(session);
+
+        Assert.True(PlcProjXml.HasParameters(_plcProj, PlcProjXml.PlaceholderElement, "TcUnit", Params("L", "K", "FALSE")));
     }
 
     [Fact]

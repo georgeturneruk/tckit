@@ -3,9 +3,9 @@
 ## Requirements
 
 - [Claude Code](https://docs.claude.com/en/docs/claude-code) (or any MCP client)
-- A Windows host with **TwinCAT 3.1 Build 4026** and **TcXaeShell**
+- For the full stack: a Windows host with **TwinCAT 3.1 Build 4026** and **TcXaeShell**
 
-Reading projects, generating docs, and searching infosys work without TwinCAT installed. Writes, builds, and hardware authoring need TcXaeShell open with the solution loaded; runtime tools (deploy, tests, symbols, diagnostics) need an ADS route to the target.
+Reading projects, generating docs, searching infosys, and authoring ST (via the [xml writer backend](../capabilities/project-writer/overview.md)) work without TwinCAT installed, on Windows or Linux. Builds and hardware authoring need TcXaeShell open with the solution loaded (on Windows the writer defaults to the same Automation Interface route); runtime tools (deploy, tests, symbols, diagnostics) need an ADS route to the target.
 
 ## Plugin (recommended)
 
@@ -21,7 +21,7 @@ The bundled skills walk you through setup. No .NET SDK is required: if the SDK i
 
 ## Prebuilt binary
 
-For MCP clients other than the plugin, or for offline and locked-down machines, download `tckit-server-win-x64.exe` from the [releases page](https://github.com/georgeturneruk/tckit/releases). It is a self-contained Windows x64 build with no .NET runtime or SDK dependency.
+For MCP clients other than the plugin, or for offline and locked-down machines, download `tckit-server-win-x64.exe` from the [releases page](https://github.com/georgeturneruk/tckit/releases). It is a self-contained build with no .NET runtime or SDK dependency. `tckit-server-linux-x64` is the Linux equivalent (readers, ADS, and the xml writer backend; no COM-backed lanes).
 
 ```
 claude mcp add tckit -- <path>\tckit-server-win-x64.exe

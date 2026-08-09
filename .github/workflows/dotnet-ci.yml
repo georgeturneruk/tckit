@@ -1,11 +1,12 @@
 name: .NET CI
 
-# Build + unit-test TcKit on Linux. It works on ubuntu even though every project is
-# `net8.0-windows`: nothing here uses the Windows Desktop packs (WPF/WinForms/UI-Automation) — the
-# only Windows-bound code is COM + P/Invoke in the Automation adapter, which are compile-anywhere
-# externs exercised only behind in-memory fakes. EnableWindowsTargeting lets the SDK restore the
-# Windows reference assemblies on a non-Windows host. Live COM/ADS validation against a real 4026 is
-# inherently Windows + TwinCAT and stays a separate on-machine step, not CI.
+# Build + unit-test TcKit on Linux. Projects target plain net8.0; the COM/UIA-touching trio
+# (Automation, Server, Cli) multi-targets net8.0;net8.0-windows so shipped Windows artefacts keep
+# the WPF-profile UIA lane (ADR-0014). EnableWindowsTargeting lets the SDK restore the Windows
+# reference assemblies (including WPF, for the windows flavour) on a non-Windows host; the test
+# project is plain net8.0 so the test host never loads the desktop framework. Live COM/ADS
+# validation against a real 4026 is inherently Windows + TwinCAT and stays a separate on-machine
+# step, not CI; the xml writer backend (ADR-0017) is exercised here directly.
 
 on:
   push:
@@ -41,6 +42,33 @@ jobs:
 
       - name: Test
         run: dotnet test TcKit.sln --configuration Release --no-build --verbosity normal
+
+      # The xml writer backend's whole point is writes with no XAE (ADR-0017): drive a
+      # representative verb sequence through the CLI on Linux against a fixture copy, then read
+      # the result back through the reader to prove the round trip.
+      - name: XML writer integration (Linux, no XAE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          cp -r "${{ github.workspace }}/bench/fixtures/bug-hunting/B1-off-by-one/." "$scratch/"
+          cli() { dotnet run --project src/TcKit.Cli --configuration Release --framework net8.0 --no-build -- "$@"; }
+          export TCKIT_SOLUTION="$scratch/B1RollingAverage.sln"
+          export TCKIT_WRITER=xml
+          plc=B1RollingAverage_Plc
+          cli add-folder Filters --parent POUs --plc "$plc"
+          printf 'FUNCTION_BLOCK FB_Filter\nVAR\n    x : LREAL;\nEND_VAR\nx := x;\n' > "$scratch/fb.st"
+          cli add-pou FB_Filter function_block "@$scratch/fb.st" --parent POUs/Filters --plc "$plc"
+          cli add-method FB_Filter Step $'METHOD Step : LREAL\nStep := x;' --plc "$plc"
+          cli add-variable FB_Filter VAR_INPUT "fGain : LREAL;" --plc "$plc"
+          cli update-method-body-patch FB_Filter Step "Step := x;" "Step := x * fGain;" --plc "$plc"
+          cli add-dut ST_Cfg $'TYPE ST_Cfg :\nSTRUCT\n    n : INT;\nEND_STRUCT\nEND_TYPE' --plc "$plc"
+          cli add-library-placeholder TcUnit TcUnit --distributor www.tcunit.org --plc "$plc"
+          cli get-pou-item "$TCKIT_SOLUTION" FB_Filter Step --plc "$plc" | grep -q "x \* fGain" \
+            || { echo "patched method body not visible through the reader"; exit 1; }
+          cli delete-pou FB_Filter --plc "$plc"
+          grep -q "FB_Filter" "$scratch/B1RollingAverage/$plc/$plc.plcproj" \
+            && { echo "compile item survived delete-pou"; exit 1; } || true
 
       - name: Skills drift check (.claude/skills/ vs plugin/skills/)
         working-directory: ${{ github.workspace }}

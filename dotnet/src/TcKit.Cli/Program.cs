@@ -1,17 +1,19 @@
 // TcKit CLI entry point. The init / config / doctor subcommands port here in a
 // later phase via System.CommandLine. For now it exposes the read verbs (which
-// share the reader + serialiser with the MCP tools) and the writer verbs (which
-// drive the COM Automation lane), so the parity oracle and the writer smoke can
-// exercise the whole surface without scripting the MCP stdio handshake.
+// share the reader + serialiser with the MCP tools) and the writer verbs, so the
+// parity oracle and the writer smoke can exercise the whole surface without
+// scripting the MCP stdio handshake.
 //
 // Read verbs are self-contained: they prime the symbol index with get_structure,
-// then read. Write verbs target the solution open in the attached TcXaeShell;
-// code-bearing args accept either a literal string or '@<path>' to read a file.
+// then read. Write verbs go through the selected backend (--writer / TCKIT_WRITER,
+// ADR-0017): the automation backend targets the solution open in the attached
+// TcXaeShell, the xml backend targets the solution named by --sln / TCKIT_SOLUTION.
+// Code-bearing args accept either a literal string or '@<path>' to read a file.
 using TcKit.Adapters.Ads;
 using TcKit.Adapters.Automation;
 using TcKit.Adapters.DocGen;
 using TcKit.Adapters.Docs;
-using TcKit.Adapters.Reader;
+using TcKit.Adapters.Xml;
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
 using TcKit.Core.Serialization;
@@ -98,6 +100,12 @@ async Task<int> RunBuildTestVerb()
     {
         case "build":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var runner = new AutomationBuildRunner();
             var result = await runner.BuildAsync(Opt("plc"), Flag("force-log"), ct).ConfigureAwait(false);
             return EmitObj(result, result.Success);
@@ -105,6 +113,12 @@ async Task<int> RunBuildTestVerb()
 
         case "deploy" when pos.Length >= 1:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var runner = new AutomationBuildRunner();
             var result = await runner.DeployAsync(pos[0], Opt("plc"), !Flag("no-autostart"), ct).ConfigureAwait(false);
             return EmitResult(result);
@@ -126,6 +140,12 @@ async Task<int> RunBuildTestVerb()
             }
 
             var timeout = int.Parse(OptOr("timeout", "120"), System.Globalization.CultureInfo.InvariantCulture);
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var testWriter = new AutomationProjectWriter();
             using var buildRunner = new AutomationBuildRunner();
             var result = await TcKit.Core.Workflows.TestWorkflow.RunAsync(
@@ -222,12 +242,24 @@ async Task<int> RunWriteVerb()
     {
         case "scan-hardware":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var scanner = new AutomationHardwareScanner();
             return Emit(await scanner.ScanHardwareAsync(Opt("project"), ct).ConfigureAwait(false));
         }
 
         case "scaffold-hardware-code":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var scanner = new AutomationHardwareScanner();
             var gvl = pos.Length >= 1 ? pos[0] : "HardwareIO";
             return EmitResult(await scanner
@@ -237,6 +269,12 @@ async Task<int> RunWriteVerb()
 
         case "add-ethercat-master":
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             var name = pos.Length >= 1 ? pos[0] : "Device 1 (EtherCAT)";
             return EmitResult(await hw.AddEtherCatMasterAsync(name, Opt("project"), ct).ConfigureAwait(false));
@@ -244,6 +282,12 @@ async Task<int> RunWriteVerb()
 
         case "add-ethercat-box" when pos.Length >= 3:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             return EmitResult(await hw
                 .AddEtherCatBoxAsync(pos[0], pos[1], pos[2], OptOr("before", ""), Opt("project"), ct)
@@ -252,13 +296,27 @@ async Task<int> RunWriteVerb()
 
         case "delete-io-device" when pos.Length >= 1:
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException(
+                    $"{args[0]} needs Windows with XAE (COM Automation Interface).");
+            }
+
             using var hw = new AutomationHardwareConfigurer();
             return EmitResult(await hw
                 .DeleteIoDeviceAsync(pos[0], Opt("project"), Flag("confirmed"), ct).ConfigureAwait(false));
         }
     }
 
-    using var writer = new AutomationProjectWriter();
+    // --sln seeds the xml backend's solution for this one-shot process (the automation backend
+    // gets its solution from the attached XAE instead, so it ignores this).
+    if (Opt("sln") is { } slnOption)
+    {
+        Environment.SetEnvironmentVariable("TCKIT_SOLUTION", slnOption);
+    }
+
+    var writer = CreateProjectWriter(Opt("writer"));
+    using var writerLifetime = writer as IDisposable;
     switch (args[0])
     {
         case "open-project" when pos.Length >= 1:
@@ -437,6 +495,31 @@ static (string[] Positionals, Dictionary<string, string> Options) ParseArgs(stri
     return (positionals.ToArray(), options);
 }
 
+// Writer backend selection (ADR-0017): --writer beats TCKIT_WRITER beats the platform default.
+// Chosen once per invocation; never a per-call fallback (an attached XAE would regenerate files
+// from its stale in-memory tree and silently revert interleaved on-disk edits).
+static IProjectWriter CreateProjectWriter(string? flag)
+{
+    var choice = (flag ?? Environment.GetEnvironmentVariable("TCKIT_WRITER"))?.Trim().ToLowerInvariant();
+    if (choice is not (null or "" or "automation" or "xml"))
+    {
+        throw new ArgumentException($"Unknown writer '{choice}'; use 'automation' or 'xml'.");
+    }
+
+    if (choice == "xml" || (string.IsNullOrEmpty(choice) && !OperatingSystem.IsWindows()))
+    {
+        return new XmlProjectWriter();
+    }
+
+    if (!OperatingSystem.IsWindows())
+    {
+        throw new InvalidOperationException(
+            "--writer automation needs Windows with a running XAE; use --writer xml here.");
+    }
+
+    return new AutomationProjectWriter();
+}
+
 static PouType ParsePouType(string value) => value.Trim().ToLowerInvariant() switch
 {
     "function_block" or "functionblock" or "fb" => PouType.FunctionBlock,
@@ -518,7 +601,9 @@ static void PrintUsage()
     Console.WriteLine("  get-doc-page <url>");
     Console.WriteLine("doc generator verbs (local ST comments; no network):");
     Console.WriteLine("  generate-docs <projectDir> <outputDir> [--format html|markdown]");
-    Console.WriteLine("write verbs (target the open XAE solution; code args accept '@<file>'):");
+    Console.WriteLine("write verbs (code args accept '@<file>'):");
+    Console.WriteLine("  [--writer automation|xml]  backend (default: automation on Windows, xml elsewhere)");
+    Console.WriteLine("  [--sln <path>]             solution for the xml backend (or set TCKIT_SOLUTION)");
     Console.WriteLine("  create-project <name> <path>");
     Console.WriteLine("  add-plc-project <plcName> [--sln <path>] [--type standard]");
     Console.WriteLine("  open-project <sln>");

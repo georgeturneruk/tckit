@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -9,6 +10,7 @@ namespace TcKit.Adapters.Automation;
 /// COM operation must hop onto a dedicated STA thread. Work items run one at a time in submission
 /// order, which also serialises access to the shared DTE session.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal sealed class StaExecutor : IDisposable
 {
     private readonly BlockingCollection<Action> _queue = new();

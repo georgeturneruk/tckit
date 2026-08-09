@@ -16,7 +16,7 @@ What can it do?
 
 TwinCAT programming isn't like other software development. Code is stored in a proprietary format and there's no command line runner. Everything has to go through the Windows-based XAE.
 
-Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer goes through Beckhoff's Automation Interface. It avoids manual edits. Instead it uses the exact same mechanism as the XAE.
+Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer avoids manual edits. On Windows it goes through Beckhoff's Automation Interface, the exact same mechanism as the XAE. Off Windows (or with `TCKIT_WRITER=xml`) a deterministic XML backend writes the same file shapes directly, so authoring also works on Linux and in CI with no TwinCAT install.
 
 The reader is more efficient than having an agent manually sift through large amounts of XML (the format of TwinCAT files). [Context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) kills performance. TcKit prevents that.
 

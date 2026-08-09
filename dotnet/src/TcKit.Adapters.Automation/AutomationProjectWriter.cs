@@ -1,5 +1,6 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -9,6 +10,7 @@ namespace TcKit.Adapters.Automation;
 /// authoring to <see cref="ProjectAuthor"/> (which is COM-agnostic and unit-tested against a fake).
 /// Domain errors thrown by the author are mapped to the <see cref="Result"/> error contract.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
 {
     private readonly StaExecutor _sta = new();
@@ -178,6 +180,10 @@ public sealed class AutomationProjectWriter : IProjectWriter, IDisposable
             return Task.FromResult(_sta.Run(() =>
             {
                 using var session = new ComTcSession();
+                // Adopt the Parameters blocks already on disk before the verb runs: the guard's
+                // registry is process state, and a one-verb-per-process host (the CLI) must keep
+                // defending blocks spliced by earlier processes.
+                ParameterGuard.SeedFromDisk(Path.GetDirectoryName(session.SolutionPath));
                 var result = author(session);
                 // Any verb's save can silently drop spliced library-parameter blocks from the
                 // .plcproj (XAE's in-memory model never learns them); re-check and restore here so

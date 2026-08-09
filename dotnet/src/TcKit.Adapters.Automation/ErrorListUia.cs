@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
+using System.Runtime.Versioning;
 
 namespace TcKit.Adapters.Automation;
 
@@ -21,6 +22,7 @@ namespace TcKit.Adapters.Automation;
 /// info. Returns null when the GUI can't be reached, so the caller keeps its honest-message
 /// fallback. C# port of the bridge harness's Read-TcErrorListUia, reworked per the above; ADR-0014.
 /// </summary>
+[SupportedOSPlatform("windows")]
 internal static class ErrorListUia
 {
     private const int MaxPages = 80;

@@ -9,8 +9,8 @@ AI agent (any MCP client)
 TcKit.Server ── permission gate (~/.tckit/permissions.json)
     │  port interfaces (TcKit.Core)
     ▼
-Reader        offline XML parse of .TcPOU / .TcGVL / .TcDUT
-Automation    COM Automation Interface → TcXaeShell (writes, builds, I/O config)
+Xml           offline .TcPOU / .TcGVL / .TcDUT / .plcproj: the reader, and the xml writer backend
+Automation    COM Automation Interface → TcXaeShell (default writer backend on Windows, builds, I/O config)
 Ads           Beckhoff.TwinCAT.Ads + TwinSharp → live runtime (deploy, tests, symbols, diagnostics)
 Docs          Beckhoff infosys over HTTP, disk-cached
 DocGen        doc site renderer, local source only
@@ -24,7 +24,7 @@ dotnet/
 │   ├── TcKit.Core/                 ← ports (interfaces), models, permission gate
 │   ├── TcKit.Server/               ← MCP server + tool definitions
 │   ├── TcKit.Cli/                  ← dev CLI driving the same adapters
-│   ├── TcKit.Adapters.Reader/
+│   ├── TcKit.Adapters.Xml/
 │   ├── TcKit.Adapters.Automation/
 │   ├── TcKit.Adapters.Ads/
 │   ├── TcKit.Adapters.Docs/

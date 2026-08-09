@@ -1,7 +1,7 @@
 using TcKit.Core.Models;
 using TcKit.Core.Ports;
 
-namespace TcKit.Adapters.Reader;
+namespace TcKit.Adapters.Xml;
 
 /// <summary>
 /// File-based <see cref="IProjectReader"/>: builds a <see cref="ProjectStructure"/> by walking
@@ -335,7 +335,10 @@ public sealed class XmlProjectReader : IProjectReader
         IReadOnlyList<string>? librariesFrom, Dictionary<string, string> index)
     {
         var pous = new List<PouRef>();
-        foreach (var file in EnumerateSorted(folderRoot, "*.TcPOU", ".TcPOU"))
+        // Interfaces created in XAE (and by the xml writer backend) are .TcIO files with an
+        // <Itf> root; ParsePou handles both roots, so the two globs share one loop.
+        foreach (var file in EnumerateSorted(folderRoot, "*.TcPOU", ".TcPOU")
+            .Concat(EnumerateSorted(folderRoot, "*.TcIO", ".TcIO")))
         {
             var meta = TryParse(() => TcFileParser.ParsePou(file));
             if (meta is null)

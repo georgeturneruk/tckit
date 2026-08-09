@@ -1,18 +1,19 @@
 using System.Xml;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
-/// File-only (.plcproj) helpers for the library-placeholder lane. The Automation Interface exposes
-/// no documented surface for placeholder *parameter overrides* (the IDE's "Library Parameters"
-/// dialog has no programmatic counterpart on ITcPlcLibraryManager / ITcPlcPlaceholderRef, and the
-/// placeholder tree item's ConsumeXml schema is undocumented), so the MSBuild XML that XAE itself
-/// writes on disk is the only reliable target. This is the one documented exception to the
-/// never-edit-XML-directly rule. COM-free, so it is unit-tested against temp files. Mirrors
-/// Find-TcPlcProjFile / Test-TcPlcProjHasPlaceholder / Set-TcPlcProjPlaceholderParameters in
-/// bridge/harness/_TcDte.psm1.
+/// File-only (.plcproj) helpers shared by both writer backends: .plcproj resolution by PLC name
+/// and library reference/placeholder parameter blocks. For the automation backend this is the
+/// library-parameter lane's escape hatch (the Automation Interface exposes no documented surface
+/// for placeholder *parameter overrides*: the IDE's "Library Parameters" dialog has no
+/// programmatic counterpart on ITcPlcLibraryManager / ITcPlcPlaceholderRef, and the placeholder
+/// tree item's ConsumeXml schema is undocumented, so the MSBuild XML that XAE itself writes on
+/// disk is the only reliable target). For the XML backend it is simply part of the on-disk write
+/// path. COM-free, so it is unit-tested against temp files. Mirrors Find-TcPlcProjFile /
+/// Test-TcPlcProjHasPlaceholder / Set-TcPlcProjPlaceholderParameters in bridge/harness/_TcDte.psm1.
 /// </summary>
-internal static class PlcProjXml
+public static class PlcProjXml
 {
     /// <summary>
     /// Resolve the consumer PLC's .plcproj by name, searching recursively from the solution dir.
@@ -129,6 +130,79 @@ internal static class PlcProjXml
         }
 
         return true;
+    }
+
+    /// <summary>One reference's on-disk parameter overrides, as read back from a .plcproj.</summary>
+    public sealed record ReferenceParameters(
+        string ElementName, string ReferenceName,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Parameters);
+
+    /// <summary>
+    /// Read every &lt;Parameters&gt; override block in a .plcproj: each placeholder or library
+    /// reference that carries one, with its (ListName, Key, Value) entries. A missing or
+    /// malformed file reads as "no overrides" (the splice path surfaces the real error).
+    /// </summary>
+    public static IReadOnlyList<ReferenceParameters> ReadReferenceParameters(string plcProjPath)
+    {
+        if (!File.Exists(plcProjPath))
+        {
+            return [];
+        }
+
+        XmlDocument doc;
+        try
+        {
+            doc = Load(plcProjPath);
+        }
+#pragma warning disable CA1031 // A malformed file means "no overrides to protect"; the splice path errors properly.
+        catch (Exception)
+        {
+            return [];
+        }
+#pragma warning restore CA1031
+
+        var results = new List<ReferenceParameters>();
+        foreach (var elementName in new[] { PlaceholderElement, LibraryElement })
+        {
+            foreach (var reference in doc.SelectNodes($"//*[local-name()='{elementName}']")!.OfType<XmlElement>())
+            {
+                var wrapper = reference.ChildNodes.Cast<XmlNode>()
+                    .FirstOrDefault(c => c.NodeType == XmlNodeType.Element && c.LocalName == "Parameters");
+                if (wrapper is null)
+                {
+                    continue;
+                }
+
+                var parameters = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var parameter in wrapper.ChildNodes.OfType<XmlElement>().Where(e => e.LocalName == "Parameter"))
+                {
+                    var listName = parameter.GetAttribute("ListName");
+                    var key = parameter.ChildNodes.OfType<XmlElement>().FirstOrDefault(c => c.LocalName == "Key")?.InnerText;
+                    var value = parameter.ChildNodes.OfType<XmlElement>().FirstOrDefault(c => c.LocalName == "Value")?.InnerText;
+                    if (string.IsNullOrEmpty(listName) || string.IsNullOrEmpty(key) || value is null)
+                    {
+                        continue;
+                    }
+
+                    if (parameters.TryGetValue(listName, out var keys))
+                    {
+                        ((Dictionary<string, string>)keys)[key] = value;
+                    }
+                    else
+                    {
+                        parameters[listName] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [key] = value };
+                    }
+                }
+
+                if (parameters.Count > 0)
+                {
+                    var name = reference.GetAttribute("Include").Split(',')[0].Trim();
+                    results.Add(new ReferenceParameters(elementName, name, parameters));
+                }
+            }
+        }
+
+        return results;
     }
 
     /// <summary>

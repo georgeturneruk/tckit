@@ -1,13 +1,14 @@
 using System.Text.RegularExpressions;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
-/// Splits combined ST source into the declaration and implementation halves that the Automation
-/// Interface writes separately (<c>DeclarationText</c> / <c>ImplementationText</c>). Faithful port
-/// of the bridge harness's <c>Split-TcCode</c>.
+/// Splits combined ST source into the declaration and implementation halves that TwinCAT stores
+/// separately (Automation Interface <c>DeclarationText</c> / <c>ImplementationText</c>; on-disk
+/// Declaration / Implementation-ST CDATA). Shared by both writer backends so a POU authored
+/// through either splits identically. Faithful port of the bridge harness's <c>Split-TcCode</c>.
 /// </summary>
-internal static partial class StCode
+public static partial class StCode
 {
     /// <summary>
     /// Split rules, in order: (1) if any END_VAR is present, the declaration is everything up to and

@@ -1,13 +1,14 @@
 using TcKit.Core.Models;
 
-namespace TcKit.Adapters.Automation;
+namespace TcKit.Core.Authoring;
 
 /// <summary>
 /// TwinCAT Automation Interface tree-item kind constants (the integer passed as the second
 /// argument to <c>ITcSmTreeItem.CreateChild</c>), plus the maps from the domain enums.
-/// Mirrors the bridge harness's <c>$script:TcKind</c> table.
+/// Both writer backends report these integers in delete-verb Results so tool output does not
+/// depend on the backend. Mirrors the bridge harness's <c>$script:TcKind</c> table.
 /// </summary>
-internal static class TcKind
+public static class TcKind
 {
     public const int Folder = 601;
     public const int Program = 602;
@@ -45,5 +46,12 @@ internal static class TcKind
         DutKind.Union => Union,
         DutKind.Alias => throw new NotSupportedException("Alias DUT creation is not supported."),
         _ => throw new ArgumentOutOfRangeException(nameof(dutKind), dutKind, "Unknown DUT kind."),
+    };
+
+    /// <summary>Kind integer for an existing DUT (aliases included; deletes report these).</summary>
+    public static int ForDutItem(DutKind dutKind) => dutKind switch
+    {
+        DutKind.Alias => Alias,
+        _ => ForDut(dutKind),
     };
 }

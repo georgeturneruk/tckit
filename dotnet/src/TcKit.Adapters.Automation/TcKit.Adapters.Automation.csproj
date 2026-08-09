@@ -15,16 +15,18 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- net8.0 flavour: COM-free consumers (the Linux server lane, the test project).
+         net8.0-windows flavour: what Windows artefacts ship, with the UIA lane below. -->
+    <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- System.Windows.Automation (the UIA client) ships with the WPF profile of the Windows
-         Desktop framework; needed for the Express-edition Error List read (ADR-0014). WPF only
-         exists on Windows, and pulling the WindowsDesktop framework reference makes the Linux CI
-         test host unlaunchable, so the UIA lane is compiled only on Windows builds (which include
-         every shipped artefact; release publishing runs on windows-latest). Overridable for
-         local verification via -p:TcKitUiaLane=false. -->
-    <TcKitUiaLane Condition="'$(TcKitUiaLane)' == ''">$([MSBuild]::IsOSPlatform('Windows'))</TcKitUiaLane>
+         Desktop framework; needed for the Express-edition Error List read (ADR-0014). WPF gates
+         on the windows TFM (UseWPF is invalid on plain net8.0), so the UIA lane rides the
+         net8.0-windows flavour — which is what every shipped Windows artefact consumes.
+         Overridable for local verification via -p:TcKitUiaLane=false. -->
+    <TcKitUiaLane Condition="'$(TcKitUiaLane)' == '' and '$(TargetFramework)' == 'net8.0-windows'">true</TcKitUiaLane>
+    <TcKitUiaLane Condition="'$(TcKitUiaLane)' == ''">false</TcKitUiaLane>
     <UseWPF Condition="'$(TcKitUiaLane)' == 'true'">true</UseWPF>
     <DefineConstants Condition="'$(TcKitUiaLane)' == 'true'">$(DefineConstants);TCKIT_UIA</DefineConstants>
   </PropertyGroup>

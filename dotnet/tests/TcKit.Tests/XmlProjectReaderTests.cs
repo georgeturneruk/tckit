@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using TcKit.Adapters.Reader;
+using TcKit.Adapters.Xml;
 using TcKit.Core.Models;
 
 namespace TcKit.Tests;
@@ -158,6 +158,18 @@ public class XmlProjectReaderTests
         var contains = PouNamed(plc, "F_Contains");
         Assert.Equal(PouType.Function, contains.PouType);
         Assert.Equal("POUs/Strings", contains.Folder);
+    }
+
+    [Fact]
+    public async Task GetStructure_IndexesTcIoInterfaces()
+    {
+        var structure = await Read(T3Solution, "T3TckitUtils_Plc");
+
+        // I_Pid lives in a .TcIO file (XAE's on-disk shape for interfaces).
+        var itf = PouNamed(structure.Plcs["T3TckitUtils_Plc"], "I_Pid");
+        Assert.Equal(PouType.Interface, itf.PouType);
+        Assert.EndsWith("I_Pid.TcIO", itf.Path);
+        Assert.Equal("POUs/PID", itf.Folder);
     }
 
     [Fact]
