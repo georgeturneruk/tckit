@@ -247,3 +247,25 @@ green; every verb below is now live-validated through that harness.
 - [x] delete_folder — CI-tested (fake) + live-validated (writer smoke)
 - [x] delete_library_reference — wildcard-version resolution + CI-tested (fake) + live-validated (writer smoke)
 - [x] delete_placeholder — CI-tested (fake) + live-validated (writer smoke)
+
+## XML writer backend (ADR-0017; second `IProjectWriter`)
+
+`TcKit.Adapters.Xml` gained `XmlProjectWriter`: the same verb surface as the
+automation lane, implemented as deterministic edits of the on-disk TwinCAT XML
+(no COM, no XAE, runs on Linux). Backend selected per session via
+`TCKIT_WRITER` / `--writer` (automation default on Windows, xml elsewhere).
+Validation ladder per verb: CI-tested (temp-dir xunit, byte-exact emission with
+pinned GUIDs) -> Linux CI integration (CLI drives the verb against a fixture
+copy on ubuntu) -> **parity-validated** (`oracle/parity-writer.ps1` diffs
+canonicalised trees against the automation backend on a live 4026).
+
+- [x] all object verbs (add/update/patch/delete POU, GVL, DUT, folder, method,
+  property, variable) — CI-tested; representative sequence in the Linux CI
+  integration step; parity run on the bench box **pending**
+- [x] library verbs (reference / placeholder / parameters) — CI-tested; parity
+  run **pending** (`DefaultResolution` / `Namespace` shapes to be locked live)
+- [x] create_project / add_plc_project / save_plc_as_library — explicit
+  unsupported `Result.Fail` on this backend (XAE templates / compiler)
+- [ ] parity sweep green on a live 4026 (the [~] -> [x] gate for this lane;
+  known open items: LineIds tolerance, accessor declaration defaults,
+  interface .TcIO shapes, XAE default templates for empty `code`)

@@ -24,16 +24,21 @@ TaskBinding, TcKind, PlcProjXml) live in `TcKit.Core/Authoring`; the writer
 joins the reader in `TcKit.Adapters.Xml` (renamed from
 `TcKit.Adapters.Reader`) so both share one file-format layer.
 
-**Where it lives:** `dotnet/src/TcKit.Core/Authoring/` and the
-`TcKit.Adapters.Xml` rename are in. `XmlProjectWriter`, backend selection,
-the net8.0 retarget, and the parity oracle are not yet implemented.
+**Where it lives:** All implemented on the feature branch: `TcKit.Core/Authoring/`
+(shared primitives), `TcKit.Adapters.Xml` (XmlProjectWriter + TcPlcObjectFile /
+PlcProjFile / TcXmlFormat / GuidSource / SolutionContext), backend selection in
+`TcKit.Server/Program.cs` + `TcKit.Cli` (`--writer` / `--sln`), the net8.0
+retarget with the multi-targeted COM lane, linux-x64 release artefacts, a Linux
+CI integration step, and `dotnet/oracle/parity-writer.ps1`. Interfaces are
+emitted as `.TcIO` and the reader now indexes them.
 
 **Open questions:**
 
-- Does XAE 4026 open and compile files with absent/stale `<LineIds>`?
-  (Expected yes; bench fixtures lack them. Parity-phase checklist item.)
-- Exact Property/Get/Set and interface-member declaration shapes XAE emits,
-  and the `DefaultResolution` string format (lock against a live dump).
+- The parity sweep has not yet run on a live 4026 (the promotion gate).
+  Expected first-run divergences: LineIds tolerance, accessor declaration
+  defaults ("VAR\nEND_VAR" chosen), interface `.TcIO` shapes, XAE's default
+  templates for empty `code`, `Namespace` on `AddLibraryReference` (library
+  name chosen; XAE derives it from metadata).
 - Whether `CreateProject`/`AddPlcProject` can scaffold from embedded
   templates in a later phase (v1 fails explicitly).
 
@@ -141,3 +146,8 @@ oracle.
   renamed to `TcKit.Adapters.Xml`, and `ResolvePlcName` now honours
   `PLC_PROJECT_NAME` (reader-consistent: only when it names a PLC in the
   open solution).
+- 2026-08-09 (later): Full implementation on the feature branch: writer,
+  backend selection, net8.0 retarget + linux-x64 artefacts, Linux CI
+  integration step, parity harness. 522 tests green; CLI xml-backend
+  sequence verified locally against a B1 fixture copy. Promotion to
+  Accepted/Implemented gates on the live parity sweep on the bench box.

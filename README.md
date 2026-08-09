@@ -21,7 +21,7 @@ What can it do?
 
 TwinCAT programming isn't like other software development. Code is stored in a proprietary format and there's no command line runner. Everything has to go through the Windows-based XAE.
 
-Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer goes through Beckhoff's Automation Interface. It avoids manual edits. Instead it uses the exact same mechanism as the XAE.
+Agents can manually manipulate TwinCAT files, but it's inefficient and can cause project corruption and instability. TcKit's writer avoids manual edits. On Windows it goes through Beckhoff's Automation Interface, the exact same mechanism as the XAE. Off Windows (or with `TCKIT_WRITER=xml`) a deterministic XML backend writes the same file shapes directly, so authoring also works on Linux and in CI with no TwinCAT install.
 
 The reader is more efficient than having an agent manually sift through large amounts of XML (the format of TwinCAT files). [Context rot](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) kills performance. TcKit prevents that.
 
@@ -36,7 +36,7 @@ The doc generator run against [TcUnit](https://github.com/tcunit/TcUnit) is publ
 > [!CAUTION]
 > `Deploy`, `StartRuntime`, `RunTests`, `WriteSymbols`, and `InvokeRpc` act on a live PLC. Always verify the target NetId. The safety stance lives in `~/.tckit/permissions.json`: set `mode` (`read` / `write` / `execute`), and list targets in `blocked_net_ids` to permanently block them (e.g. a production PLC). Live writes additionally require explicit `confirmed=true`.
 
-Requires Claude Code, plus TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host.
+Requires Claude Code. The full stack (builds, deploys, live targets) needs TwinCAT 3.1 Build 4026 + TcXaeShell on a Windows host; reading and authoring alone run anywhere, including Linux.
 
 **Plugin (recommended).** In Claude Code:
 
