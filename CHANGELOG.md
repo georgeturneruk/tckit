@@ -125,6 +125,18 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   (`tckit_analyzer_diagnostic.category-naming.severity`). Naming defaults to
   `suggestion`.
 
+### Removed
+
+- **The deterministic XML writer backend (ADR-0017) is retired (ADR-0019).**
+  It shipped, reached full parity with the Automation Interface lane (28 verbs,
+  0 diverged on a live 4026), and was then ported wholesale to a standalone
+  external tool, leaving two maintained implementations of byte-identical write
+  semantics. TcKit keeps one: structural writes go through the Automation
+  Interface only, so they need Windows with XAE attached. Gone with it:
+  `TCKIT_WRITER`, `--writer`, `TCKIT_SOLUTION` / `--sln` seeding, the Linux CI
+  write-integration step, and `oracle/parity-writer.ps1`. The reader, the
+  analysis lane, and the Linux release binaries are unaffected.
+
 ### Fixed
 
 - **Linux release binaries are actually published.** The docs advertised

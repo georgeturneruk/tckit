@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TcKit.Adapters.Ads;
@@ -25,10 +25,19 @@ builder.Services.AddSingleton<IPermissionGate>(_ => new FilePermissionGate());
 builder.Services.AddSingleton<IProjectReader, XmlProjectReader>();
 builder.Services.AddSingleton<IProjectAnalyser, ProjectAnalyser>();
 
-// Writer backend selection (ADR-0017): resolved once at startup, never per call. An attached
-// XAE regenerates files from its stale in-memory tree on its next save, so interleaving the two
-// backends within a session would silently revert on-disk edits.
-builder.Services.AddSingleton<IProjectWriter>(_ => CreateProjectWriter());
+// Structural writes go through the Automation Interface only (ADR-0019 retired the xml
+// backend); like the other COM-backed lanes, a guarded factory turns first use on a
+// non-Windows host into a clear tool error.
+builder.Services.AddSingleton<IProjectWriter>(_ =>
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        throw new PlatformNotSupportedException(
+            "Structural writes need Windows with XAE (COM Automation Interface); not available on this host.");
+    }
+
+    return new AutomationProjectWriter();
+});
 
 // The COM-backed lanes only exist on Windows; a guarded factory turns the first use on another
 // host into a clear tool error instead of a DI activation exception from the STA thread.
@@ -75,28 +84,3 @@ builder.Services
     .WithToolsFromAssembly();
 
 await builder.Build().RunAsync();
-
-// TCKIT_WRITER = automation | xml. Default: automation where XAE can exist (Windows), the
-// deterministic xml backend everywhere else.
-static IProjectWriter CreateProjectWriter()
-{
-    var choice = Environment.GetEnvironmentVariable("TCKIT_WRITER")?.Trim().ToLowerInvariant();
-    if (choice is not (null or "" or "automation" or "xml"))
-    {
-        throw new InvalidOperationException(
-            $"Unknown TCKIT_WRITER value '{choice}'; use 'automation' or 'xml'.");
-    }
-
-    if (choice == "xml" || (string.IsNullOrEmpty(choice) && !OperatingSystem.IsWindows()))
-    {
-        return new XmlProjectWriter();
-    }
-
-    if (!OperatingSystem.IsWindows())
-    {
-        throw new InvalidOperationException(
-            "TCKIT_WRITER=automation needs Windows with a running XAE; use TCKIT_WRITER=xml here.");
-    }
-
-    return new AutomationProjectWriter();
-}

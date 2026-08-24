@@ -3,16 +3,12 @@ using TcKit.Core.Models;
 namespace TcKit.Core.Ports;
 
 /// <summary>
-/// Structural writes to a TwinCAT project. Two backends implement this port (ADR-0017), selected
-/// once per session via TCKIT_WRITER: the Automation Interface backend drives the attached XAE
-/// over COM (the default on Windows), and the xml backend deterministically edits the on-disk
-/// project files (the default elsewhere; runs without XAE). Every write targets "the open
-/// solution": what <see cref="OpenProjectAsync"/> set (for the xml backend, TCKIT_SOLUTION seeds
-/// it). PLC-scoped methods take an optional plcName (null = PLC_PROJECT_NAME env when it names a
-/// PLC in the solution, then sole-PLC auto-resolution; see ADR-0005). Backend divergences:
-/// CreateProject / AddPlcProject / SavePlcAsLibrary need XAE machinery and fail explicitly on the
-/// xml backend, and the xml AddLibraryReference cannot verify the library is installed (errors
-/// surface at build time). Callers other than the writer backends must never manipulate
+/// Structural writes to a TwinCAT project. One backend implements this port: the Automation
+/// Interface adapter drives the attached XAE over COM, so writes are Windows-only (ADR-0019
+/// retired the deterministic xml backend of ADR-0017). Every write targets "the open solution":
+/// what <see cref="OpenProjectAsync"/> set. PLC-scoped methods take an optional plcName
+/// (null = PLC_PROJECT_NAME env when it names a PLC in the solution, then sole-PLC
+/// auto-resolution; see ADR-0005). Callers other than the writer backend must never manipulate
 /// .TcPOU / .plcproj XML directly.
 /// </summary>
 public interface IProjectWriter

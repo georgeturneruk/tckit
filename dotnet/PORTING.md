@@ -248,31 +248,13 @@ green; every verb below is now live-validated through that harness.
 - [x] delete_library_reference — wildcard-version resolution + CI-tested (fake) + live-validated (writer smoke)
 - [x] delete_placeholder — CI-tested (fake) + live-validated (writer smoke)
 
-## XML writer backend (ADR-0017; second `IProjectWriter`)
+## XML writer backend (ADR-0017; retired by ADR-0019)
 
-`TcKit.Adapters.Xml` gained `XmlProjectWriter`: the same verb surface as the
-automation lane, implemented as deterministic edits of the on-disk TwinCAT XML
-(no COM, no XAE, runs on Linux). Backend selected per session via
-`TCKIT_WRITER` / `--writer` (automation default on Windows, xml elsewhere).
-Validation ladder per verb: CI-tested (temp-dir xunit, byte-exact emission with
-pinned GUIDs) -> Linux CI integration (CLI drives the verb against a fixture
-copy on ubuntu) -> **parity-validated** (`oracle/parity-writer.ps1` diffs
-canonicalised trees against the automation backend on a live 4026).
-
-- [x] all object verbs (add/update/patch/delete POU, GVL, DUT, folder, method,
-  property, variable) — CI-tested; representative sequence in the Linux CI
-  integration step; **parity-validated** (live 4026)
-- [x] library verbs (reference / placeholder / parameters) — CI-tested +
-  **parity-validated**; live-locked shapes: `*` version recorded as `newest`
-  in LibraryReference Includes, LibraryReferences in their own ItemGroup
-- [x] create_project / add_plc_project / save_plc_as_library — explicit
-  unsupported `Result.Fail` on this backend (XAE templates / compiler)
-- [x] parity sweep green on a live 4026 — 28 verbs, 0 diverged (three
-  iterations: property shapes `PROPERTY PUBLIC` / accessor `Name` attrs /
-  `PUBLIC`+VAR accessor declaration, then the library-lane shapes above).
-  XAE opens and compiles an xml-authored project clean (CheckAllObjects,
-  LineIds absent). Side finding, since fixed: ParameterGuard state was per
-  process, so CLI-per-verb automation usage lost spliced parameter blocks
-  on the next verb's save; the guard now seeds its registry from the
-  on-disk Parameters blocks before every verb (live-verified: the sweep
-  splices before further automation verbs and stays green).
+`TcKit.Adapters.Xml` briefly carried a second `IProjectWriter` that made
+deterministic edits to the on-disk TwinCAT XML (no COM, no XAE, ran on Linux),
+selected per session via `TCKIT_WRITER` / `--writer`. It reached full parity
+with the automation lane (28 verbs, 0 diverged, on a live 4026) and was then
+retired: deterministic off-Windows XML authoring now lives in a dedicated
+external tool ported from this backend, and TcKit writes only through the
+Automation Interface. See ADR-0019 for the removal and ADR-0017 for the
+original design and the parity evidence.

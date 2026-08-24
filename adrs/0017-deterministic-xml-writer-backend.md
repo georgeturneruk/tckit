@@ -1,19 +1,24 @@
 ---
 adr: 0017
 title: Deterministic XML writer backend for IProjectWriter
-status: Implemented
+status: Superseded
 created: 2026-08-09
-last_reviewed: 2026-08-09
+last_reviewed: 2026-08-24
 issue:
 pr: 140
 supersedes:
-superseded_by:
+superseded_by: 0019
 related: [0004, 0005, 0013, 0015]
 ---
 
 ## Current state
 
-**Decision (live):** Ship a second `IProjectWriter` implementation that
+**Decision (live):** Superseded by ADR-0019: the xml backend shipped, reached
+full parity (28 verbs, 0 diverged on a live 4026), was ported wholesale to a
+standalone external tool, and was then removed from TcKit so one
+implementation owns the write semantics per environment. The Automation
+Interface is TcKit's only writer again. Original decision, kept for the
+record: ship a second `IProjectWriter` implementation that
 deterministically edits the TwinCAT project XML on disk (.TcPOU / .TcGVL /
 .TcDUT / .plcproj), selected per session via `TCKIT_WRITER=automation|xml`
 (default: automation on Windows, xml elsewhere; never a per-call fallback).
@@ -152,3 +157,4 @@ oracle.
   from the on-disk blocks before every verb), and the multi-target retarget
   broke the Cloudflare Pages doc build's `dotnet run` (fixed with an
   explicit `--framework net8.0` in `scripts/build-docs.sh`).
+- 2026-08-24: Superseded by ADR-0019; the backend was removed after being ported to an external standalone tool.

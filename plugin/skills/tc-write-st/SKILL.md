@@ -10,7 +10,7 @@ Follow this procedure every time you produce ST that will be written to the proj
 
 ## Tool selection — read this before calling anything
 
-These TcKit writer tools go through the selected writer backend (the XAE Automation Interface by default on Windows; a deterministic on-disk XML writer elsewhere or when `TCKIT_WRITER=xml`), which keeps GUIDs and project cross-references consistent. Use them in place of `Edit`/`Write` on `.TcPOU` or `.plcproj` files.
+These TcKit writer tools go through the XAE Automation Interface, which keeps GUIDs and project cross-references consistent. Use them in place of `Edit`/`Write` on `.TcPOU` or `.plcproj` files.
 
 | Request                                                                    | Tool                                                          |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -37,7 +37,7 @@ These TcKit writer tools go through the selected writer backend (the XAE Automat
 
 **`AddVariable` semantics.** Inserts the declaration line before the matching scope's `END_VAR`. If the scope block does not exist on the target item, a new one is created at the conventional position (order: `VAR_INPUT`, `VAR_OUTPUT`, `VAR_IN_OUT`, `VAR`, `VAR CONSTANT`, `VAR_PERSISTENT`, `VAR_TEMP`). Use this instead of reading the full declaration, hand-editing the VAR block, and writing it back.
 
-**Backend requirement.** On the default automation backend, writer tools drive XAE over the COM Automation Interface and will not work unless TcXaeShell is open with the solution loaded. On the xml backend (`TCKIT_WRITER=xml`; the default off Windows) they edit the project files directly, need no XAE, and take the target solution from `OpenProject` or `TCKIT_SOLUTION`. The backend is fixed for the session — never work around a writer failure by editing `.TcPOU` / `.plcproj` yourself, and never assume the other backend as a fallback mid-session.
+**Backend requirement.** Writer tools drive XAE over the COM Automation Interface and will not work unless TcXaeShell is open with the solution loaded (Windows only). Never work around a writer failure by editing `.TcPOU` / `.plcproj` yourself.
 
 ## Pre-write checks (in order)
 
@@ -56,7 +56,7 @@ These TcKit writer tools go through the selected writer backend (the XAE Automat
 1. If the user has named a specific FB and the change is a clear add (one variable, one method, or one patch with the anchor already stated), call the writer directly. The writer fails cleanly if the target FB is missing, so a defensive `GetPouInterface` "to confirm it exists" is wasted. Only read first when you actually need the existing shape, e.g. to choose a patch anchor or check a signature.
 2. **Pick the smallest write that does the job** using the Tool selection table above. Small edit on a method -> `UpdateMethodBodyPatch`. Small edit on the FB-level decl / cyclic body -> `UpdatePouDeclarationPatch` / `UpdatePouImplementationPatch`. Single new variable -> `AddVariable`. Full method-body rewrite -> `UpdateMethodBody`. Full POU declaration / implementation rewrite -> `UpdatePouDeclaration` / `UpdatePouImplementation`. New unit -> `AddPou` / `AddMethod` / `CreateProject`.
 3. For patch-based edits, fetch the current item with `GetPouItem` (or `GetPouDeclaration` if only the FB-level VAR block matters) so the anchor you choose is grounded in the real text, not your memory of it.
-4. NEVER edit `.TcPOU` or `.plcproj` XML directly. GUIDs and cross-references go through the writer tools (whichever backend serves them).
+4. NEVER edit `.TcPOU` or `.plcproj` XML directly. GUIDs and cross-references go through the writer tools.
 5. **Check what you wrote.** Call `AnalyseProject(projectPath, objectName: "<the POU you edited>")`. This is offline, needs no XAE, and returns in well under a second, so it costs nothing next to a build. It catches what the compiler will not: a function block instance declared in a method's `VAR` (its state resets every call), floating-point equality, an unused local, `RETAIN` where it cannot retain, and naming that departs from the project's configured convention.
 
    Fix what it reports, then re-run it on the same POU. Two rules apply:
