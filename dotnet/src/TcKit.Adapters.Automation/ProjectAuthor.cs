@@ -247,7 +247,7 @@ internal static partial class ProjectAuthor
         var (plc, sm) = Open(session, plcName);
         var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
         var pouPath = pou.PathName;
-        var method = FindChild(pou, methodName);
+        var method = FindChild(pou, methodName, skipFolders: true);
         if (method is null || method.PathName == pouPath)
         {
             throw new InvalidOperationException($"Method '{methodName}' not found under POU '{pouName}'.");
@@ -264,7 +264,7 @@ internal static partial class ProjectAuthor
         var (plc, sm) = Open(session, plcName);
         var pou = LocateUnderFolder(PousFolder(sm, plc), pouName, "POU", plc);
         var pouPath = pou.PathName;
-        var property = FindChild(pou, propertyName);
+        var property = FindChild(pou, propertyName, skipFolders: true);
         if (property is null || property.PathName == pouPath)
         {
             throw new InvalidOperationException($"Property '{propertyName}' not found under POU '{pouName}'.");
@@ -918,17 +918,17 @@ internal static partial class ProjectAuthor
         => sm.LookupTreeItem($"TIPC^{plc}^{plc} Project^DUTs");
 
     private static ITcTreeItem LocatePou(ITcSysManager sm, string plc, string pouName)
-        => FindChild(PousFolder(sm, plc), pouName)
+        => FindChild(PousFolder(sm, plc), pouName, skipFolders: true)
             ?? throw new InvalidOperationException($"POU '{pouName}' not found in PLC project '{plc}'.");
 
     private static ITcTreeItem LocatePouUnderProject(ITcSysManager sm, string plc, string pouName)
-        => FindChild(ProjectNode(sm, plc), pouName)
+        => FindChild(ProjectNode(sm, plc), pouName, skipFolders: true)
             ?? throw new InvalidOperationException($"POU '{pouName}' not found in PLC project '{plc}'.");
 
     private static ITcTreeItem LocateItem(ITcSysManager sm, string plc, string pouName, string itemName)
     {
         var pou = LocatePouUnderProject(sm, plc, pouName);
-        return FindChild(pou, itemName)
+        return FindChild(pou, itemName, skipFolders: true)
             ?? throw new InvalidOperationException($"Item '{itemName}' not found on POU '{pouName}'.");
     }
 
@@ -941,14 +941,14 @@ internal static partial class ProjectAuthor
             return pou;
         }
 
-        return FindChild(pou, itemName)
+        return FindChild(pou, itemName, skipFolders: true)
             ?? throw new InvalidOperationException($"Item '{itemName}' not found on POU '{pouName}'.");
     }
 
     /// <summary>Find an item by name under a type-root folder, rejecting the folder itself.</summary>
     private static ITcTreeItem LocateUnderFolder(ITcTreeItem folder, string name, string label, string plc)
     {
-        var item = FindChild(folder, name);
+        var item = FindChild(folder, name, skipFolders: true);
         if (item is null || item.Name == folder.Name)
         {
             throw new InvalidOperationException($"{label} '{name}' not found under {folder.Name} of '{plc}'.");
@@ -1067,17 +1067,19 @@ internal static partial class ProjectAuthor
         return cursor;
     }
 
-    /// <summary>Depth-first search for a tree item by name under a root.</summary>
-    public static ITcTreeItem? FindChild(ITcTreeItem root, string name)
+    /// <summary>Depth-first search for a tree item by name under a root.
+    /// When <paramref name="skipFolders"/> is set, folders are searched through but never returned, so
+    /// an object (POU/GVL/DUT) shadowed by a same-named ancestor folder (POUs/HAL/HAL) is still found.</summary>
+    public static ITcTreeItem? FindChild(ITcTreeItem root, string name, bool skipFolders = false)
     {
-        if (root.Name == name)
+        if (root.Name == name && !(skipFolders && root.ItemType == TcKind.Folder))
         {
             return root;
         }
 
         for (var i = 1; i <= root.ChildCount; i++)
         {
-            var found = FindChild(root.Child(i), name);
+            var found = FindChild(root.Child(i), name, skipFolders);
             if (found is not null)
             {
                 return found;

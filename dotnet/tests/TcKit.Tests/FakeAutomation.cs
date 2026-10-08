@@ -46,8 +46,13 @@ internal sealed class FakeTreeItem(string name, int kind = 0) : ITcTreeItem
 
     public string DeclarationText
     {
-        get => _declaration;
-        set => _declaration = value;
+        // Encodes the AI behaviour: a folder has no declaration (COM binder: "does not contain a definition").
+        get => Kind == TcKind.Folder
+            ? throw new InvalidOperationException("A folder has no declaration text.")
+            : _declaration;
+        set => _declaration = Kind == TcKind.Folder
+            ? throw new InvalidOperationException("A folder has no declaration text.")
+            : value;
     }
 
     public string ImplementationText

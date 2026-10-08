@@ -183,6 +183,32 @@ public class ProjectAuthorTests
     }
 
     [Fact]
+    public void AddMethod_OnPouInSameNamedFolder_SkipsTheFolder()
+    {
+        var (session, pous, _) = FakeProject.Build("Plc");
+        var folder = new FakeTreeItem("FB_X", TcKind.Folder);
+        pous["Plc"].Add(folder);
+        ProjectAuthor.AddPou(session, "FB_X", PouType.FunctionBlock, "FUNCTION_BLOCK FB_X", "POUs/FB_X", null);
+
+        ProjectAuthor.AddMethod(session, "FB_X", "M", "METHOD M : BOOL\nM := TRUE;", null);
+
+        Assert.Equal("M := TRUE;", ChildNamed(ChildNamed(folder, "FB_X"), "M").ImplementationText);
+    }
+
+    [Fact]
+    public void UpdatePouDeclaration_OnGvlInSameNamedFolder_SkipsTheFolder()
+    {
+        var (session, pous, _) = FakeProject.Build("Plc");
+        var folder = new FakeTreeItem("HAL", TcKind.Folder);
+        pous["Plc"].Add(folder);
+        ProjectAuthor.AddGvl(session, "HAL", "VAR_GLOBAL\nEND_VAR", "POUs/HAL", null);
+
+        ProjectAuthor.UpdatePouDeclarationPatch(session, "HAL", "END_VAR", "  g : INT;\nEND_VAR", null);
+
+        Assert.Contains("g : INT;", ChildNamed(folder, "HAL").DeclarationText);
+    }
+
+    [Fact]
     public void AddMethod_UnknownPou_Throws()
     {
         var (session, _, _) = FakeProject.Build("Plc");

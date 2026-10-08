@@ -156,6 +156,14 @@ on [Keep a Changelog](https://keepachangelog.com/), and this project follows
   Version (`1.0.0.0`) on every save. Existing Title/Company/Version values
   are now preserved; only blank fields are filled with defaults, and a
   fully-populated `ProjectInfo` skips the rewrite entirely.
+- **Writers no longer resolve a POU or GVL to a same-named folder.** The
+  automation lane's name lookup is depth-first and returned the first match of
+  any kind, and a folder is visited before its children. A GVL `HAL` kept in a
+  `POUs/HAL` folder therefore resolved to the folder, which has no declaration,
+  and every writer that reads or sets one failed with `'System.__ComObject'
+  does not contain a definition for 'DeclarationText'`. `AddMethod`,
+  `AddProperty`, the `Update*` and `Delete*` tools were all affected. Object
+  lookups now search through folders without returning them.
 
 ## [0.5.1] - 2026-08-03
 
